@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0003 — job `scoreboard` falha quando não mede nada ([doc](docs/iterations/0003-ci-scoreboard-falha.md))
-**Próxima tarefa:** ROADMAP 0.2c — persistir na CI a série gerada: commit-back do `scoreboard.csv` no push para `main` (ver nota 2).
+**Última iteração concluída:** 0004 — a série gerada pela CI é publicada em `scoreboard-data` ([doc](docs/iterations/0004-ci-serie-persistida.md))
+**Próxima tarefa:** ROADMAP 0.3 — parser do header do cartucho (0x0100–0x014F) + `gb-cli info <rom>`. **Antes de começar, confira a nota 11.**
 **Marco atual:** M0 — Fundação
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -75,6 +75,19 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
   `scripts/fetch-test-roms.sh` baixa o bundle fixado por tag e sha256.
 - **`scoreboard.csv` é acumulativo e versionado.** Cada execução anexa; nunca
   truncar. É a série temporal que vira gráfico no ROADMAP 8.2.
+- **A série completa mora na branch `scoreboard-data`, não em `main`.** Push em
+  `main` dispara `scripts/publish-scoreboard.sh`, que publica lá a **união** do
+  que já estava publicado com o que o runner mediu. União, e não substituição:
+  o runner mede em cima do CSV do commit que fez checkout, então o CSV local é
+  sempre um recorte da série. Não é `main` porque a proteção de `main` exige PR
+  e o `GITHUB_TOKEN` não tem bypass — o porquê inteiro está no cabeçalho do
+  script e no [doc da 0004](docs/iterations/0004-ci-serie-persistida.md).
+  Quem for plotar o 8.2 lê `scoreboard-data`; o CSV de `main` é só o que as
+  iterações commitaram à mão.
+- **O `GITHUB_TOKEN` deste repositório é `read` por padrão.** Job que precise
+  escrever declara `permissions:` **no job** (o `scoreboard` declara
+  `contents: write`). Não mova isso para o topo do workflow: daria escrita ao
+  `check`, que não precisa. `ci_workflow.rs` reprova quem tirar.
 - **`scripts/scoreboard.sh` sai != 0 quando não anexa nenhuma linha.** "Rodou
   sem medir nada" é erro, não sucesso: sair `0` ali deixaria a CI verde com a
   série congelada e o artefato repetindo o CSV do dia anterior.
@@ -106,17 +119,16 @@ contorno previsto no prompt de bootstrap.
    passos no dia em que o valor virar, sem pintar nada de vermelho. Hoje os
    passos são incondicionais e há teste guardando isso.
 
-2. **As linhas geradas pela CI se perdem.** → agora é o **ROADMAP 0.2c**. O artefato *contém* o histórico
-   versionado (o checkout traz o `scoreboard.csv` commitado, e a execução anexa
-   por cima — o run do PR #1 subiu 242 linhas, não 121). O que se perde é o
-   inverso: a CI não commita o que gerou, então as linhas produzidas por ela
-   somem quando o job acaba. O histórico que sobrevive é só o que uma iteração
-   commita na mão. Se a apresentação quiser a série completa vinda da CI, isso é
-   trabalho do ROADMAP 0.2 — não está feito.
+2. ~~**As linhas geradas pela CI se perdem.**~~ **Resolvida na 0004** — mas não
+   como o item pedia. O 0.2c dizia "commit-back em `main`"; isso é inalcançável
+   pela CI, porque a proteção de `main` exige PR e o `GITHUB_TOKEN` não tem
+   bypass. A série passou a ser publicada na branch `scoreboard-data`. Ver a
+   invariante correspondente e a nota 11.
 
 3. **`scoreboard.csv` vai gerar conflito** se duas iterações mexerem nele em
    paralelo. Projeto é sequencial, então na prática não dói; se doer, resolva
-   concatenando os dois lados, nunca escolhendo um.
+   concatenando os dois lados, nunca escolhendo um. A 0004 **não** piorou isso:
+   a CI publica em branch própria e nunca escreve em `main`.
 
 4. **9 ROMs mooneye são de outros modelos** (`-dmg0`, `-mgb`, `-S`, `-sgb`,
    `-sgb2`). Elas rodam, mas na suíte `mooneye/acceptance-nondmg`. Não são
@@ -165,8 +177,25 @@ contorno previsto no prompt de bootstrap.
    `if` escrito para tratar o caso vazio. Sempre `declare -A m=()`.
    Testado em bash 5.3; custou a 0003 um teste verde por engano.
 
-10. **O custo por iteração não está sendo medido.** As 0001, 0002 e 0003 têm o
+10. **O custo por iteração não está sendo medido.** As 0001 a 0004 têm o
     campo `Custo reportado` vazio — sessão interativa, sem
     `--output-format json`. O ROADMAP 8.2 pede exatamente esse gráfico. Nenhum
     item do ROADMAP cobre a coleta hoje; ou o `scripts/loop.sh` passa a
-    registrar, ou o 8.2 nasce com três pontos faltando.
+    registrar, ou o 8.2 nasce com quatro pontos faltando.
+
+11. **A publicação da série ainda não foi observada de ponta a ponta.** Os
+    testes cobrem `publish-scoreboard.sh` contra um remoto local, e um smoke
+    test cobriu o CSV real num round-trip byte a byte. O que só a execução de
+    push em `main` mostra é a credencial do `actions/checkout` chegando ao
+    `git push` junto com `permissions: contents: write`. **Primeira coisa a
+    conferir na 0005:** `git ls-remote origin scoreboard-data` e o log do job
+    `scoreboard` do último push. Se a branch não existir, o passo falhou e o
+    job estará vermelho em `main`.
+
+    E o fato que sustenta o desenho todo — "o `GITHUB_TOKEN` seria rejeitado ao
+    empurrar para `main`" — é **inferência** a partir das configurações lidas na
+    API, não observação. O experimento que fecha a questão: rodar o passo uma
+    vez com `DATA_BRANCH=main` e ler a mensagem de erro. Se for
+    `protected branch hook declined`, a inferência procede; se passar, o 0.2c
+    podia ter sido literal e vale registrar isso. Custa uma execução; ninguém
+    fez ainda. Ver nota 7 para o preço de anotar inferência como medição.

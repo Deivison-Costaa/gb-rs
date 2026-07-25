@@ -8,10 +8,10 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 ## M0 — Fundação
 
 - [x] 0.1 Workspace Cargo: `gb-core`, `gb-cli`, `gb-desktop`. `#![forbid(unsafe_code)]` no core.
-- [ ] 0.2 CI: fmt, clippy `-D warnings`, test. Artefato `scoreboard.csv`.
+- [x] 0.2 CI: fmt, clippy `-D warnings`, test. Artefato `scoreboard.csv`.
   - [x] 0.2a Job `check`: fmt, clippy `-D warnings` e test rodando **incondicionalmente** (remover a guarda morta do 0.1) + teste que reprova a regressão do workflow.
   - [x] 0.2b Job `scoreboard`: falhar quando `scripts/scoreboard.sh` morre ou o CSV não cresce (`STATUS.md`, nota 7).
-  - [ ] 0.2c Persistir a série gerada pela CI: publicar o `scoreboard.csv` acumulado numa branch de dados (`scoreboard-data`) no push para `main` (`STATUS.md`, nota 2). **Não é `main`:** a proteção de `main` exige PR, e o `GITHUB_TOKEN` não tem como contorná-la — ver [doc da 0004](docs/iterations/0004-ci-serie-persistida.md).
+  - [x] 0.2c Persistir a série gerada pela CI: publicar o `scoreboard.csv` acumulado numa branch de dados (`scoreboard-data`) no push para `main` (`STATUS.md`, nota 2). **Não é `main`:** a proteção de `main` exige PR, e o `GITHUB_TOKEN` não tem como contorná-la — ver [doc da 0004](docs/iterations/0004-ci-serie-persistida.md).
 - [ ] 0.3 Parser do header do cartucho (0x0100–0x014F) + `gb-cli info <rom>`: título, tipo de MBC, tamanho ROM/RAM, checksum.
 - [ ] 0.4 `Cartridge` trait + `NoMbc` (ROM-only, 32KB).
 - [ ] 0.5 `scripts/fetch-test-roms.sh`: baixa blargg, mooneye, dmg-acid2 para `tests/roms/`.

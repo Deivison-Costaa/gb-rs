@@ -10,7 +10,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [x] 0.1 Workspace Cargo: `gb-core`, `gb-cli`, `gb-desktop`. `#![forbid(unsafe_code)]` no core.
 - [ ] 0.2 CI: fmt, clippy `-D warnings`, test. Artefato `scoreboard.csv`.
   - [x] 0.2a Job `check`: fmt, clippy `-D warnings` e test rodando **incondicionalmente** (remover a guarda morta do 0.1) + teste que reprova a regressão do workflow.
-  - [ ] 0.2b Job `scoreboard`: falhar quando `scripts/scoreboard.sh` morre ou o CSV não cresce (`STATUS.md`, nota 7).
+  - [x] 0.2b Job `scoreboard`: falhar quando `scripts/scoreboard.sh` morre ou o CSV não cresce (`STATUS.md`, nota 7).
   - [ ] 0.2c Persistir a série gerada pela CI: commit-back do `scoreboard.csv` no push para `main` (`STATUS.md`, nota 2).
 - [ ] 0.3 Parser do header do cartucho (0x0100–0x014F) + `gb-cli info <rom>`: título, tipo de MBC, tamanho ROM/RAM, checksum.
 - [ ] 0.4 `Cartridge` trait + `NoMbc` (ROM-only, 32KB).

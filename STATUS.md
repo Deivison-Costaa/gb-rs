@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0002 — job `check` incondicional ([doc](docs/iterations/0002-ci-check-incondicional.md))
-**Próxima tarefa:** ROADMAP 0.2b — job `scoreboard` falhar quando `scripts/scoreboard.sh` morre ou o CSV não cresce (ver nota 7).
+**Última iteração concluída:** 0003 — job `scoreboard` falha quando não mede nada ([doc](docs/iterations/0003-ci-scoreboard-falha.md))
+**Próxima tarefa:** ROADMAP 0.2c — persistir na CI a série gerada: commit-back do `scoreboard.csv` no push para `main` (ver nota 2).
 **Marco atual:** M0 — Fundação
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -75,6 +75,17 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
   `scripts/fetch-test-roms.sh` baixa o bundle fixado por tag e sha256.
 - **`scoreboard.csv` é acumulativo e versionado.** Cada execução anexa; nunca
   truncar. É a série temporal que vira gráfico no ROADMAP 8.2.
+- **`scripts/scoreboard.sh` sai != 0 quando não anexa nenhuma linha.** "Rodou
+  sem medir nada" é erro, não sucesso: sair `0` ali deixaria a CI verde com a
+  série congelada e o artefato repetindo o CSV do dia anterior.
+  `crates/gb-cli/tests/scoreboard_script.rs` guarda isso — e exige a mensagem,
+  não só o código de saída, porque morrer por outro motivo já satisfaria um
+  teste que só olhasse o código.
+- **O job `scoreboard` não pode engolir o veredito do script.** Nada de `if:`
+  nem `continue-on-error: true` nos passos de `fetch-test-roms.sh` e
+  `scoreboard.sh` — `ci_workflow.rs` reprova. O `upload-artifact` é a exceção e
+  leva `if: always()` de propósito: é na execução que morreu que se quer ler o
+  CSV parcial.
 - **Contrato do `gb-cli`** (definido em `scripts/scoreboard.sh` antes de o
   binário existir, conforme R5) — os itens 0.3 e 1.12 têm de cumprir:
   `gb-cli run <rom> --headless --max-cycles <n>`, saindo `0` = pass, `1` = fail,
@@ -120,14 +131,15 @@ contorno previsto no prompt de bootstrap.
    Game Boy Color e este emulador é DMG. Se aparecer no placar, algo regrediu
    em `scripts/fetch-test-roms.sh`.
 
-7. **O `scoreboard.sh` tinha um bug latente e a 0001 o destravou.** Sob
-   `set -e` + `pipefail`, o `grep 'cycles='` que não casava derrubava o script
-   inteiro em `exit 1` — silencioso, zero linhas anexadas — antes do fallback
-   que o próprio autor escrevera na linha seguinte. Só apareceu quando o
-   `gb-cli` passou a existir e o caminho `mode=run` foi exercido pela primeira
-   vez. Corrigido com `|| true`. **O job `scoreboard` da CI ainda não falha
-   quando o script morre assim** — se o CSV parar de crescer, é aí que se olha.
-   → é o **ROADMAP 0.2b**, a próxima tarefa.
+7. ~~**O `scoreboard.sh` tinha um bug latente e a 0001 o destravou.**~~
+   **Resolvida na 0003 — e a segunda metade dela estava errada.** O bug do
+   `grep 'cycles='` sob `set -e` (corrigido com `|| true` na 0001) é real. Mas
+   a afirmação de que "o job `scoreboard` não falha quando o script morre assim"
+   **não procede**: `run: ./scripts/scoreboard.sh` roda sob `bash -e {0}`, e
+   saída != 0 já reprovava o passo e o job. Era inferência, nunca conferida.
+   O que faltava mesmo era o inverso — script saindo `0` sem anexar nada — e é
+   isso que a 0003 implementou. Ver o erro #3 do
+   [doc da 0003](docs/iterations/0003-ci-scoreboard-falha.md).
 
 8. **Escrever teste antes da implementação não torna o teste testado.** O erro
    #1 e #3 da 0001 são a mesma coisa vista de dois lados: código escrito "por
@@ -140,3 +152,21 @@ contorno previsto no prompt de bootstrap.
    valer alguma coisa depois de duas mordidas (remover o passo do clippy;
    tirar-lhe o `-D warnings`). Trate "passou de primeira" como suspeita, não
    como notícia boa.
+
+   **E na 0003 apareceu a versão invertida, que engana melhor:** o teste
+   *falhou* de primeira — resultado que o ciclo RED→GREEN ensina a comemorar —
+   mas falhou por um bug diferente do que ele pretendia medir (`declare -A`
+   não associado sob `set -u`, três linhas antes). **Vermelho não é prova; é
+   prova o vermelho com a mensagem certa.** Guarda nova deve afirmar o
+   *motivo* da falha, não só o código de saída.
+
+9. **Bash: `declare -A m` sem atribuição é variável NÃO associada.** Sob
+   `set -u`, `${#m[@]}` e `${!m[@]}` abortam o script — inclusive dentro do
+   `if` escrito para tratar o caso vazio. Sempre `declare -A m=()`.
+   Testado em bash 5.3; custou a 0003 um teste verde por engano.
+
+10. **O custo por iteração não está sendo medido.** As 0001, 0002 e 0003 têm o
+    campo `Custo reportado` vazio — sessão interativa, sem
+    `--output-format json`. O ROADMAP 8.2 pede exatamente esse gráfico. Nenhum
+    item do ROADMAP cobre a coleta hoje; ou o `scripts/loop.sh` passa a
+    registrar, ou o 8.2 nasce com três pontos faltando.

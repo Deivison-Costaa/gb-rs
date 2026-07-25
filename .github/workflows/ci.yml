@@ -22,6 +22,12 @@ jobs:
 
   scoreboard:
     runs-on: ubuntu-latest
+    # O GITHUB_TOKEN deste repositório é read por padrão
+    # (`default_workflow_permissions: "read"`). Sem isto o push da série é
+    # rejeitado por permissão. Fica no job, e não no topo do workflow, para o
+    # `check` continuar sem poder escrever — ele não tem por quê.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -32,6 +38,17 @@ jobs:
       # sem anexar linha alguma (ROADMAP 0.2b).
       - run: ./scripts/fetch-test-roms.sh
       - run: ./scripts/scoreboard.sh
+      # ROADMAP 0.2c — a série medida aqui só sobrevive ao runner se for
+      # publicada. Vai para a branch `scoreboard-data`, não para `main`: a
+      # proteção de `main` exige PR e o GITHUB_TOKEN não tem bypass. O porquê
+      # completo está no cabeçalho de scripts/publish-scoreboard.sh.
+      #
+      # Este `if:` é decisão, não descuido — em execução de PR o commit medido
+      # pode nunca entrar em `main`, e PR de fork nem token de escrita recebe.
+      # Nada de `continue-on-error:` aqui: série que para de crescer em silêncio
+      # é o modo de falha que a 0.2b existe para evitar.
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: ./scripts/publish-scoreboard.sh
       # O CSV acumulado é o gráfico da apresentação. Não perca — e o `always()`
       # é o que garante o artefato justamente na execução que morreu no meio,
       # que é a que se quer ler.

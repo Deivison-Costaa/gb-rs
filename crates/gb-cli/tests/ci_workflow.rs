@@ -36,10 +36,19 @@ const REQUIRED_STEPS: &[(&str, &[&str])] = &[
 /// Se qualquer um destes falhar sem derrubar o job, o placar da apresentação
 /// para de crescer em silêncio — o CSV do artefato passa a ser o de ontem e
 /// nada fica vermelho.
+///
+/// Os fragmentos incluem o `run: ` e o `./` de propósito. `scoreboard.sh` sozinho
+/// é substring de `publish-scoreboard.sh` (ROADMAP 0.2c), e `find` devolve o
+/// **primeiro** passo que casa: bastaria alguém reordenar os passos para a
+/// guarda passar a examinar o passo errado, sem nada ficar vermelho. Guarda que
+/// depende da ordem do arquivo que ela guarda não é guarda.
 const SCOREBOARD_STEPS: &[(&str, &[&str])] = &[
-    ("download das ROMs", &["fetch-test-roms.sh"]),
-    ("execução do placar", &["scoreboard.sh"]),
+    ("download das ROMs", &["run: ./scripts/fetch-test-roms.sh"]),
+    ("execução do placar", &["run: ./scripts/scoreboard.sh"]),
 ];
+
+/// ROADMAP 0.2c — o passo que publica a série na branch de dados.
+const PUBLISH_STEP: &[&str] = &["run: ./scripts/publish-scoreboard.sh"];
 
 /// `crates/gb-cli` → `crates` → raiz do workspace.
 fn workspace_root() -> PathBuf {
@@ -96,7 +105,9 @@ fn is_meaningful(line: &str) -> bool {
     !trimmed.is_empty() && !trimmed.starts_with('#')
 }
 
-/// Extrai os passos do job `job` de um workflow do GitHub Actions.
+/// O corpo do job `job`, já sem a indentação do bloco: as chaves do job
+/// (`runs-on:`, `permissions:`, `steps:`) ficam na coluna zero, e o que estiver
+/// aninhado nelas continua aninhado.
 ///
 /// Varredura por indentação, deliberadamente burra — mesma escolha (e mesmo
 /// motivo) do parser de manifesto em `gb-core/tests/purity.rs`: puxar um crate
@@ -104,8 +115,8 @@ fn is_meaningful(line: &str) -> bool {
 /// que vale. Cobre a forma que este repositório usa, e os testes de parser
 /// abaixo dizem exatamente qual é essa forma.
 ///
-/// Devolve vazio se o job não existir, ou não tiver `steps:`.
-fn steps_of_job(workflow: &str, job: &str) -> Vec<Step> {
+/// Devolve vazio se o job não existir.
+fn job_body(workflow: &str, job: &str) -> Vec<String> {
     let lines: Vec<&str> = workflow.lines().collect();
 
     let jobs_at = match lines
@@ -133,7 +144,47 @@ fn steps_of_job(workflow: &str, job: &str) -> Vec<Step> {
         .position(|l| is_meaningful(l) && indent_of(l) <= job_indent)
         .map(|i| job_at + 1 + i)
         .unwrap_or(lines.len());
+
     let body = &lines[job_at + 1..job_end];
+
+    // Dedentar pelo cabeçalho do job (`  scoreboard:`) **não** põe as chaves na
+    // coluna zero: elas ficam um nível mais fundo, porque são o mapeamento
+    // aninhado sob o nome do job. Quem manda é a indentação da primeira chave.
+    let key_indent = match body.iter().find(|l| is_meaningful(l)) {
+        Some(l) => indent_of(l),
+        None => return Vec::new(),
+    };
+
+    body.iter()
+        .map(|l| l.get(key_indent..).unwrap_or("").to_string())
+        .collect()
+}
+
+/// O valor de `<scope>:` dentro do bloco `permissions:` do job, se houver.
+///
+/// O `GITHUB_TOKEN` deste repositório é **read** por padrão
+/// (`actions/permissions/workflow` → `default_workflow_permissions: "read"`).
+/// Um job que precise escrever tem de pedir, e pedir no job é o certo: dar
+/// escrita no topo do workflow daria escrita também ao `check`, que não precisa.
+fn job_permission(workflow: &str, job: &str, scope: &str) -> Option<String> {
+    let body = job_body(workflow, job);
+    let at = body
+        .iter()
+        .position(|l| l.trim() == "permissions:" && indent_of(l) == 0)?;
+
+    let prefix = format!("{scope}:");
+    body[at + 1..]
+        .iter()
+        .take_while(|l| !is_meaningful(l) || indent_of(l) > 0)
+        .find(|l| l.trim().starts_with(&prefix))
+        .map(|l| l.trim()[prefix.len()..].trim().to_string())
+}
+
+/// Extrai os passos do job `job` de um workflow do GitHub Actions.
+///
+/// Devolve vazio se o job não existir, ou não tiver `steps:`.
+fn steps_of_job(workflow: &str, job: &str) -> Vec<Step> {
+    let body = job_body(workflow, job);
 
     let steps_at = match body.iter().position(|l| l.trim() == "steps:") {
         Some(i) => i,
@@ -195,6 +246,9 @@ jobs:
 
   outro:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: none
     steps:
       - run: echo nada a ver
 ";
@@ -246,6 +300,37 @@ fn step_scanner_does_not_leak_steps_from_other_jobs() {
 #[test]
 fn step_scanner_returns_empty_for_an_absent_job() {
     assert!(steps_of_job(SAMPLE, "inexistente").is_empty());
+}
+
+/// O bloco `permissions:` do job não é um passo e não pode virar um.
+#[test]
+fn step_scanner_ignores_job_level_blocks_before_the_steps() {
+    let steps = steps_of_job(SAMPLE, "outro");
+    assert_eq!(steps.len(), 1, "esperava 1 passo, veio {steps:#?}");
+    assert!(steps[0].mentions_all(&["nada a ver"]));
+}
+
+#[test]
+fn permission_scanner_reads_the_job_level_permissions_block() {
+    assert_eq!(
+        job_permission(SAMPLE, "outro", "contents"),
+        Some("write".to_string())
+    );
+    assert_eq!(
+        job_permission(SAMPLE, "outro", "packages"),
+        Some("none".to_string())
+    );
+    assert_eq!(
+        job_permission(SAMPLE, "outro", "id-token"),
+        None,
+        "escopo não declarado não pode ser lido como concedido"
+    );
+    assert_eq!(
+        job_permission(SAMPLE, "check", "contents"),
+        None,
+        "o job `check` não declara `permissions:` — não herda a do vizinho"
+    );
+    assert_eq!(job_permission(SAMPLE, "inexistente", "contents"), None);
 }
 
 // --- a guarda de verdade --------------------------------------------------
@@ -362,5 +447,108 @@ fn ci_uploads_the_scoreboard_csv_even_on_failure() {
         "ROADMAP 0.2b: sem `if: always()` o CSV da execução que falhou se perde \
          com o runner — e é essa a execução que se quer ler. Passo:\n{}",
         upload.body
+    );
+}
+
+// --- a publicação da série (ROADMAP 0.2c) ---------------------------------
+//
+// O artefato guarda o CSV de **uma** execução, por 90 dias. Ele não monta a
+// série: quando o runner morre, as linhas que a CI produziu somem, e o que
+// sobra no git é só o que uma iteração commitou à mão. O passo de publicação é
+// o que fecha esse buraco.
+
+/// ROADMAP 0.2c — o job publica a série depois de medi-la.
+#[test]
+fn ci_scoreboard_job_publishes_the_series() {
+    let steps = steps_of_job(&read_workflow(), "scoreboard");
+    assert!(
+        steps.iter().any(|s| s.mentions_all(PUBLISH_STEP)),
+        "ROADMAP 0.2c: nenhum passo do job `scoreboard` publica a série \
+         ({PUBLISH_STEP:?}) — as linhas geradas pela CI morrem com o runner"
+    );
+}
+
+/// ROADMAP 0.2c — e publica **depois** de medir.
+///
+/// Publicar antes do `scoreboard.sh` mandaria para a branch de dados o CSV do
+/// checkout, sem as linhas desta execução: um commit por push em `main` que não
+/// acrescenta nada. Continuaria verde, e a série continuaria congelada.
+#[test]
+fn ci_publishes_after_measuring() {
+    let steps = steps_of_job(&read_workflow(), "scoreboard");
+    let measure = steps
+        .iter()
+        .position(|s| s.mentions_all(&["run: ./scripts/scoreboard.sh"]))
+        .expect("o job `scoreboard` não roda mais o placar");
+    let publish = steps
+        .iter()
+        .position(|s| s.mentions_all(PUBLISH_STEP))
+        .expect("o job `scoreboard` não publica mais a série");
+
+    assert!(
+        publish > measure,
+        "ROADMAP 0.2c: a publicação (passo {publish}) vem antes da medição \
+         (passo {measure}) — publicaria o CSV do checkout, sem esta execução"
+    );
+}
+
+/// ROADMAP 0.2c — o `GITHUB_TOKEN` deste repositório é read por padrão.
+///
+/// Sem `contents: write` **no job**, o push é rejeitado por falta de permissão
+/// e o passo morre. Verificado na API, não suposto:
+/// `actions/permissions/workflow` → `default_workflow_permissions: "read"`.
+#[test]
+fn ci_scoreboard_job_asks_for_write_access() {
+    assert_eq!(
+        job_permission(&read_workflow(), "scoreboard", "contents").as_deref(),
+        Some("write"),
+        "ROADMAP 0.2c: o job `scoreboard` não pede `permissions: contents: write` \
+         e o token padrão deste repositório é read — o push da série seria \
+         rejeitado por permissão"
+    );
+}
+
+/// ROADMAP 0.2c — publicar só faz sentido no push para `main`.
+///
+/// Numa execução de PR o commit medido não está em `main`, e a série ganharia
+/// pontos de código que talvez nunca entre. Pior: PR vindo de fork recebe token
+/// somente-leitura, e o passo falharia sempre. Este é o segundo `if:` desejado
+/// do job — e, como o do artefato, é afirmado aqui para ser uma decisão.
+#[test]
+fn ci_publishes_only_on_push_to_main() {
+    let steps = steps_of_job(&read_workflow(), "scoreboard");
+    let publish = steps
+        .iter()
+        .find(|s| s.mentions_all(PUBLISH_STEP))
+        .expect("o job `scoreboard` não publica mais a série");
+
+    let condition = publish
+        .value_of("if")
+        .expect("ROADMAP 0.2c: o passo de publicação roda em qualquer evento");
+
+    for fragment in ["github.event_name", "'push'", "refs/heads/main"] {
+        assert!(
+            condition.contains(fragment),
+            "ROADMAP 0.2c: a condição do passo de publicação não menciona \
+             {fragment} — `{condition}`"
+        );
+    }
+}
+
+/// ROADMAP 0.2c — e o fracasso dele é o fracasso do job, pelo mesmo motivo da
+/// 0.2b: série que para de crescer em silêncio é pior do que série nenhuma.
+#[test]
+fn ci_publish_step_cannot_fail_silently() {
+    let steps = steps_of_job(&read_workflow(), "scoreboard");
+    let publish = steps
+        .iter()
+        .find(|s| s.mentions_all(PUBLISH_STEP))
+        .expect("o job `scoreboard` não publica mais a série");
+
+    assert!(
+        matches!(publish.value_of("continue-on-error"), None | Some("false")),
+        "ROADMAP 0.2c: o passo de publicação tem `continue-on-error` — ele pode \
+         morrer com o job terminando verde. Passo:\n{}",
+        publish.body
     );
 }

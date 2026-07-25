@@ -7,7 +7,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 
 ## M0 — Fundação
 
-- [ ] 0.1 Workspace Cargo: `gb-core`, `gb-cli`, `gb-desktop`. `#![forbid(unsafe_code)]` no core.
+- [x] 0.1 Workspace Cargo: `gb-core`, `gb-cli`, `gb-desktop`. `#![forbid(unsafe_code)]` no core.
 - [ ] 0.2 CI: fmt, clippy `-D warnings`, test. Artefato `scoreboard.csv`.
 - [ ] 0.3 Parser do header do cartucho (0x0100–0x014F) + `gb-cli info <rom>`: título, tipo de MBC, tamanho ROM/RAM, checksum.
 - [ ] 0.4 `Cartridge` trait + `NoMbc` (ROM-only, 32KB).

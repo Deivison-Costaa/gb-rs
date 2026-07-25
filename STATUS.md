@@ -67,11 +67,13 @@ contorno previsto no prompt de bootstrap.
    Confira na 0.1 que eles realmente rodaram — se continuarem pulando, o
    `Cargo.toml` não está na raiz.
 
-2. **O artefato `scoreboard.csv` da CI não acumula.** Cada job roda em checkout
-   limpo, então o CSV enviado como artefato tem só as linhas daquela execução.
-   O histórico de verdade é o `scoreboard.csv` versionado, que cresce a cada
-   iteração que commita. Se a apresentação precisar do histórico completo da CI,
-   isso é trabalho a fazer no ROADMAP 0.2 — não está feito.
+2. **As linhas geradas pela CI se perdem.** O artefato *contém* o histórico
+   versionado (o checkout traz o `scoreboard.csv` commitado, e a execução anexa
+   por cima — o run do PR #1 subiu 242 linhas, não 121). O que se perde é o
+   inverso: a CI não commita o que gerou, então as linhas produzidas por ela
+   somem quando o job acaba. O histórico que sobrevive é só o que uma iteração
+   commita na mão. Se a apresentação quiser a série completa vinda da CI, isso é
+   trabalho do ROADMAP 0.2 — não está feito.
 
 3. **`scoreboard.csv` vai gerar conflito** se duas iterações mexerem nele em
    paralelo. Projeto é sequencial, então na prática não dói; se doer, resolva

@@ -144,13 +144,22 @@ ausência de ferramenta, não por esquecimento.
 
 ## Notas
 
-**O que esta iteração ainda não observou.** Que o push do Actions para
-`scoreboard-data` funciona de ponta a ponta. Os testes cobrem o script contra um
-remoto local, e o smoke test cobre o CSV real (605 linhas, incluindo
-`03-op sp,hl.gb`, com vírgula dentro das aspas) num round-trip byte a byte. O
-que só a primeira execução de push em `main` mostra é o par
-`permissions: contents: write` + credencial do `actions/checkout` chegando junto
-no `git push`. É a primeira coisa a conferir na 0005.
+**O que faltava observar, e o que se observou.** No fechamento do PR este campo
+dizia que o push do Actions para `scoreboard-data` ainda não tinha sido visto de
+ponta a ponta — os testes cobriam o script contra um remoto local, e o smoke
+test cobria o CSV real (605 linhas, incluindo `03-op sp,hl.gb`, com vírgula
+dentro das aspas) num round-trip byte a byte, mas o par
+`permissions: contents: write` + credencial do `actions/checkout` só aparece
+numa execução de verdade.
+
+O push de merge resolveu: run `30174085591`, passo `success`, branch criada com
+**726 linhas** (as 605 de `main` mais as 121 daquela execução), autor
+`github-actions[bot]`. Na execução de PR do mesmo código o passo saiu `skipped`.
+Os dois lados do `if:` estão observados.
+
+Fica registrado nos dois estados de propósito: o valor deste log não é parecer
+que tudo foi previsto, é mostrar em que ordem as coisas passaram de suposição a
+medição. A que **não** passou é a do erro #1 — ver nota 11 do `STATUS.md`.
 
 **A branch de dados não é um lugar bom para esconder erro.** Ela não aparece em
 `git log` de `main`, ninguém faz checkout dela, e nada quebra se ela ficar

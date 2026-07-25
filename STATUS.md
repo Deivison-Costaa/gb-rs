@@ -4,7 +4,7 @@
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
 **Última iteração concluída:** 0004 — a série gerada pela CI é publicada em `scoreboard-data` ([doc](docs/iterations/0004-ci-serie-persistida.md))
-**Próxima tarefa:** ROADMAP 0.3 — parser do header do cartucho (0x0100–0x014F) + `gb-cli info <rom>`. **Antes de começar, confira a nota 11.**
+**Próxima tarefa:** ROADMAP 0.3 — parser do header do cartucho (0x0100–0x014F) + `gb-cli info <rom>`. Primeiro item com spec de hardware: ler `docs/reference/08-cartridges-mbc.md` antes (R1).
 **Marco atual:** M0 — Fundação
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -183,19 +183,21 @@ contorno previsto no prompt de bootstrap.
     item do ROADMAP cobre a coleta hoje; ou o `scripts/loop.sh` passa a
     registrar, ou o 8.2 nasce com quatro pontos faltando.
 
-11. **A publicação da série ainda não foi observada de ponta a ponta.** Os
-    testes cobrem `publish-scoreboard.sh` contra um remoto local, e um smoke
-    test cobriu o CSV real num round-trip byte a byte. O que só a execução de
-    push em `main` mostra é a credencial do `actions/checkout` chegando ao
-    `git push` junto com `permissions: contents: write`. **Primeira coisa a
-    conferir na 0005:** `git ls-remote origin scoreboard-data` e o log do job
-    `scoreboard` do último push. Se a branch não existir, o passo falhou e o
-    job estará vermelho em `main`.
+11. **A publicação da série funciona — observada.** O push de merge da 0004
+    (run `30174085591`, commit `dddba9c`) rodou o passo com `success` e criou
+    `scoreboard-data` com **726 linhas de dado**, autor `github-actions[bot]`,
+    mensagem `chore(scoreboard): +726 linhas de dddba9c`. As 726 são as 605
+    commitadas em `main` mais as 121 que aquela execução mediu — a união
+    funcionou contra dado real. Confere com
+    `git show origin/scoreboard-data --stat`.
 
-    E o fato que sustenta o desenho todo — "o `GITHUB_TOKEN` seria rejeitado ao
-    empurrar para `main`" — é **inferência** a partir das configurações lidas na
-    API, não observação. O experimento que fecha a questão: rodar o passo uma
-    vez com `DATA_BRANCH=main` e ler a mensagem de erro. Se for
-    `protected branch hook declined`, a inferência procede; se passar, o 0.2c
-    podia ter sido literal e vale registrar isso. Custa uma execução; ninguém
-    fez ainda. Ver nota 7 para o preço de anotar inferência como medição.
+    Na execução de PR do mesmo código o passo saiu `skipped`, como o `if:`
+    manda. Os dois lados da condição estão observados, não supostos.
+
+    **O que continua inferência:** "o `GITHUB_TOKEN` seria rejeitado ao empurrar
+    para `main`" — o fato que decidiu o desenho todo. Veio das configurações
+    lidas na API, não de uma rejeição vista. O experimento que fecha a questão:
+    rodar o passo uma vez com `DATA_BRANCH=main` e ler o erro. Se for
+    `protected branch hook declined`, procede; se passar, o 0.2c podia ter sido
+    literal e vale registrar. Custa uma execução; ninguém fez ainda. Ver nota 7
+    para o preço de anotar inferência como medição.

@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: rustfmt, clippy }
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --all
+
+  scoreboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: ./scripts/fetch-test-roms.sh
+      - run: ./scripts/scoreboard.sh
+      # O CSV acumulado é o gráfico da apresentação. Não perca.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scoreboard-${{ github.sha }}
+          path: scoreboard.csv

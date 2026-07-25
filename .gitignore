@@ -1,0 +1,20 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# ROMs de teste — baixadas por scripts/fetch-test-roms.sh, NUNCA commitadas.
+# Blargg/mooneye são livres, mas manter binário fora do git é regra do projeto.
+tests/roms/
+
+# Saves de jogo gerados em runtime
+*.sav
+*.state
+
+# Logs e métricas brutas do loop.sh (métricas consolidadas vão em docs/)
+logs/
+
+# Tarball do scaffold original — conteúdo já expandido na árvore
+gb-rs-scaffold.tar.gz
+
+# Sistema
+.DS_Store

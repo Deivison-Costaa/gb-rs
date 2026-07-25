@@ -20,6 +20,10 @@
 #   crash    gb-cli saiu com qualquer outro código
 #   skip     gb-cli ainda não existe (ou não há ROMs) — contabiliza como 0
 #
+# Código de saída do próprio script: 0 se anexou ao menos uma linha, != 0 se
+# não anexou nenhuma (ROADMAP 0.2b). "Rodou sem medir nada" é erro, não
+# sucesso — senão a CI fica verde com a série temporal congelada.
+#
 # ------------------------------------------------------------------------
 # CONTRATO COM O gb-cli
 #
@@ -115,6 +119,14 @@ suite_of() {
 
 csv_escape() { printf '"%s"' "${1//\"/\"\"}"; }
 
+# Linhas de dado do CSV — o cabeçalho não conta. 0 se o arquivo não existe.
+csv_data_lines() {
+  if [[ ! -f "$CSV" ]]; then printf '0'; return 0; fi
+  local n
+  n="$(wc -l < "$CSV")"
+  if (( n > 0 )); then printf '%s' "$(( n - 1 ))"; else printf '0'; fi
+}
+
 # --- execução -------------------------------------------------------------
 
 run_one() {
@@ -143,7 +155,11 @@ run_one() {
 }
 
 main() {
-  local ts commit gb_cli mode
+  local ts commit gb_cli mode rows_before rows_after
+
+  # Medido antes de qualquer escrita — inclusive antes da criação do cabeçalho.
+  rows_before="$(csv_data_lines)"
+
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   commit="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
@@ -170,7 +186,11 @@ main() {
 
   [[ -f "$CSV" ]] || echo "$CSV_HEADER" > "$CSV"
 
-  declare -A total pass
+  # O `=()` não é enfeite: sob `set -u`, um `declare -A total` sem atribuição
+  # deixa a variável declarada e **não associada**, e o `${#total[@]}` do resumo
+  # abaixo derruba o script — justamente no caso de zero ROMs, que é o caso que
+  # o `if` ali existe para tratar. Bash 5.3, testado.
+  declare -A total=() pass=()
   local rom rel suite status cycles result
 
   for rom in "${roms[@]+"${roms[@]}"}"; do
@@ -216,7 +236,21 @@ main() {
   printf '%-32s %s\n' "--------------------------------" "--------"
   printf '%-32s %3d/%-3d\n' "TOTAL" "$grand_p" "$grand_t"
   echo
-  echo "Anexado a $CSV ($(( $(wc -l < "$CSV") - 1 )) linhas no total)."
+  rows_after="$(csv_data_lines)"
+  echo "Anexado a $CSV ($rows_after linhas no total, $rows_before antes)."
+
+  # ROADMAP 0.2b — a checagem que faltava.
+  #
+  # `set -e` cobre o script morrer. Não cobre o script terminar bem e não ter
+  # medido nada: ROMs não baixadas, `find` mudo, laço sem nenhuma volta. Nesse
+  # caso a CI ficaria verde, o artefato subiria com o CSV de ontem, e a série
+  # temporal do ROADMAP 8.2 congelaria sem sinal nenhum. Sair 0 aqui seria
+  # afirmar "medi tudo e está tudo bem" tendo medido nada.
+  if (( rows_after <= rows_before )); then
+    die "não anexou nenhuma linha a $CSV (antes: $rows_before, depois: $rows_after).
+     Nenhuma ROM foi medida — rode ./scripts/fetch-test-roms.sh, ou confira
+     ROMS_DIR=$ROMS_DIR."
+  fi
 }
 
 main "$@"

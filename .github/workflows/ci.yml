@@ -26,10 +26,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # Nem `if:` nem `continue-on-error:` nestes dois, nunca. O placar que
+      # falha em silêncio é pior do que placar nenhum: a série temporal congela
+      # e o job continua verde. `scoreboard.sh` sai != 0 também quando termina
+      # sem anexar linha alguma (ROADMAP 0.2b).
       - run: ./scripts/fetch-test-roms.sh
       - run: ./scripts/scoreboard.sh
-      # O CSV acumulado é o gráfico da apresentação. Não perca.
-      - uses: actions/upload-artifact@v4
+      # O CSV acumulado é o gráfico da apresentação. Não perca — e o `always()`
+      # é o que garante o artefato justamente na execução que morreu no meio,
+      # que é a que se quer ler.
+      - if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: scoreboard-${{ github.sha }}
           path: scoreboard.csv

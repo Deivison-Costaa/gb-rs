@@ -1,0 +1,13 @@
+[package]
+name = "gb-desktop"
+description = "Frontend gráfico: janela, teclado e áudio."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# `winit`, `pixels` e `cpal` entram no ROADMAP 4.4, não antes: cada uma
+# custa minutos de CI a cada PR, e não há nada para desenhar até a PPU (M3).
+[dependencies]
+gb-core = { path = "../gb-core" }

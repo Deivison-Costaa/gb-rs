@@ -1,0 +1,20 @@
+[workspace]
+resolver = "3"
+members = ["crates/gb-core", "crates/gb-cli", "crates/gb-desktop"]
+
+# Metadados compartilhados. Os crates herdam com `campo.workspace = true`,
+# para que a versão do projeto seja um número só, num lugar só.
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+repository = "https://github.com/Deivison-Costaa/gb-rs"
+
+# O scoreboard roda as 121 ROMs em release com até 250M de M-cycles
+# (ver `scripts/scoreboard.sh`). Ainda não há emulador para medir, então
+# nada de LTO ou codegen-units=1 por ora: o custo de compilação na CI é
+# certo e o ganho é especulativo. Revisitar quando o M1 fechar e houver
+# tempo de execução real para comparar.
+[profile.release]
+debug = 1

@@ -3,18 +3,23 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0000 — bootstrap (sem código de emulador)
-**Próxima tarefa:** ROADMAP 0.1 — workspace Cargo (`gb-core`, `gb-cli`, `gb-desktop`)
+**Última iteração concluída:** 0001 — workspace Cargo ([doc](docs/iterations/0001-workspace-cargo.md))
+**Próxima tarefa:** ROADMAP 0.2 — CI: fmt, clippy `-D warnings`, test. Artefato `scoreboard.csv`.
 **Marco atual:** M0 — Fundação
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
 ## Placar de ROMs de teste
 
-Baseline do dia 0: **121 ROMs baixadas, 0 passando** — não existe emulador
-ainda. Os totais abaixo são os que `scripts/scoreboard.sh` mede de fato, e
-divergem um pouco dos que o scaffold estimava (a diferença é que cada suíte tem
-as ROMs individuais **mais** a ROM agregada).
+**121 ROMs baixadas, 0 passando** — ainda não existe emulador. Os totais abaixo
+são os que `scripts/scoreboard.sh` mede de fato, e divergem um pouco dos que o
+scaffold estimava (a diferença é que cada suíte tem as ROMs individuais **mais**
+a ROM agregada).
+
+Desde a 0001 o status das linhas é `crash`, não `skip`: o `gb-cli` existe mas
+sai `2` (`EXIT_NOT_IMPLEMENTED`) em qualquer invocação. Ambos contam 0 passando
+— **não é regressão**, é o rótulo ficando honesto. Quem plotar o 8.2 tem de
+agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 
 | Suíte | Passando | Total |
 |---|---|---|
@@ -33,7 +38,23 @@ as ROMs individuais **mais** a ROM agregada).
 ## Invariantes já estabelecidas
 
 - CPU é cycle-stepped (M-cycle). PPU é scanline renderer, não pixel FIFO.
-- `gb-core` não tem dependência de I/O.
+- `gb-core` não tem dependência de I/O. **Agora isso é testado, não prometido:**
+  `crates/gb-core/tests/purity.rs` reprova qualquer dependência fora de
+  `ALLOWED_DEPENDENCIES` (hoje vazia) e exige `#![forbid(unsafe_code)]` em
+  `lib.rs`. Para admitir uma dependência (o 7.3 vai querer `serde`), adicione à
+  lista **e justifique no doc da iteração**.
+- **Identificadores em inglês; comentários, docs e mensagens de teste em
+  português.** A API fala de hardware, cujos nomes são ingleses de origem, e
+  `CLAUDE.md` § Arquitetura já usa `bus.rs`/`Cartridge`/`NoMbc`. A prosa é do
+  trabalho, e o trabalho é em português.
+- **Workspace:** edition 2024, `resolver = "3"`, `rust-version = "1.85"`,
+  metadados herdados de `[workspace.package]`. `[profile.release] debug = 1`
+  (pânico de opcode em release sem símbolo é indepurável); sem LTO até o fim do
+  M1, quando houver tempo de execução real para justificar o custo de CI.
+- **Códigos de saída do `gb-cli`** (contrato do `scoreboard.sh`): `0` pass,
+  `1` fail, `124` timeout, **qualquer outro** = erro do emulador. Enquanto não
+  houver emulador, o binário sai `2`. Nunca reaproveite `0`/`1` para "não
+  implementado" — isso planta um veredito falso no `scoreboard.csv`.
 - **`main` é protegida:** merge só via PR, com os jobs `check` e `scoreboard`
   verdes e branch atualizada. 0 aprovações exigidas (projeto solo), histórico
   linear, sem force-push. `enforce_admins=false` de propósito: se o loop
@@ -61,11 +82,10 @@ contorno previsto no prompt de bootstrap.
 
 ## Notas para a próxima iteração
 
-1. **A guarda na CI some sozinha.** O job `check` pula `fmt`/`clippy`/`test`
-   enquanto não houver `Cargo.toml` na raiz. Assim que a 0.1 criar o workspace,
-   os três passos voltam a rodar sem tocar em `.github/workflows/ci.yml`.
-   Confira na 0.1 que eles realmente rodaram — se continuarem pulando, o
-   `Cargo.toml` não está na raiz.
+1. ~~**A guarda na CI some sozinha.**~~ **Resolvido na 0001.** `Cargo.toml`
+   está na raiz, `steps.workspace.outputs.exists` dá `true` e `fmt`/`clippy`/
+   `test` voltaram a rodar. A guarda em `.github/workflows/ci.yml` virou código
+   morto — o 0.2 pode removê-la.
 
 2. **As linhas geradas pela CI se perdem.** O artefato *contém* o histórico
    versionado (o checkout traz o `scoreboard.csv` commitado, e a execução anexa
@@ -91,3 +111,18 @@ contorno previsto no prompt de bootstrap.
 6. **`blargg/cgb_sound` foi deliberadamente excluída** do download: é suíte de
    Game Boy Color e este emulador é DMG. Se aparecer no placar, algo regrediu
    em `scripts/fetch-test-roms.sh`.
+
+7. **O `scoreboard.sh` tinha um bug latente e a 0001 o destravou.** Sob
+   `set -e` + `pipefail`, o `grep 'cycles='` que não casava derrubava o script
+   inteiro em `exit 1` — silencioso, zero linhas anexadas — antes do fallback
+   que o próprio autor escrevera na linha seguinte. Só apareceu quando o
+   `gb-cli` passou a existir e o caminho `mode=run` foi exercido pela primeira
+   vez. Corrigido com `|| true`. **Lição para o 0.2:** o job `scoreboard` da CI
+   não falha quando o script morre assim; se o CSV parar de crescer, é aí que
+   se olha.
+
+8. **Escrever teste antes da implementação não torna o teste testado.** O erro
+   #1 e #3 da 0001 são a mesma coisa vista de dois lados: código escrito "por
+   antecipação" (o `scoreboard.sh` do bootstrap; os guardas de invariante) passa
+   verde por vacuidade até algo real exercitá-lo. Quando escrever um guarda,
+   force-o a falhar uma vez — nem que seja mutando o alvo à mão e revertendo.

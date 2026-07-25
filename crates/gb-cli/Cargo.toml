@@ -1,0 +1,11 @@
+[package]
+name = "gb-cli"
+description = "Runner headless: roda uma ROM de teste e reporta o resultado."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+gb-core = { path = "../gb-core" }

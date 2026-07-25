@@ -127,7 +127,11 @@ run_one() {
   rc=$?
   set -e
 
-  cycles="$(printf '%s' "$out" | grep -oE 'cycles=[0-9]+' | tail -1 | cut -d= -f2)"
+  # O `|| true` não é decorativo: com `set -e` + `pipefail`, um grep que não
+  # casa sai 1, derruba a atribuição e mata o script inteiro — antes do
+  # fallback da linha seguinte. O caminho só passou a ser exercido quando o
+  # gb-cli passou a existir (ROADMAP 0.1) sem ainda emitir `cycles=`.
+  cycles="$(printf '%s' "$out" | grep -oE 'cycles=[0-9]+' | tail -1 | cut -d= -f2 || true)"
   [[ -n "$cycles" ]] || cycles=0
 
   case "$rc" in

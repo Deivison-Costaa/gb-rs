@@ -1,0 +1,11 @@
+[package]
+name = "gb-core"
+description = "Máquina de estados do Game Boy DMG: CPU, bus, PPU, APU. Sem I/O."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Sem `[dependencies]`, e é intencional (R3). `tests/purity.rs` reprova o
+# build se alguma aparecer sem passar pela lista de permitidas.

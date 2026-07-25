@@ -1,4 +1,4 @@
-//! Guarda do job `check` do workflow de CI — ROADMAP 0.2a.
+//! Guarda dos jobs do workflow de CI — ROADMAP 0.2a e 0.2b.
 //!
 //! A proteção de `main` exige que o job `check` fique verde. Isso garante que
 //! ele **rodou**, não que ele **verificou alguma coisa**: um passo com um `if:`
@@ -29,6 +29,16 @@ const REQUIRED_STEPS: &[(&str, &[&str])] = &[
     ("formatação", &["cargo fmt", "--check"]),
     ("clippy", &["cargo clippy", "-D warnings"]),
     ("testes", &["cargo test"]),
+];
+
+/// Os passos do job `scoreboard` cujo veredito **é** o veredito do job.
+///
+/// Se qualquer um destes falhar sem derrubar o job, o placar da apresentação
+/// para de crescer em silêncio — o CSV do artefato passa a ser o de ontem e
+/// nada fica vermelho.
+const SCOREBOARD_STEPS: &[(&str, &[&str])] = &[
+    ("download das ROMs", &["fetch-test-roms.sh"]),
+    ("execução do placar", &["scoreboard.sh"]),
 ];
 
 /// `crates/gb-cli` → `crates` → raiz do workspace.
@@ -64,8 +74,16 @@ impl Step {
     /// Coluna zero é o que distingue o `if:` do passo de um `if:` aninhado
     /// dentro de um `with:` ou de um bloco `run: |`.
     fn has_key(&self, key: &str) -> bool {
+        self.value_of(key).is_some()
+    }
+
+    /// O valor da chave `key` do passo, já sem espaços em volta.
+    fn value_of(&self, key: &str) -> Option<&str> {
         let prefix = format!("{key}:");
-        self.body.lines().any(|l| l.starts_with(&prefix))
+        self.body
+            .lines()
+            .find(|l| l.starts_with(&prefix))
+            .map(|l| l[prefix.len()..].trim())
     }
 }
 
@@ -268,4 +286,81 @@ fn ci_quality_steps_are_unconditional() {
             step.body
         );
     }
+}
+
+// --- a guarda do job `scoreboard` (ROADMAP 0.2b) --------------------------
+//
+// O job `scoreboard` é o que alimenta a série temporal do ROADMAP 8.2. A
+// proteção de `main` exige que ele fique verde, o que — de novo — garante que
+// ele rodou, não que mediu. Aqui a preocupação é o inverso da 0.2a: não é o
+// passo ser pulado, é o passo **falhar sem derrubar o job**.
+
+/// ROADMAP 0.2b — o job existe e roda as duas coisas de que depende.
+#[test]
+fn ci_scoreboard_job_fetches_roms_and_runs_the_scoreboard() {
+    let steps = steps_of_job(&read_workflow(), "scoreboard");
+    assert!(
+        !steps.is_empty(),
+        "o job `scoreboard` sumiu do .github/workflows/ci.yml, ou perdeu os `steps:`"
+    );
+
+    for (label, fragments) in SCOREBOARD_STEPS {
+        assert!(
+            steps.iter().any(|s| s.mentions_all(fragments)),
+            "ROADMAP 0.2b: nenhum passo do job `scoreboard` faz {label} ({fragments:?})"
+        );
+    }
+}
+
+/// ROADMAP 0.2b — e o fracasso deles é o fracasso do job.
+///
+/// `continue-on-error: true` é o modo de falha específico desta iteração: o
+/// passo fica vermelho, o job fica verde, a proteção de `main` libera o merge e
+/// o `scoreboard.csv` congela sem que ninguém veja. `if:` reprova pelo motivo
+/// da 0.2a — passo pulado não mede nada.
+#[test]
+fn ci_scoreboard_steps_cannot_fail_silently() {
+    let steps = steps_of_job(&read_workflow(), "scoreboard");
+
+    for (label, fragments) in SCOREBOARD_STEPS {
+        let step = steps
+            .iter()
+            .find(|s| s.mentions_all(fragments))
+            .unwrap_or_else(|| panic!("nenhum passo do job `scoreboard` faz {label}"));
+
+        assert!(
+            !step.has_key("if"),
+            "ROADMAP 0.2b: o passo de {label} está atrás de um `if:` e pode ser \
+             pulado sem que a CI fique vermelha. Passo:\n{}",
+            step.body
+        );
+        assert!(
+            matches!(step.value_of("continue-on-error"), None | Some("false")),
+            "ROADMAP 0.2b: o passo de {label} tem `continue-on-error` — ele pode \
+             morrer com o job terminando verde. Passo:\n{}",
+            step.body
+        );
+    }
+}
+
+/// ROADMAP 0.2b — quando o placar falha, é o artefato que se olha.
+///
+/// O `upload-artifact` só roda em passo de sucesso por padrão. Justamente na
+/// execução que interessa investigar — a que morreu no meio — o CSV parcial
+/// ficaria dentro do runner descartado. Este é o único `if:` desejado no job.
+#[test]
+fn ci_uploads_the_scoreboard_csv_even_on_failure() {
+    let steps = steps_of_job(&read_workflow(), "scoreboard");
+    let upload = steps
+        .iter()
+        .find(|s| s.mentions_all(&["upload-artifact"]))
+        .expect("ROADMAP 0.2: o job `scoreboard` não sobe mais o artefato do CSV");
+
+    assert_eq!(
+        upload.value_of("if"),
+        Some("always()"),
+        "ROADMAP 0.2b: sem `if: always()` o CSV da execução que falhou se perde \
+         com o runner — e é essa a execução que se quer ler. Passo:\n{}",
+        upload.body
+    );
 }

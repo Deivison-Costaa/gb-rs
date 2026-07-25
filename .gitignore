@@ -13,6 +13,9 @@ tests/roms/
 # Logs e métricas brutas do loop.sh (métricas consolidadas vão em docs/)
 logs/
 
+# Cache de downloads (bundle de ROMs) — evita rebaixar a cada execução
+.cache/
+
 # Tarball do scaffold original — conteúdo já expandido na árvore
 gb-rs-scaffold.tar.gz
 

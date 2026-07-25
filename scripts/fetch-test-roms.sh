@@ -70,6 +70,24 @@ new_tmpdir() {
   printf '%s' "$d"
 }
 
+# O bundle traz blargg/cgb_sound junto, que é suíte de Game Boy Color e não foi
+# pedida — este emulador é DMG. Deixá-la entrar poluiria o scoreboard com 13
+# falhas permanentes que não são regressão de nada.
+prune_blargg() {
+  local d="$ROMS_DIR/blargg" entry base keep
+  [[ -d "$d" ]] || return 0
+  for entry in "$d"/*; do
+    [[ -e "$entry" ]] || continue
+    base="$(basename "$entry")"
+    [[ "$base" == "halt_bug.gb" ]] && continue
+    keep=0
+    for s in "${REQUIRED_BLARGG[@]}"; do
+      [[ "$base" == "$s" ]] && { keep=1; break; }
+    done
+    (( keep )) || rm -rf "$entry"
+  done
+}
+
 require_tools() {
   local missing=()
   for t in curl unzip tar sha256sum; do
@@ -115,6 +133,7 @@ download_bundle() {
   mv "$tmp/mooneye-test-suite/acceptance"  "$ROMS_DIR/mooneye/acceptance"
   mv "$tmp/dmg-acid2"                      "$ROMS_DIR/dmg-acid2"
 
+  prune_blargg
   echo "$BUNDLE_VERSION" > "$STAMP"
 }
 
@@ -140,6 +159,8 @@ download_fallback() {
   curl -sSfL --retry 3 --connect-timeout 20 \
     -o "$ROMS_DIR/dmg-acid2/dmg-acid2.gb" "$ACID2_FALLBACK_URL" \
     || warn "dmg-acid2 indisponível também"
+
+  prune_blargg
 
   warn "mooneye NÃO baixada: não existe release pré-montada upstream, só o fonte (exige RGBDS)."
   warn "O scoreboard vai reportar 0 ROMs de mooneye até o bundle voltar."

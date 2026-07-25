@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0001 — workspace Cargo ([doc](docs/iterations/0001-workspace-cargo.md))
-**Próxima tarefa:** ROADMAP 0.2 — CI: fmt, clippy `-D warnings`, test. Artefato `scoreboard.csv`.
+**Última iteração concluída:** 0002 — job `check` incondicional ([doc](docs/iterations/0002-ci-check-incondicional.md))
+**Próxima tarefa:** ROADMAP 0.2b — job `scoreboard` falhar quando `scripts/scoreboard.sh` morre ou o CSV não cresce (ver nota 7).
 **Marco atual:** M0 — Fundação
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -55,6 +55,13 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
   `1` fail, `124` timeout, **qualquer outro** = erro do emulador. Enquanto não
   houver emulador, o binário sai `2`. Nunca reaproveite `0`/`1` para "não
   implementado" — isso planta um veredito falso no `scoreboard.csv`.
+- **Os três passos de qualidade do job `check` são incondicionais.** Nada de
+  `if:` em `cargo fmt` / `cargo clippy -- -D warnings` / `cargo test` — passo
+  pulado deixa o job verde sem ter medido nada, e é `check` verde que a proteção
+  de `main` exige. `crates/gb-cli/tests/ci_workflow.rs` reprova quem
+  reintroduzir a condicional, ou quem tirar o `-D warnings`. O teste mora em
+  `cargo test --all`, não no workflow: guarda dentro da coisa guardada some
+  junto com ela.
 - **`main` é protegida:** merge só via PR, com os jobs `check` e `scoreboard`
   verdes e branch atualizada. 0 aprovações exigidas (projeto solo), histórico
   linear, sem force-push. `enforce_admins=false` de propósito: se o loop
@@ -82,12 +89,13 @@ contorno previsto no prompt de bootstrap.
 
 ## Notas para a próxima iteração
 
-1. ~~**A guarda na CI some sozinha.**~~ **Resolvido na 0001.** `Cargo.toml`
-   está na raiz, `steps.workspace.outputs.exists` dá `true` e `fmt`/`clippy`/
-   `test` voltaram a rodar. A guarda em `.github/workflows/ci.yml` virou código
-   morto — o 0.2 pode removê-la.
+1. ~~**A guarda na CI some sozinha.**~~ **Removida na 0002.** E a 0001 a
+   descreveu errado: não era código morto, era condicional **viva** dando
+   `true`. Código morto não roda e não falha; condicional viva desliga os três
+   passos no dia em que o valor virar, sem pintar nada de vermelho. Hoje os
+   passos são incondicionais e há teste guardando isso.
 
-2. **As linhas geradas pela CI se perdem.** O artefato *contém* o histórico
+2. **As linhas geradas pela CI se perdem.** → agora é o **ROADMAP 0.2c**. O artefato *contém* o histórico
    versionado (o checkout traz o `scoreboard.csv` commitado, e a execução anexa
    por cima — o run do PR #1 subiu 242 linhas, não 121). O que se perde é o
    inverso: a CI não commita o que gerou, então as linhas produzidas por ela
@@ -117,12 +125,18 @@ contorno previsto no prompt de bootstrap.
    inteiro em `exit 1` — silencioso, zero linhas anexadas — antes do fallback
    que o próprio autor escrevera na linha seguinte. Só apareceu quando o
    `gb-cli` passou a existir e o caminho `mode=run` foi exercido pela primeira
-   vez. Corrigido com `|| true`. **Lição para o 0.2:** o job `scoreboard` da CI
-   não falha quando o script morre assim; se o CSV parar de crescer, é aí que
-   se olha.
+   vez. Corrigido com `|| true`. **O job `scoreboard` da CI ainda não falha
+   quando o script morre assim** — se o CSV parar de crescer, é aí que se olha.
+   → é o **ROADMAP 0.2b**, a próxima tarefa.
 
 8. **Escrever teste antes da implementação não torna o teste testado.** O erro
    #1 e #3 da 0001 são a mesma coisa vista de dois lados: código escrito "por
    antecipação" (o `scoreboard.sh` do bootstrap; os guardas de invariante) passa
    verde por vacuidade até algo real exercitá-lo. Quando escrever um guarda,
    force-o a falhar uma vez — nem que seja mutando o alvo à mão e revertendo.
+
+   **Reincidiu na 0002** e o procedimento funcionou:
+   `ci_check_job_runs_fmt_clippy_and_tests` passou de primeira, e só passou a
+   valer alguma coisa depois de duas mordidas (remover o passo do clippy;
+   tirar-lhe o `-D warnings`). Trate "passou de primeira" como suspeita, não
+   como notícia boa.

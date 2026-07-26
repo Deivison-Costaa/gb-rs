@@ -196,6 +196,7 @@ const ADD_HL_R16_MASK: u8 = 0b1100_1111;
 const ADD_HL_R16_PATTERN: u8 = 0b0000_1001;
 
 const ADD_SP_I8: u8 = 0xE8;
+const LD_HL_SP_I8: u8 = 0xF8;
 
 const HIGH_PAGE: u16 = 0xFF00;
 
@@ -256,6 +257,13 @@ enum AddSpI8 {
     WriteHigh,
 }
 
+// `LD HL,SP+i8` ($F8): mesmas flags do $E8, mas 3 M-cycles e destino HL.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LdHlSpI8 {
+    ReadImmediate,
+    Internal,
+}
+
 // match de Cpu::step é total sem _ =>: estado novo quebra a compilação.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -288,6 +296,7 @@ enum State {
     // no fetch (como o 1.7a); falta escrever a metade alta no internal.
     AddHlR16(R16),
     AddSpI8(AddSpI8),
+    LdHlSpI8(LdHlSpI8),
     Locked(Lockup),
 }
 
@@ -342,6 +351,7 @@ impl Cpu {
             State::IncDecR16(target) => self.finish_inc_dec_r16(target),
             State::AddHlR16(source) => self.finish_add_hl_r16(source),
             State::AddSpI8(phase) => self.add_sp_i8(bus, phase),
+            State::LdHlSpI8(phase) => self.ld_hl_sp_i8(bus, phase),
             State::Locked(lockup) => State::Locked(lockup),
         };
     }
@@ -371,7 +381,8 @@ impl Cpu {
             | State::IncDecHl(..)
             | State::IncDecR16(_)
             | State::AddHlR16(_)
-            | State::AddSpI8(_) => None,
+            | State::AddSpI8(_)
+            | State::LdHlSpI8(_) => None,
         }
     }
 
@@ -448,6 +459,7 @@ impl Cpu {
             }
             _ if opcode & ADD_HL_R16_MASK == ADD_HL_R16_PATTERN => self.add_hl_r16(opcode),
             ADD_SP_I8 => State::AddSpI8(AddSpI8::ReadImmediate),
+            LD_HL_SP_I8 => State::LdHlSpI8(LdHlSpI8::ReadImmediate),
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
             }
@@ -870,6 +882,35 @@ impl Cpu {
             AddSpI8::WriteHigh => {
                 let [high, _] = self.latch.to_be_bytes();
                 self.write_r16_high(R16::Sp, high);
+                State::Fetch
+            }
+        }
+    }
+
+    // 3 M-cycles: fetch → read(i8) → internal.
+    // Mesmas flags do `ADD SP,i8` ($E8), mas destino é HL (par de registrador)
+    // e não SP (que exigiria write pelo barramento) — ver docs/iterations/0031.
+    fn ld_hl_sp_i8(&mut self, bus: &mut Bus, phase: LdHlSpI8) -> State {
+        match phase {
+            LdHlSpI8::ReadImmediate => {
+                let i8 = self.read_at_pc(bus);
+                let sp = self.registers.sp;
+                let offset = (i8 as i8) as u16;
+                let result = sp.wrapping_add(offset);
+
+                let sp_low = (sp & 0xFF) as u8;
+                self.registers.set_flag(Flag::Z, false);
+                self.registers.set_flag(Flag::N, false);
+                self.registers
+                    .set_flag(Flag::H, (sp_low & 0x0F) + (i8 & 0x0F) > 0x0F);
+                self.registers
+                    .set_flag(Flag::C, u16::from(sp_low) + u16::from(i8) > 0xFF);
+
+                self.latch = result;
+                State::LdHlSpI8(LdHlSpI8::Internal)
+            }
+            LdHlSpI8::Internal => {
+                self.registers.set_hl(self.latch);
                 State::Fetch
             }
         }

@@ -224,7 +224,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     imediato — regra de 8 bits sobre um valor de 16, não o par inteiro do
     1.7b. `02-cpu.md` não tem essa seção; a nota 34/36 do 1.6a (ausência de
     seta não é sempre latch) precisa ser reavaliada aqui antes de supor.
-  - [ ] 1.7d `LD HL,SP+e8` (`$F8`) — 1 opcode, 3 M-cycles
+  - [x] 1.7d `LD HL,SP+e8` (`$F8`) — 1 opcode, 3 M-cycles
     (`fetch → read(i8) → internal`), a mesma coluna de flags do 1.7c mas um
     M-cycle a menos (escreve em `HL`, um par de registrador, não em `SP` pelo
     barramento) — não presuma a mesma forma só porque a flag é igual.

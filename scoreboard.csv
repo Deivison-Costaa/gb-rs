@@ -3871,3 +3871,124 @@ timestamp,commit,suite,rom,status,ciclos
 2026-07-26T15:42:52Z,184593b,"mooneye/acceptance","mooneye/acceptance/timer/tima_reload.gb",crash,0
 2026-07-26T15:42:52Z,184593b,"mooneye/acceptance","mooneye/acceptance/timer/tima_write_reloading.gb",crash,0
 2026-07-26T15:42:52Z,184593b,"mooneye/acceptance","mooneye/acceptance/timer/tma_write_reloading.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/cpu_instrs","blargg/cpu_instrs/cpu_instrs.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/cpu_instrs","blargg/cpu_instrs/individual/01-special.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/cpu_instrs","blargg/cpu_instrs/individual/02-interrupts.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/cpu_instrs","blargg/cpu_instrs/individual/03-op sp,hl.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/cpu_instrs","blargg/cpu_instrs/individual/04-op r,imm.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/cpu_instrs","blargg/cpu_instrs/individual/05-op rp.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/cpu_instrs","blargg/cpu_instrs/individual/06-ld r,r.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/cpu_instrs","blargg/cpu_instrs/individual/07-jr,jp,call,ret,rst.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/cpu_instrs","blargg/cpu_instrs/individual/08-misc instrs.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/cpu_instrs","blargg/cpu_instrs/individual/09-op r,r.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/cpu_instrs","blargg/cpu_instrs/individual/10-bit ops.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/cpu_instrs","blargg/cpu_instrs/individual/11-op a,(hl).gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/dmg_sound","blargg/dmg_sound/dmg_sound.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/dmg_sound","blargg/dmg_sound/rom_singles/01-registers.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/dmg_sound","blargg/dmg_sound/rom_singles/02-len ctr.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/dmg_sound","blargg/dmg_sound/rom_singles/03-trigger.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/dmg_sound","blargg/dmg_sound/rom_singles/04-sweep.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/dmg_sound","blargg/dmg_sound/rom_singles/05-sweep details.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/dmg_sound","blargg/dmg_sound/rom_singles/06-overflow on trigger.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/dmg_sound","blargg/dmg_sound/rom_singles/07-len sweep period sync.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/dmg_sound","blargg/dmg_sound/rom_singles/08-len ctr during power.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/dmg_sound","blargg/dmg_sound/rom_singles/09-wave read while on.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/dmg_sound","blargg/dmg_sound/rom_singles/10-wave trigger while on.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/dmg_sound","blargg/dmg_sound/rom_singles/11-regs after power.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/dmg_sound","blargg/dmg_sound/rom_singles/12-wave write while on.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/halt_bug","blargg/halt_bug.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/instr_timing","blargg/instr_timing/instr_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/interrupt_time","blargg/interrupt_time/interrupt_time.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/mem_timing-2","blargg/mem_timing-2/mem_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/mem_timing-2","blargg/mem_timing-2/rom_singles/01-read_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/mem_timing-2","blargg/mem_timing-2/rom_singles/02-write_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/mem_timing-2","blargg/mem_timing-2/rom_singles/03-modify_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/mem_timing","blargg/mem_timing/individual/01-read_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/mem_timing","blargg/mem_timing/individual/02-write_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/mem_timing","blargg/mem_timing/individual/03-modify_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/mem_timing","blargg/mem_timing/mem_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/oam_bug","blargg/oam_bug/oam_bug.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/oam_bug","blargg/oam_bug/rom_singles/1-lcd_sync.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/oam_bug","blargg/oam_bug/rom_singles/2-causes.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/oam_bug","blargg/oam_bug/rom_singles/3-non_causes.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/oam_bug","blargg/oam_bug/rom_singles/4-scanline_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/oam_bug","blargg/oam_bug/rom_singles/5-timing_bug.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/oam_bug","blargg/oam_bug/rom_singles/6-timing_no_bug.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/oam_bug","blargg/oam_bug/rom_singles/7-timing_effect.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"blargg/oam_bug","blargg/oam_bug/rom_singles/8-instr_effect.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"dmg-acid2","dmg-acid2/dmg-acid2.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/add_sp_e_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/bits/mem_oam.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/bits/reg_f.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/bits/unused_hwio-GS.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance-nondmg","mooneye/acceptance/boot_div2-S.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance-nondmg","mooneye/acceptance/boot_div-dmg0.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/boot_div-dmgABCmgb.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance-nondmg","mooneye/acceptance/boot_div-S.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance-nondmg","mooneye/acceptance/boot_hwio-dmg0.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/boot_hwio-dmgABCmgb.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance-nondmg","mooneye/acceptance/boot_hwio-S.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance-nondmg","mooneye/acceptance/boot_regs-dmg0.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/boot_regs-dmgABC.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance-nondmg","mooneye/acceptance/boot_regs-mgb.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance-nondmg","mooneye/acceptance/boot_regs-sgb2.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance-nondmg","mooneye/acceptance/boot_regs-sgb.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/call_cc_timing2.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/call_cc_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/call_timing2.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/call_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/di_timing-GS.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/div_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ei_sequence.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ei_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/halt_ime0_ei.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/halt_ime0_nointr_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/halt_ime1_timing2-GS.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/halt_ime1_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/if_ie_registers.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/instr/daa.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/interrupts/ie_push.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/intr_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/jp_cc_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/jp_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ld_hl_sp_e_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/oam_dma/basic.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/oam_dma/reg_read.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/oam_dma_restart.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/oam_dma/sources-GS.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/oam_dma_start.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/oam_dma_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/pop_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ppu/hblank_ly_scx_timing-GS.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ppu/intr_1_2_timing-GS.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ppu/intr_2_0_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ppu/intr_2_mode0_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ppu/intr_2_mode0_timing_sprites.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ppu/intr_2_mode3_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ppu/intr_2_oam_ok_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ppu/lcdon_timing-GS.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ppu/lcdon_write_timing-GS.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ppu/stat_irq_blocking.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ppu/stat_lyc_onoff.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ppu/vblank_stat_intr-GS.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/push_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/rapid_di_ei.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ret_cc_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/reti_intr_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/reti_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/ret_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/rst_timing.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/serial/boot_sclk_align-dmgABCmgb.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/timer/div_write.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/timer/rapid_toggle.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/timer/tim00_div_trigger.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/timer/tim00.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/timer/tim01_div_trigger.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/timer/tim01.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/timer/tim10_div_trigger.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/timer/tim10.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/timer/tim11_div_trigger.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/timer/tim11.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/timer/tima_reload.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/timer/tima_write_reloading.gb",crash,0
+2026-07-26T16:12:16Z,9316e2d,"mooneye/acceptance","mooneye/acceptance/timer/tma_write_reloading.gb",crash,0

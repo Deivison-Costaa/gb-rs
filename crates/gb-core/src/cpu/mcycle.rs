@@ -20,16 +20,23 @@
 //! da seguinte. Os dois modelos dão o mesmo número de M-cycles por instrução, e
 //! é o número que a suíte Mooneye cobra.
 //!
-//! # Por que não há tabela de micro-operações
+//! # Por que ainda não há tabela de micro-operações
 //!
 //! Um `enum MicroOp { ReadImmediate, Internal, … }` seria o desenho natural
-//! para os 245 opcodes que faltam — e é código escrito por antecipação, que a
+//! para os opcodes que faltam — e é código escrito por antecipação, que a
 //! nota 8 do `STATUS.md` registra como o erro mais reincidente do projeto:
-//! passa verde por vacuidade até algo real exercitá-lo. Com duas instruções
-//! decodificadas não há de onde generalizar. Os estados abaixo descrevem
-//! exatamente as instruções que existem hoje, o `match` é total sem `_ =>`, e
-//! quem acrescentar um opcode no 1.4 vai **precisar** mexer aqui — que é o
-//! momento em que a generalização terá três casos para aprender.
+//! passa verde por vacuidade até algo real exercitá-lo.
+//!
+//! O 1.4a acrescentou 63 opcodes e **três** formas de M-cycle, todas da mesma
+//! família: `fetch`, e depois no máximo um acesso ao barramento. Generalizar
+//! daí seria generalizar de um terço dos dados — as outras formas do `x8/lsm`
+//! (operando imediato no 1.4b, efeito colateral sobre `HL` no 1.4c, endereço
+//! de 16 bits no 1.4d) ainda não existem para contradizer o desenho. A
+//! decisão está marcada no ROADMAP, no 1.4d.
+//!
+//! O que **nasceu** aqui é menor e vem direto da spec: [`R8`], o operando de
+//! três bits da § Block 1. Isso não é antecipação — é a codificação que a
+//! tabela dá, e os 63 opcodes a exercitam inteira.
 //!
 //! # Onde entra o resto da máquina
 //!
@@ -50,6 +57,42 @@ const NOP: u8 = 0x00;
 /// `fetch → read(u16:lower) → read(u16:upper) → internal(branch decision?)`.
 const JP_U16: u8 = 0xC3;
 
+/// `$40`–`$7F` — o bloco `LD r8,r8` (ROADMAP 1.4a).
+///
+/// `docs/reference/02-cpu.md`, § Block 1: 8-bit register-to-register loads:
+///
+/// ```text
+/// Bits | Campo
+///    7 | 0
+///    6 | 1
+///  5-3 | Dest (r8)
+///  2-0 | Source (r8)
+/// ```
+///
+/// Sessenta e quatro combinações, das quais 63 são load — a 64ª é [`HALT`].
+/// Os dois extremos são `0b01_000_000` e `0b01_111_111`.
+const LD_R8_R8_FIRST: u8 = 0x40;
+/// Ver [`LD_R8_R8_FIRST`].
+const LD_R8_R8_LAST: u8 = 0x7F;
+
+/// `$76` — `HALT`, e **não** `LD (HL),(HL)`.
+///
+/// A § Block 1 chama isto de exceção, com todas as letras:
+///
+/// > **Exception**: trying to encode `ld [hl], [hl]` instead yields the `halt`
+/// > instruction
+///
+/// É o único buraco de um bloco que fora dele é perfeitamente regular, e um
+/// decodificador escrito direto dos bits não o vê: `0b01_110_110` é destino 6,
+/// fonte 6, e a fórmula responde "leia `(HL)` e escreva em `(HL)`" — uma
+/// instrução sem efeito observável, que não trava, e que faria qualquer ROM
+/// que use `HALT` para esperar uma interrupção girar para sempre.
+///
+/// `HALT` é o ROADMAP 2.3 (com o bug do `HALT` junto), então até lá ele para a
+/// CPU com [`Lockup::UndecodedOpcode`] — o rótulo que diz "falta implementar",
+/// como qualquer outro opcode legítimo que ainda não chegou.
+const HALT: u8 = 0x76;
+
 /// Por que a CPU parou de buscar instruções.
 ///
 /// As duas variantes têm o mesmo efeito — a CPU não anda mais — e origens
@@ -69,11 +112,85 @@ pub enum Lockup {
     /// termina. Não são `NOP`.
     IllegalOpcode(u8),
     /// Opcode legítimo do SM83 que este emulador ainda não decodifica — hoje
-    /// 243 dos 256, e eles chegam nos itens 1.4 a 1.11 do ROADMAP.
+    /// **180** dos 245 que existem, e eles chegam nos itens 1.4b a 1.11 do
+    /// ROADMAP. Um deles é o [`HALT`], que só é "não decodificado" porque o
+    /// 2.3 ainda não chegou; os outros 179 nunca foram tentados.
     ///
     /// Parar aqui, em vez de entrar em pânico, mantém o `gb-core` como máquina
     /// de estados: quem decide o que fazer com uma CPU parada é quem a roda.
     UndecodedOpcode(u8),
+}
+
+/// Um dos **sete** registradores de 8 bits alcançáveis como operando.
+///
+/// Sete, e não oito: o oitavo valor de [`R8`] é a memória, não um registrador.
+/// Manter os dois em tipos separados é o que faz o `match` de [`Cpu::fetch`]
+/// distinguir as três formas de M-cycle sem um braço impossível — e o que
+/// permite a [`State::LoadFromHl`] carregar um destino que **é** registrador,
+/// sem `unreachable!` (a R6 não quer pânico no `gb-core`).
+///
+/// `F` não está aqui, e a ausência é da spec: a lista `r8` é
+/// `b c d e h l [hl] a`, sem `f`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ByteRegister {
+    B,
+    C,
+    D,
+    E,
+    H,
+    L,
+    A,
+}
+
+/// O operando `r8` da spec: três bits, oito valores.
+///
+/// `docs/reference/02-cpu.md`, § CPU Instruction Set, tabela de placeholders:
+///
+/// ```text
+/// 0 | b      4 | h
+/// 1 | c      5 | l
+/// 2 | d      6 | [hl]
+/// 3 | e      7 | a
+/// ```
+///
+/// O índice 6 é o que dá as três formas de M-cycle do bloco: sem ele a
+/// instrução é `fetch` e acabou; com ele no lugar da fonte há uma leitura no
+/// M2; com ele no lugar do destino há uma escrita no M2.
+///
+/// **A tabela dessa seção está corrompida na conversão** (nota 24 do
+/// `STATUS.md`): ela emenda, sem cabeçalho, os placeholders `r8`, `r16`,
+/// `r16stk`, `r16mem` e `cond` numa lista só, com os índices 0–3 repetidos
+/// quatro vezes. Os oito valores acima são o primeiro bloco, e quem confirma
+/// que a leitura é essa é a tabela de gbops em `03-opcodes.md`, que enumera os
+/// 63 opcodes um a um — e a própria § Block 1, cuja exceção
+/// (`ld [hl], [hl]` → `halt`) só faz sentido com `[hl]` no índice 6.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum R8 {
+    /// Índices 0–5 e 7.
+    Register(ByteRegister),
+    /// Índice 6 — a memória apontada por `HL`, não um registrador.
+    MemoryAtHl,
+}
+
+impl R8 {
+    /// Decodifica os três bits de um campo `r8`.
+    ///
+    /// O `_` do último braço é `0b111` e só ele: a máscara deixa oito valores,
+    /// sete estão nomeados acima. Um `match` sobre `u8` não tem como ser
+    /// exaustivo sem ele, e a alternativa seria um `unreachable!` — pânico que
+    /// a R6 não quer no `gb-core`.
+    const fn from_bits(bits: u8) -> Self {
+        match bits & 0b111 {
+            0 => Self::Register(ByteRegister::B),
+            1 => Self::Register(ByteRegister::C),
+            2 => Self::Register(ByteRegister::D),
+            3 => Self::Register(ByteRegister::E),
+            4 => Self::Register(ByteRegister::H),
+            5 => Self::Register(ByteRegister::L),
+            6 => Self::MemoryAtHl,
+            _ => Self::Register(ByteRegister::A),
+        }
+    }
 }
 
 /// Em que ponto de qual instrução a CPU está.
@@ -88,6 +205,17 @@ enum State {
     /// Dentro de `JP u16`. O `fetch` já aconteceu — foi ele que criou este
     /// estado —, então o que resta são os três M-cycles de [`JumpImmediate`].
     JumpImmediate(JumpImmediate),
+    /// Dentro de `LD r,(HL)`. O M2 é `read((HL)->r)`: a leitura no barramento
+    /// e a escrita no registrador acontecem no **mesmo** M-cycle, e o
+    /// registrador que vai receber o byte viaja aqui.
+    ///
+    /// Não há um terceiro M-cycle onde a escrita "aconteça de verdade". A
+    /// tentação de pôr um vem do `JP u16`, cujo desvio é do M4 e não do M3 —
+    /// mas ali a coluna tem quatro passos e aqui tem dois, e os 8 T-cycles não
+    /// deixam espaço para inventar o terceiro.
+    LoadFromHl(ByteRegister),
+    /// Dentro de `LD (HL),r`. O M2 é `write(r->(HL))`.
+    StoreToHl(ByteRegister),
     /// A CPU parou, e não volta.
     Locked(Lockup),
 }
@@ -163,6 +291,8 @@ impl Cpu {
         self.state = match self.state {
             State::Fetch => self.fetch(bus),
             State::JumpImmediate(phase) => self.jump_immediate(bus, phase),
+            State::LoadFromHl(dest) => self.load_from_hl(bus, dest),
+            State::StoreToHl(source) => self.store_to_hl(bus, source),
             // O tempo passa; a CPU não. Ver [`Lockup`].
             State::Locked(lockup) => State::Locked(lockup),
         };
@@ -173,7 +303,9 @@ impl Cpu {
     pub const fn lockup(&self) -> Option<Lockup> {
         match self.state {
             State::Locked(lockup) => Some(lockup),
-            State::Fetch | State::JumpImmediate(_) => None,
+            State::Fetch | State::JumpImmediate(_) | State::LoadFromHl(_) | State::StoreToHl(_) => {
+                None
+            }
         }
     }
 
@@ -193,6 +325,10 @@ impl Cpu {
             // Um M-cycle, que é este; nada a fazer e nada a lembrar.
             NOP => State::Fetch,
             JP_U16 => State::JumpImmediate(JumpImmediate::ReadLowByte),
+            // A exceção **antes** do bloco, e a ordem é o ponto: `$76` cai
+            // dentro da faixa abaixo e não é um load. Ver [`HALT`].
+            HALT => State::Locked(Lockup::UndecodedOpcode(opcode)),
+            LD_R8_R8_FIRST..=LD_R8_R8_LAST => self.load_r8_r8(opcode),
             // Os onze `-` da coluna `GB CPU`. Ver [`Lockup::IllegalOpcode`].
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
@@ -218,6 +354,83 @@ impl Cpu {
                 self.registers.pc = self.latch;
                 State::Fetch
             }
+        }
+    }
+
+    /// Decodifica um opcode do bloco `01 ddd sss` e faz o que couber no M1.
+    ///
+    /// As três formas da tabela de gbops saem das três combinações possíveis
+    /// dos dois campos, e a quarta — os dois em `[hl]` — não chega aqui: é o
+    /// [`HALT`], desviado antes.
+    ///
+    /// | Dest | Source | T-cycles | Coluna |
+    /// |---|---|---|---|
+    /// | reg | reg | 4 | `fetch` |
+    /// | reg | `[hl]` | 8 | `fetch → read((HL)->r)` |
+    /// | `[hl]` | reg | 8 | `fetch → write(r->(HL))` |
+    ///
+    /// A primeira acaba **aqui**, dentro do fetch: a coluna tem um passo só, e
+    /// mover um byte entre dois registradores não toca o barramento.
+    fn load_r8_r8(&mut self, opcode: u8) -> State {
+        match (R8::from_bits(opcode >> 3), R8::from_bits(opcode)) {
+            (R8::Register(dest), R8::Register(source)) => {
+                let value = self.read_r8(source);
+                self.write_r8(dest, value);
+                State::Fetch
+            }
+            (R8::Register(dest), R8::MemoryAtHl) => State::LoadFromHl(dest),
+            (R8::MemoryAtHl, R8::Register(source)) => State::StoreToHl(source),
+            // `$76`, que [`HALT`] já desviou. O braço existe para que o
+            // `match` seja total sem `_ =>`, como o do [`State`].
+            (R8::MemoryAtHl, R8::MemoryAtHl) => State::Locked(Lockup::UndecodedOpcode(opcode)),
+        }
+    }
+
+    /// M2 de `LD r,(HL)`: `read((HL)->r)`.
+    ///
+    /// Um acesso ao barramento e a escrita no registrador, no mesmo M-cycle.
+    /// O endereço é o `HL` de agora — nada neste bloco mexe em `HL`, e por
+    /// isso `LD H,(HL)` lê de onde `HL` apontava antes de `H` mudar.
+    fn load_from_hl(&mut self, bus: &Bus, dest: ByteRegister) -> State {
+        let value = bus.read(self.registers.hl());
+        self.write_r8(dest, value);
+        State::Fetch
+    }
+
+    /// M2 de `LD (HL),r`: `write(r->(HL))`.
+    fn store_to_hl(&mut self, bus: &mut Bus, source: ByteRegister) -> State {
+        bus.write(self.registers.hl(), self.read_r8(source));
+        State::Fetch
+    }
+
+    /// O valor de um dos sete registradores de 8 bits.
+    ///
+    /// Este mapeamento mora no decodificador, e não em [`Registers`], de
+    /// propósito: o 1.1 decidiu que o banco de registradores tem campos
+    /// públicos e nenhum acessor por registrador, porque quem precisa de um
+    /// nome de três bits para um campo é quem decodifica opcode.
+    const fn read_r8(&self, which: ByteRegister) -> u8 {
+        match which {
+            ByteRegister::B => self.registers.b,
+            ByteRegister::C => self.registers.c,
+            ByteRegister::D => self.registers.d,
+            ByteRegister::E => self.registers.e,
+            ByteRegister::H => self.registers.h,
+            ByteRegister::L => self.registers.l,
+            ByteRegister::A => self.registers.a,
+        }
+    }
+
+    /// Escreve num dos sete registradores de 8 bits. Ver [`Cpu::read_r8`].
+    const fn write_r8(&mut self, which: ByteRegister, value: u8) {
+        match which {
+            ByteRegister::B => self.registers.b = value,
+            ByteRegister::C => self.registers.c = value,
+            ByteRegister::D => self.registers.d = value,
+            ByteRegister::E => self.registers.e = value,
+            ByteRegister::H => self.registers.h = value,
+            ByteRegister::L => self.registers.l = value,
+            ByteRegister::A => self.registers.a = value,
         }
     }
 

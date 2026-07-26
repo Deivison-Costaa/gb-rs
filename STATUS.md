@@ -3,10 +3,11 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0040 — JP cc,u16 (`$C2` `$CA` `$D2` `$DA`) + JP HL (`$E9`) ([doc](docs/iterations/0040-jp-cond-hl.md)). 5 opcodes, 3-4 M-cycles (12/16 T). `State::JumpImmediate` ganhou campo `Condition`; `$C3` passa `Always` e o fluxo é idêntico ao de antes. `$E9` resolve no fetch em 1 M-cycle. Bateria: **6/6 pegos, 2/2 controles verdes**.
+**Última iteração concluída:** 0041 — CALL cc,u16 (`$C4` `$CC` `$CD` `$D4` `$DC`) ([doc](docs/iterations/0041-call-cond.md)). 5 opcodes, 3/6 M-cycles (12/24 T). `State::CallImmediate` é variante própria, independente do `JumpImmediate` — a decisão condicional no M3 leva a `Internal` em vez de `SetProgramCounter`. O `PC` (endereço de retorno) é usado direto nos `push_byte`, sem latch adicional. Bateria: **6/6 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0040 — JP cc,u16 + JP HL ([doc](docs/iterations/0040-jp-cond-hl.md)).
 **Iteração anterior:** 0039 — Quebra do 1.10 + JR cc,i8 (`$18` `$20` `$28` `$30` `$38`) ([doc](docs/iterations/0039-jr-breakdown.md)).
 **Duas iterações atrás:** 0038 — SET (`CB C0`–`CB FF`) ([doc](docs/iterations/0038-cb-set.md)).
-**Próxima tarefa:** ROADMAP **1.10c** — `CALL cc,u16` (`$C4` `$CC` `$CD` `$D4` `$DC`). `CALL` condicional é a extensão natural do `JP cc,u16`: mesma decisão condicional após ler os dois bytes do operando, mas o caminho "com desvio" adiciona um `PUSH` implícito de `PC` (push do endereço de retorno). Sem desvio: `fetch → read(low) → read(high)` (12 T); com desvio: `fetch → read(low) → read(high) → internal → write(upper→(--SP)) → write(lower→(--SP))` (24 T). O `internal` entre `read(high)` e o primeiro `write` decide a condição — é o mesmo ponto que esta iteração usa em `ReadHighByte`. O `CALL u16` (`$CD`) é o incondicional do grupo. O `evaluate_condition` e o `Condition` continuam os mesmos. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação). O `PUSH` implícito reaproveita `push_byte` (1.5b) — o `PC` pós-leitura do operando (que aponta para a instrução seguinte) é empilhado em duas escritas com `--SP`.
+**Próxima tarefa:** ROADMAP **1.10d** — `RET cc` (`$C0` `$C8` `$D0` `$D8`) + `RET` (`$C9`) + `RETI` (`$D9`). `RET` condicional é o inverso do `CALL`: lê da pilha (`POP` implícito) para `PC`. Sem desvio: `fetch → internal` (8 T); com desvio: `fetch → internal → read((SP++)→lower) → read((SP++)→upper) → internal(set PC)` (20 T). O `internal` do M2 decide a condição — mesmo ponto que o `Internal` desta iteração. `RET` incondicional (`$C9`): 4 M-cycles (16 T), `fetch → read((SP++)→lower) → read((SP++)→upper) → internal(set PC)`. `RETI` é `RET` + `EI` em hardware; a ativação do IME pode entrar aqui (como stub para o 1.11/2.2) ou ficar delegada. O `pop_byte` (1.5c) é reaproveitado para as leituras. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação). O `Condition` e `evaluate_condition` continuam os mesmos. A máscara de condição de `RET` é `0xE7` / `0xC0` (bits 5-4, mesma posição dos demais). Os opcodes são: `C0`=NZ, `C8`=Z, `C9`=incondicional, `D0`=NC, `D8`=C, `D9`=RETI (decodificado individualmente).
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -37,7 +38,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **491** (eram **471** antes da 0040 — +20 do novo arquivo `cpu_jp`).
+Testes do workspace: **511** (eram **491** antes da 0041 — +20 do novo arquivo `cpu_call`).
 
 ## Invariantes
 

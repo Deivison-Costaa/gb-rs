@@ -203,6 +203,10 @@ const JP_COND_MASK: u8 = 0xE7;
 const JP_COND_PATTERN: u8 = 0xC2;
 const JP_HL: u8 = 0xE9;
 
+const CALL_U16: u8 = 0xCD;
+const CALL_COND_MASK: u8 = 0xE7;
+const CALL_COND_PATTERN: u8 = 0xC4;
+
 const CB_PREFIX: u8 = 0xCB;
 
 const RLCA: u8 = 0x07;
@@ -324,6 +328,7 @@ enum Condition {
 enum State {
     Fetch,
     JumpImmediate(Condition, JumpImmediate),
+    CallImmediate(Condition, CallImmediate),
     LoadFromHl(ByteRegister),
     StoreToHl(ByteRegister),
     LoadImmediate(ByteRegister),
@@ -375,6 +380,15 @@ enum JumpImmediate {
     SetProgramCounter,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CallImmediate {
+    ReadLowByte,
+    ReadHighByte,
+    Internal,
+    PushHighByte,
+    PushLowByte,
+}
+
 #[derive(Debug, Clone)]
 pub struct Cpu {
     pub registers: Registers,
@@ -397,6 +411,7 @@ impl Cpu {
         self.state = match self.state {
             State::Fetch => self.fetch(bus),
             State::JumpImmediate(condition, phase) => self.jump_immediate(bus, condition, phase),
+            State::CallImmediate(condition, phase) => self.call_immediate(bus, condition, phase),
             State::LoadFromHl(dest) => self.load_from_hl(bus, dest),
             State::StoreToHl(source) => self.store_to_hl(bus, source),
             State::LoadImmediate(dest) => self.load_immediate(bus, dest),
@@ -437,6 +452,7 @@ impl Cpu {
             State::Locked(lockup) => Some(lockup),
             State::Fetch
             | State::JumpImmediate(..)
+            | State::CallImmediate(..)
             | State::LoadFromHl(_)
             | State::StoreToHl(_)
             | State::LoadImmediate(_)
@@ -499,6 +515,11 @@ impl Cpu {
                 self.registers.pc = self.registers.hl();
                 State::Fetch
             }
+            CALL_U16 => State::CallImmediate(Condition::Always, CallImmediate::ReadLowByte),
+            _ if opcode & CALL_COND_MASK == CALL_COND_PATTERN => State::CallImmediate(
+                Self::decode_jp_condition(opcode),
+                CallImmediate::ReadLowByte,
+            ),
             _ if opcode & JP_COND_MASK == JP_COND_PATTERN => State::JumpImmediate(
                 Self::decode_jp_condition(opcode),
                 JumpImmediate::ReadLowByte,
@@ -593,6 +614,40 @@ impl Cpu {
                 }
             }
             JumpImmediate::SetProgramCounter => {
+                self.registers.pc = self.latch;
+                State::Fetch
+            }
+        }
+    }
+
+    fn call_immediate(
+        &mut self,
+        bus: &mut Bus,
+        condition: Condition,
+        phase: CallImmediate,
+    ) -> State {
+        match phase {
+            CallImmediate::ReadLowByte => {
+                self.latch = u16::from(self.read_at_pc(bus));
+                State::CallImmediate(condition, CallImmediate::ReadHighByte)
+            }
+            CallImmediate::ReadHighByte => {
+                self.latch |= u16::from(self.read_at_pc(bus)) << 8;
+                if Self::evaluate_condition(self, condition) {
+                    State::CallImmediate(condition, CallImmediate::Internal)
+                } else {
+                    State::Fetch
+                }
+            }
+            CallImmediate::Internal => State::CallImmediate(condition, CallImmediate::PushHighByte),
+            CallImmediate::PushHighByte => {
+                let [high, _] = self.registers.pc.to_be_bytes();
+                self.push_byte(bus, high);
+                State::CallImmediate(condition, CallImmediate::PushLowByte)
+            }
+            CallImmediate::PushLowByte => {
+                let [_, low] = self.registers.pc.to_be_bytes();
+                self.push_byte(bus, low);
                 self.registers.pc = self.latch;
                 State::Fetch
             }

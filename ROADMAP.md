@@ -232,7 +232,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [ ] 1.9 Opcodes: prefixo CB completo (BIT/RES/SET/rot).
   - [x] 1.9a CB decode + RLC (`CB 00`–`CB 07`) — mecanismo de dois M-cycles: o `$CB` no fetch transita para um segundo fetch que lê e decodifica o opcode real. RLC calcula `Z` (result == 0), enquanto o `RLCA` não-prefixado zera incondicionalmente — mesma armadilha da 0032 ao contrário. `(HL)` é read-modify-write em 4 M-cycles (16 T-cycles).
   - [x] 1.9b RRC + RL + RR (`CB 08`–`CB 1F`).
-  - [ ] 1.9c SLA + SRA + SWAP + SRL (`CB 20`–`CB 3F`).
+  - [x] 1.9c SLA + SRA + SWAP + SRL (`CB 20`–`CB 3F`).
   - [ ] 1.9d BIT (`CB 40`–`CB 7F`) — `Z` = bit testado, `N=0`, `H=1`, `C` intocado. `(HL)` são 12 T-cycles (read sem write).
   - [ ] 1.9e RES (`CB 80`–`CB BF`) — sem flags, `(HL)` é read-modify-write.
   - [ ] 1.9f SET (`CB C0`–`CB FF`) — sem flags, `(HL)` é read-modify-write.

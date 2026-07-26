@@ -278,6 +278,10 @@ enum CbRotOp {
     Rrc,
     Rl,
     Rr,
+    Sla,
+    Sra,
+    Swap,
+    Srl,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -979,6 +983,10 @@ impl Cpu {
             0b00001 => self.cb_rrc(opcode),
             0b00010 => self.cb_rl(opcode),
             0b00011 => self.cb_rr(opcode),
+            0b00100 => self.cb_sla(opcode),
+            0b00101 => self.cb_sra(opcode),
+            0b00110 => self.cb_swap(opcode),
+            0b00111 => self.cb_srl(opcode),
             _ => State::Locked(Lockup::UndecodedOpcode(opcode)),
         }
     }
@@ -992,6 +1000,10 @@ impl Cpu {
                     CbRotOp::Rrc => alu::rrc(value),
                     CbRotOp::Rl => alu::rl(value, carry_in),
                     CbRotOp::Rr => alu::rr(value, carry_in),
+                    CbRotOp::Sla => alu::sla(value),
+                    CbRotOp::Sra => alu::sra(value),
+                    CbRotOp::Swap => alu::swap(value),
+                    CbRotOp::Srl => alu::srl(value),
                 };
                 self.registers.set_flag(Flag::Z, result == 0);
                 self.registers.set_flag(Flag::N, false);
@@ -1022,6 +1034,22 @@ impl Cpu {
         self.cb_rot(opcode, CbRotOp::Rr, carry_in)
     }
 
+    fn cb_sla(&mut self, opcode: u8) -> State {
+        self.cb_rot(opcode, CbRotOp::Sla, false)
+    }
+
+    fn cb_sra(&mut self, opcode: u8) -> State {
+        self.cb_rot(opcode, CbRotOp::Sra, false)
+    }
+
+    fn cb_swap(&mut self, opcode: u8) -> State {
+        self.cb_rot(opcode, CbRotOp::Swap, false)
+    }
+
+    fn cb_srl(&mut self, opcode: u8) -> State {
+        self.cb_rot(opcode, CbRotOp::Srl, false)
+    }
+
     fn cb_rot_hl(&mut self, bus: &mut Bus, op: CbRotOp, phase: CbRotHlPhase) -> State {
         match phase {
             CbRotHlPhase::Read => {
@@ -1032,6 +1060,10 @@ impl Cpu {
                     CbRotOp::Rrc => alu::rrc(value),
                     CbRotOp::Rl => alu::rl(value, carry_in),
                     CbRotOp::Rr => alu::rr(value, carry_in),
+                    CbRotOp::Sla => alu::sla(value),
+                    CbRotOp::Sra => alu::sra(value),
+                    CbRotOp::Swap => alu::swap(value),
+                    CbRotOp::Srl => alu::srl(value),
                 };
                 self.registers.set_flag(Flag::Z, result == 0);
                 self.registers.set_flag(Flag::N, false);

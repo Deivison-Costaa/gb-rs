@@ -315,13 +315,13 @@ fn unknown_subcommand_exits_with_usage() {
 }
 
 #[test]
-fn run_is_still_unimplemented_and_exits_two() {
+fn run_with_relative_path_that_does_not_point_to_an_existing_rom_exits_with_no_input() {
     let out = gb_cli(&["run", "tetris.gb", "--headless", "--max-cycles", "1000"]);
 
     assert_eq!(
         code(&out),
-        Some(2),
-        "o `run` é do 1.12; `2` é o `crash` que o scoreboard espera\n{}",
+        Some(66),
+        "arquivo inexistente tem de sair com NO_INPUT, não com 2\n{}",
         describe(&out)
     );
 }

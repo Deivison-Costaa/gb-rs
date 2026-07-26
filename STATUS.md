@@ -3,11 +3,11 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0042 — RET cc + RET + RETI (`$C0` `$C8` `$C9` `$D0` `$D8` `$D9`) ([doc](docs/iterations/0042-ret-cond.md)). 6 opcodes, 2/5 M-cycles (8/20 T condicional, 16 T incondicional). `ReturnConditional(Condition)` é o M2 de decisão — sem leitura de barramento no caminho curto, ao contrário do CALL que sempre lê os operandos. `ReturnImpl(ReturnPop, bool)` compartilha as 3 fases de pop para os 6 opcodes; o `bool` carrega a flag de IME para `RETI`. `pop_byte` e `decode_jp_condition` reusados sem alteração. Bateria: **6/6 pegos, 2/2 controles verdes**.
+**Última iteração concluída:** 0043 — RST (`$C7` `$CF` `$D7` `$DF` `$E7` `$EF` `$F7` `$FF`) ([doc](docs/iterations/0043-rst.md)). 8 opcodes, 4 M-cycles (16 T), `fetch → internal → write(PC:upper→(--SP)) → write(PC:lower→(--SP))`. Reusa `call_immediate` a partir do `Internal` (M4 do CALL): o destino é latchado no fetch (`u16::from((opcode >> 3) & 7) * 8`) e o `PushLowByte` o consome como `self.registers.pc = self.latch`. `$F7`/`$FF` não colidem com `PUSH` — verificado. Menor iteração do M1: 5 linhas de código. Bateria: **4/4 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0042 — RET cc + RET + RETI.
 **Iteração anterior:** 0041 — CALL cc,u16.
-**Iteração anterior:** 0040 — JP cc,u16 + JP HL.
-**Duas iterações atrás:** 0039 — Quebra do 1.10 + JR cc,i8.
-**Próxima tarefa:** ROADMAP **1.10e** — `RST` (`$C7` `$CF` `$D7` `$DF` `$E7` `$EF` `$F7` `$FF`). 8 opcodes, 4 M-cycles (16 T), `fetch → internal → write(PC:upper→(--SP)) → write(PC:lower→(--SP))`. Essencialmente `CALL` para endereço fixo (`$00 $08 $10 $18 $20 $28 $30 $38`), sem condição e sem leitura de operando do fluxo. O endereço de destino é codificado nos bits 5-3 do opcode (`(opcode >> 3) & 7 * 8`). Reaproveita `push_byte` (1.5b) para as duas escritas na pilha. Apenas 6 dos 8 (`$C7 $CF $D7 $DF $E7 $EF`) estão no espaço `C0`–`FF`; os dois restantes (`$F7 $FF`) colidem com `PUSH AF`/`RST 38h` — verificar que o `RST` entra antes do `PUSH` no `fetch`. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação). O `push_byte` e o `PC` como endereço de retorno seguem o mesmo padrão do 1.10c (CALL).
+**Duas iterações atrás:** 0040 — JP cc,u16 + JP HL.
+**Próxima tarefa:** ROADMAP **1.11** — misc: `DAA`, `CPL`, `SCF`, `CCF`, `DI`, `EI`, `STOP` (e `NOP`, já feito). `DAA` é a instrução mais complexa do SM83 e **não é igual à do Z80**: o algoritmo de ajuste decimal depende das flags `N` (subtração) e `H`/`C` — não impor a intuição do Z80 aqui (R1). `DI`/`EI` mexem com `IME` (o campo já existe em `Cpu`, inicializado como `false`), e `EI` tem o delay de 1 instrução — esse delay só vira relevante com interrupções (2.2), então para o 1.11 basta ligar/desligar o bit. `STOP` para a CPU e espera um botão; o comportamento exato depende do `P1` (1.12/4.1), então o stub que para a CPU até `reset` basta. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação), a nota 15 (R1: a seção correspondente não é a única — o `DAA` aparece em `02-cpu.md` § BCD Flags e na tabela de opcodes, e há edge cases discutidos no Pan Docs que podem não estar em nenhum dos dois).
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -38,7 +38,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **535** (eram **511** antes da 0041 — +20 do novo arquivo `cpu_call`, +24 do `cpu_ret`).
+Testes do workspace: **543** (eram **535** antes da 0043 — +8 do novo arquivo `cpu_rst`).
 
 ## Invariantes
 

@@ -4,6 +4,10 @@
 mod boot;
 
 use crate::cart::{Cartridge, OPEN_BUS};
+use crate::serial::Serial;
+
+const SB_ADDR: u16 = 0xFF01;
+const SC_ADDR: u16 = 0xFF02;
 
 const WRAM_LEN: usize = 8 * 1024;
 
@@ -56,6 +60,7 @@ pub struct Bus {
     hram: [u8; HRAM_LEN],
     io: [u8; boot::IO_LEN],
     ie: u8,
+    serial: Serial,
 }
 
 impl Bus {
@@ -67,6 +72,7 @@ impl Bus {
             hram: [0x00; HRAM_LEN],
             io: boot::IO,
             ie: boot::INTERRUPT_ENABLE,
+            serial: Serial::new(),
         }
     }
 
@@ -77,14 +83,17 @@ impl Bus {
             Region::WorkRam | Region::EchoRam => self.wram[wram_index(addr)],
             Region::HighRam => self.hram[hram_index(addr)],
             Region::NotUsable => NOT_USABLE_READ,
-            Region::IoRegisters => {
-                let index = io_index(addr);
-                if boot::IO_HAS_OWNER[index] {
-                    self.io[index]
-                } else {
-                    OPEN_BUS
+            Region::IoRegisters => match addr {
+                SB_ADDR | SC_ADDR => self.serial.read(addr),
+                _ => {
+                    let index = io_index(addr);
+                    if boot::IO_HAS_OWNER[index] {
+                        self.io[index]
+                    } else {
+                        OPEN_BUS
+                    }
                 }
-            }
+            },
             Region::InterruptEnable => self.ie,
             Region::VideoRam | Region::ObjectAttributeMemory => OPEN_BUS,
         }
@@ -95,15 +104,23 @@ impl Bus {
             Region::CartridgeRom | Region::ExternalRam => self.cartridge.write(addr, value),
             Region::WorkRam | Region::EchoRam => self.wram[wram_index(addr)] = value,
             Region::HighRam => self.hram[hram_index(addr)] = value,
-            Region::IoRegisters => {
-                let index = io_index(addr);
-                if boot::IO_HAS_OWNER[index] {
-                    self.io[index] = value;
+            Region::IoRegisters => match addr {
+                SB_ADDR | SC_ADDR => self.serial.write(addr, value),
+                _ => {
+                    let index = io_index(addr);
+                    if boot::IO_HAS_OWNER[index] {
+                        self.io[index] = value;
+                    }
                 }
-            }
+            },
             Region::InterruptEnable => self.ie = value,
             Region::NotUsable | Region::VideoRam | Region::ObjectAttributeMemory => {}
         }
+    }
+
+    #[must_use]
+    pub fn take_serial_output(&mut self) -> Vec<u8> {
+        self.serial.take_output()
     }
 }
 

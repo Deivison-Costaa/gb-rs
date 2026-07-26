@@ -144,16 +144,23 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
   `H` carry × empréstimo × literal `1` × literal `0`, `C` calculada × literal `0`
   × **não afetada**. Então o corte é por **semântica de flag**, e os dois últimos
   sub-itens por bloco. 88 = 16 + 24 + 24 + 8 + 16.
-  - [ ] 1.6a `ADD a,r8` e `ADC a,r8` (`$80`–`$8F`) — os blocos `10 000 rrr` e
+  - [x] 1.6a `ADD a,r8` e `ADC a,r8` (`$80`–`$8F`) — os blocos `10 000 rrr` e
     `10 001 rrr`, 16 opcodes. **As primeiras flags calculadas do projeto**: até
     a 0021 as 254 linhas implementadas tinham `-` nas quatro colunas. `H` está
     **definido** na § BCD Flags do `02-cpu.md` (*"carry for the lower 4 bits of
-    the result"*) e `C` na § The Carry Flag (*"higher than $FF"*) — leia as duas
-    definições antes de escrever a expressão. `ADC` consome o `C` de **entrada**,
-    e o `H` dele tem de contá-lo. Duas formas de M-cycle: 1 para registrador,
-    2 para `(HL)` (`fetch → read((HL))`, **sem seta** — e aqui a ausência de seta
-    não significa latch, porque não há terceiro passo onde o resultado possa
-    aterrissar; a nota 34 lida como regra geral erra aqui).
+    the result"*) e `C` na § The Carry Flag (*"higher than $FF"*) — as duas
+    definições, e não uma deduzida da outra. `ADC` consome o `C` de **entrada**,
+    e o `H` dele conta-o: `A=$0F` + `$00` + `C=1` é o único caso que separa as
+    duas versões. Duas formas de M-cycle: 1 para registrador, 2 para `(HL)`
+    (`fetch → read((HL))`, **sem seta** — e a ausência de seta aqui **não** é
+    latch, porque a linha tem 8 T-cycles e não 12: não existe o terceiro passo
+    onde o latch aterrissaria, e a nota 34 lida como regra geral erra aqui).
+    **O achado é o M16:** ler `(HL)` dentro do fetch e gastar o M2 aplicando
+    preserva `A`, as flags, os 2 M-cycles e os 8 T-cycles, e **passou verde nos
+    251 testes** — o operando de uma ALU não tem testemunha entre os passos, e
+    quem o pega é trocar a memória **entre** os dois `step`. Ver
+    [doc da 0022](docs/iterations/0022-cpu-add-adc-r8.md) e `STATUS.md`,
+    notas 44 e 45.
   - [ ] 1.6b `SUB a,r8`, `SBC a,r8` e `CP a,r8` (`$90`–`$9F` e `$B8`–`$BF`) —
     os blocos `10 010 rrr`, `10 011 rrr` e `10 111 rrr`, 24 opcodes. `N` é `1`
     **literal**, e o `H` é **empréstimo** do bit 4 e não carry: três colunas com

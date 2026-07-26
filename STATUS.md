@@ -3,12 +3,12 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0021 — `LD SP,HL` (`$F9`) e `LD (u16),SP` (`$08`) ([doc](docs/iterations/0021-cpu-ld-stack-pointer.md)). Fecha o **1.5** e o grupo `x16/lsm` inteiro: 14 opcodes, quatro formas de M-cycle. **A iteração foi interrompida no meio e retomada por outra sessão, e a primeira metade não deixou relato** — o campo `Erros de primeira tentativa` mede aqui o que sobreviveu ao revisor, não o que o autor percebeu; erro cometido e consertado dentro da primeira sessão é irrecuperável. Onde ela morreu está medido: **entre o passo 6 e o passo 7** — os 14 testes passavam e `clippy -D warnings` reprovava com dois erros. **Erro #2: o `$F9` é o primeiro caso do projeto em que a spec local não decide o instante** (nota 21) e a primeira sessão viu isso certo, mas justificou a escolha citando o `$F8` — que tem `internal` **pelado** e não sustenta nada. Pior: as duas únicas linhas do arquivo que dizem quando o `SP` recebe (`$33`, `$E8`) **partem o par em duas metades, a baixa primeiro**, com `Probably` — apontando para o contrário do implementado. A escolha ficou (é `x16/alu` × `lsm`, e `Probably` é chute declarado); a justificativa foi reescrita. **O achado é o M11:** ler os dois bytes do endereço do `$08` no M2 e gastar o M3 num `internal` dá a mesma memória, o mesmo `PC` final e os mesmos 20 T-cycles, e **passou verde nos 239 testes anteriores** — o que ele quebra é a invariante "um acesso por M-cycle", que nenhum teste de estado final vê. Bateria: 15/15 pegos, 2/2 controles verdes, **quatro** mutantes de instante com um algoz único. Ver notas 42 e 43.
-**Iteração anterior:** 0020 — `POP r16stk`, o bloco `11 rr 0001` ([doc](docs/iterations/0020-cpu-pop-r16stk.md)). Os quatro `$C1 $D1 $E1 $F1` em 3 M-cycles, com `Cpu::pop_byte` — a simétrica do `push_byte` da 0019, e a simetria é de **papel**: lá é decrementa-e-escreve, aqui é lê-e-incrementa, e trocar as duas linhas de lugar não produz a outra. **Erro de hardware: nenhum, pela primeira vez em seis iterações — e o motivo é registrável.** O campo `Próxima tarefa` do `STATUS.md` nomeou as três armadilhas *antes* da spec (pós-incremento, meia metade por M-cycle, `F` sem máscara), e nenhuma virou código; a bateria teve de construir as três à mão. Um `nenhum` obtido assim vale menos como evidência do que um sem aviso. **O achado está na comparação com a 0019:** o *mesmo erro de forma* — deslocar o `±SP` em um passo — deixa **8 de 10 testes passando** no `PUSH` e só **3 de 10** no `POP`, porque o `PUSH` decide o endereço antes do acesso e o `POP` decide *no* acesso. Bateria: 11/11 pegos, 2/2 controles verdes; o latch segue com **um** algoz. Ver nota 40.
-**Duas iterações atrás:** 0019 — `PUSH r16stk`, o bloco `11 rr 0101` ([doc](docs/iterations/0019-cpu-push-r16stk.md)). Os quatro `$C5 $D5 $E5 $F5` em 4 M-cycles, com `Cpu::push_byte` — a segunda função de M-cycle compartilhada do projeto, depois do `Cpu::access` do 1.4d. **O erro foi a nota 26/30/34 pela quarta vez, e pela primeira com a fonte fora do projeto:** o Z80, cujo `PUSH` decrementa o `SP` no T-cycle extra do M1. A coluna diz `write(B->(--SP))` — pré-decremento **dentro** do passo da escrita, e o `internal` do M2 não faz nada. **8 dos 10 testes passam contra a versão errada** (bateria: 10/10 pegos, 2/2 controles verdes; o mutante do timing tem exatamente **dois** algozes). Novidade: a **guarda de ausência foi um deles** — quando o erro é "algo inerte fez algo", ela é o teste em que ele mora, e não o extra que a nota 35 descreveu. Ver notas 36 e 37.
-**Próxima tarefa:** ROADMAP 1.6 — ALU de 8 bits. **O item é grande e provavelmente precisa ser quebrado antes de começar, como o 1.4 e o 1.5:** são **quatro** blocos de codificação distintos (`10 ooo rrr` = `alu a,r8`; `11 ooo 110` = `alu a,imm8`; `00 ddd 100` = `INC r8`; `00 ddd 101` = `DEC r8`), oito operações cada nos dois primeiros, e a primeira instrução do projeto que **calcula flags** — até aqui todas as colunas de flag eram `-`. Spec: `docs/reference/03-opcodes.md` (linhas `04 05 34 35`, `80`–`BF`, `C6 CE D6 DE E6 EE F6 FE`) e a § Flags Register do `02-cpu.md`, que é onde `H` está **definido** — leia a definição antes de escrever a expressão, e não a deduza de um `ADD` que passou. **Seis coisas para conferir, todas lidas da tabela e nenhuma de memória:** (a) `SUB`/`SBC`/`CP` têm `N` = **`1` literal** e o `H` deles é **empréstimo** do bit 4, não carry — três colunas iguais às do `ADD` com significado invertido; (b) `AND` tem `H` = **`1` literal** e `C` = `0`, enquanto `XOR` e `OR` têm `H` = `0` — um half-carry "calculado genericamente" erra os três, e são constantes na coluna, não resultado de conta; (c) `INC r8` e `DEC r8` **não tocam `C`**: a coluna é `-`, e é a divergência de flags que mais aparece em ROM real; (d) `INC (HL)`/`DEC (HL)` (`$34`/`$35`) são **3 M-cycles**, `fetch → read((HL)) → write((HL))` — read-modify-write no **mesmo** endereço, em passos **diferentes**, que é o erro #1 da 0015 numa forma nova (juntar os dois num M-cycle dá a mesma memória e os mesmos 12 T-cycles); (e) `ADC`/`SBC` consomem o `C` de **entrada** e o half-carry tem de contá-lo — `A=$0F` com operando `$00` e `C=1` é o caso que separa a versão certa da que ignora o carry-in; (f) `CP` não escreve em `A`, e é a única das oito que só produz flags. **Nota 41 vale integralmente: este handoff pré-anuncia as armadilhas, então um `nenhum` no campo de erros mede o aviso e não o código — a bateria de mutação deixa de ser opcional e é o que resta de medição.** Nota 43: a asserção entre M-cycles tem de cobrir o **operando** (`PC`) e não só a memória; foi o buraco que a 0021 mediu.
+**Última iteração concluída:** 0022 — `ADD a,r8` e `ADC a,r8`, os dezesseis `$80`–`$8F` ([doc](docs/iterations/0022-cpu-add-adc-r8.md)). **As primeiras flags calculadas do projeto:** até aqui as 254 linhas implementadas tinham `-` nas quatro colunas. Abriu o 1.6, que foi **quebrado em cinco** — e a quebra divergiu da do 1.4/1.5 de propósito: 88 opcodes em quatro blocos, mas só **três** formas de M-cycle no grupo inteiro, então o corte é por **semântica de flag** e não por regra de decodificação. **Erro de hardware na conta: nenhum** — e a nota 41 vale integralmente, porque o handoff da 0021 pré-anunciou seis armadilhas de flag e o caso `A=$0F`, operando `$00`, `C=1` virou teste antes de a ALU existir. **O achado é o M16, e ele é a nota 43 numa terceira forma:** ler `(HL)` **dentro do fetch** e gastar o M2 aplicando dá o mesmo `A`, as mesmas flags, os mesmos 2 M-cycles e os mesmos 8 T-cycles — **passou verde nos 251 testes**, inclusive no que fora escrito para medir o instante. O operando de uma ALU não tem destino observável entre os passos (não é como o `HL` do 1.4c, o `SP` do 1.5b/c ou o `PC` do 1.5d), então **quem observa o instante é o estímulo, não a asserção**: troca-se o conteúdo de `(HL)` entre os dois `step`. Bateria: 16 mutantes, 15 mortos de primeira + o M16 com **um** algoz depois do teste novo, 3 controles verdes. Ver notas 44 e 45.
+**Iteração anterior:** 0021 — `LD SP,HL` (`$F9`) e `LD (u16),SP` (`$08`) ([doc](docs/iterations/0021-cpu-ld-stack-pointer.md)). Fecha o **1.5** e o grupo `x16/lsm` inteiro: 14 opcodes, quatro formas de M-cycle. **A iteração foi interrompida no meio e retomada por outra sessão, e a primeira metade não deixou relato** — o campo `Erros de primeira tentativa` mede aqui o que sobreviveu ao revisor, não o que o autor percebeu; erro cometido e consertado dentro da primeira sessão é irrecuperável. Onde ela morreu está medido: **entre o passo 6 e o passo 7** — os 14 testes passavam e `clippy -D warnings` reprovava com dois erros. **Erro #2: o `$F9` é o primeiro caso do projeto em que a spec local não decide o instante** (nota 21) e a primeira sessão viu isso certo, mas justificou a escolha citando o `$F8` — que tem `internal` **pelado** e não sustenta nada. Pior: as duas únicas linhas do arquivo que dizem quando o `SP` recebe (`$33`, `$E8`) **partem o par em duas metades, a baixa primeiro**, com `Probably` — apontando para o contrário do implementado. A escolha ficou (é `x16/alu` × `lsm`, e `Probably` é chute declarado); a justificativa foi reescrita. **O achado é o M11:** ler os dois bytes do endereço do `$08` no M2 e gastar o M3 num `internal` dá a mesma memória, o mesmo `PC` final e os mesmos 20 T-cycles, e **passou verde nos 239 testes anteriores** — o que ele quebra é a invariante "um acesso por M-cycle", que nenhum teste de estado final vê. Bateria: 15/15 pegos, 2/2 controles verdes, **quatro** mutantes de instante com um algoz único. Ver notas 42 e 43.
+**Duas iterações atrás:** 0020 — `POP r16stk`, o bloco `11 rr 0001` ([doc](docs/iterations/0020-cpu-pop-r16stk.md)). Os quatro `$C1 $D1 $E1 $F1` em 3 M-cycles, com `Cpu::pop_byte` — a simétrica do `push_byte` da 0019, e a simetria é de **papel**: lá é decrementa-e-escreve, aqui é lê-e-incrementa, e trocar as duas linhas de lugar não produz a outra. **Erro de hardware: nenhum, pela primeira vez em seis iterações — e o motivo é registrável.** O campo `Próxima tarefa` do `STATUS.md` nomeou as três armadilhas *antes* da spec (pós-incremento, meia metade por M-cycle, `F` sem máscara), e nenhuma virou código; a bateria teve de construir as três à mão. Um `nenhum` obtido assim vale menos como evidência do que um sem aviso. **O achado está na comparação com a 0019:** o *mesmo erro de forma* — deslocar o `±SP` em um passo — deixa **8 de 10 testes passando** no `PUSH` e só **3 de 10** no `POP`, porque o `PUSH` decide o endereço antes do acesso e o `POP` decide *no* acesso. Bateria: 11/11 pegos, 2/2 controles verdes; o latch segue com **um** algoz. Ver nota 40.
+**Próxima tarefa:** ROADMAP 1.6b — `SUB a,r8`, `SBC a,r8` e `CP a,r8` (`$90`–`$9F` e `$B8`–`$BF`), os blocos `10 010 rrr`, `10 011 rrr` e `10 111 rrr`. 24 opcodes, as mesmas duas formas de M-cycle do 1.6a (1 para registrador, 2 para `(HL)`), e **a coluna de flags é a armadilha inteira**. Spec: `docs/reference/03-opcodes.md` (linhas `90`–`9F`, `B8`–`BF`) e as § The Carry Flag / § The BCD Flags do `02-cpu.md` — as **mesmas** duas definições do 1.6a, e é justamente por serem as mesmas que a leitura tem de ser refeita. **Cinco coisas para conferir, todas lidas da tabela e nenhuma por analogia com o 1.6a:** (a) `N` é **`1` literal** nas 24 linhas, não calculado — a coluna diz `1`, e o 1.6a escreveu `false` no mesmo lugar; (b) o `H` é **empréstimo** do bit 4 e não carry: mesma letra na coluna, grandeza invertida, e a § The BCD Flags define `H` uma vez só, sem dizer de qual das duas operações fala — este é o segundo caso do projeto em que a spec local não decide sozinha (nota 21), e a § The Carry Flag é quem desempata dizendo que `C` é *"lower than zero"* numa subtração; (c) `SBC` consome o `C` de **entrada** e ele conta para o empréstimo do nibble, espelho exato do erro que o 1.6a testou com `A=$0F`/`$00`/`C=1` — aqui o caso é `A=$10`, operando `$00`, `C=1`; (d) **`CP` não escreve em `A`**: é a única das oito que só produz flags, e `apply` hoje faz `registers.a = result` incondicionalmente; (e) `CP A,A` é sempre `Z=1`, e `SUB A,A` também — é o par que separa "escreveu o resultado" de "só comparou", e sozinho não separa nada. **Notas 41 e 45 valem integralmente:** este handoff pré-anuncia as armadilhas, então um `nenhum` no campo de erros mede o aviso e não o código, e a bateria é o que resta de medição. **Nota 44 é a que vale para o timing:** o mutante de instante desta família ou gasta um M-cycle a mais (barulhento, morre com 4 algozes) ou lê `(HL)` dentro do fetch (silencioso, sobreviveu a 251 testes) — só o segundo é o mutante da classe, e quem o pega é trocar a memória **entre** os dois `step`.
 
-**Tarefa concluída na 0021 (referência):** ROADMAP 1.5d — os dois avulsos do `x16/lsm`, que fecharam o 1.5: `LD SP,HL` (`$F9`) e `LD (u16),SP` (`$08`). Nenhum dos dois cabe num bloco `rr`; são reconhecidos um a um, como os seis do 1.4d. Spec: `docs/reference/03-opcodes.md`, linhas 297 e 56 — transcritas, `fetch → internal` (1 byte, 8 T-cycles) e `fetch → read(u16:lower) → read(u16:upper) → write(SP:lower->(u16)) → write(SP:upper->(u16+1))` (3 bytes, 20 T-cycles, a instrução mais longa do projeto até aqui). **Quatro coisas para conferir:** (a) o `$F9` é o `internal` **no fim**, e a nota 36 avisa que `internal` é o M-cycle mais fácil de estragar porque estragá-lo parece consertá-lo — a escrita em `SP` acontece em *algum* dos dois passos e a coluna não põe seta em nenhum, então este é o primeiro caso do projeto em que a spec local **não decide** o instante (nota 21: spec ambígua é o terceiro modo de falha da R1); (b) o `$08` tem os dois bytes do endereço em `read(u16:lower)` **sem seta** — latch de verdade, como o `$FA` do 1.4d, e não meia metade por M-cycle como o 1.5a/1.5c (a nota 34 corre nas duas direções: aqui copiar o `LoadImmediatePair` é que seria o erro); (c) as duas escritas do `$08` são `(u16)` e `(u16+1)`, endereços **consecutivos crescentes** com a metade **baixa** no mais baixo — pilha e memória absoluta guardam little-endian pelo mesmo motivo, mas o `PUSH` escreve o alto primeiro e este escreve o baixo primeiro; (d) `LD HL,SP+i8` (`$F8`, linha 296) **não** é deste item — gbops o põe em `x16/alu` e ele é o 1.7, com flags `0 0 H C` sobre o byte baixo. Nota 32: asserção depois de **cada** um dos 5 M-cycles do `$08`, lendo a memória **entre** as duas escritas; e um mutante próprio para cada guarda de ausência (notas 35 e 37). Ver também a nota 40 sobre o que a bateria do `$08` deve esperar: ele é o lado que **escreve**, e ali o erro de instante é silencioso.
+**Tarefa concluída na 0022 (referência):** ROADMAP 1.6a — os dezesseis `ADD`/`ADC A,r8`, e a quebra do 1.6 em cinco. A quebra divergiu da do 1.4 e do 1.5 de propósito e o porquê está no ROADMAP: aqueles se partiram por **regra de decodificação**, um sub-item por forma de M-cycle; aqui são 88 opcodes em quatro blocos com só **três** formas no grupo inteiro, e o que varia é a **coluna de flags**. Corte por semântica de flag (1.6a/b/c), os dois últimos por bloco (1.6d/e). O `$86`/`$8E` é `fetch → read((HL))` — **sem seta**, e este é o caso que mostra que a nota 34 não é regra geral: não há terceiro passo onde o latch aterrissaria (8 T-cycles, não 12), e a seta falta porque o destino do byte não é registrador nenhum, é a ALU.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -39,7 +39,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **240** (eram **225** antes da 0021). Este
+Testes do workspace: **252** (eram **240** antes da 0022). Este
 número não é o placar — ele mede o que o projeto afirma sobre si mesmo, não o
 que o hardware cobra.
 
@@ -587,6 +587,39 @@ que o hardware cobra.
   foram extraídos: pela doutrina do 1.4d a abstração nasce onde a repetição
   **existe**, e com dois sítios ainda se adivinha a forma. O terceiro chega no
   1.10 (`CALL u16`, `JP cond`), que é quando extrair.
+
+- **`H` é o carry do nibble baixo e `C` o do byte — duas grandezas, dois bits de
+  origem.** A § The BCD Flags define `H` como *"carry for the lower 4 bits of the
+  result"* e a § The Carry Flag define `C` como o resultado de 8 bits ficar
+  *"higher than $FF"*. Não se deduz uma da outra, e calcular `H` do bit 7 (o
+  mesmo bit do `C`) é o erro que a bateria da 0022 pôs como M1. `N` é `0`
+  **literal** na coluna das 16 linhas — não é resultado de conta, e o 1.6b tem
+  `1` literal no mesmo lugar.
+- **O carry de entrada do `ADC` faz parte do resultado, então conta para `H`
+  também.** `A=$0F` + operando `$00` + `C=1` dá `$10`, e `$0F+$00` não estoura
+  nibble nenhum: uma ALU que some o carry só no total de 8 bits acerta `A` e erra
+  `H`. É o único caso que separa as duas versões, e `the_incoming_carry_of_adc_
+  counts_for_the_half_carry_too` é quem o fixa. O `SBC` do 1.6b tem o espelho.
+- **`ADD A,(HL)` são 2 M-cycles, e a nota 34 não vale aqui.** A coluna é
+  `fetch → read((HL))`, **sem seta**, e a nota 34 diz que seta ausente é latch —
+  mas latchar exige um passo onde o valor aterrisse, e a linha tem **8**
+  T-cycles, não 12. A seta falta porque o destino do byte não é registrador
+  nenhum: é a ALU, que não aparece na notação. **Antes de aplicar a nota 34,
+  conte os passos** (é o mesmo procedimento que a nota 34 já pedia para o
+  `JP u16` × `LD r16,u16`, aplicado à outra ponta).
+- **O operando de uma ALU não tem testemunha entre os M-cycles, e por isso o
+  estímulo é que mede o instante.** `HL` (1.4c), `SP` (1.5b/c) e `PC` (1.5d)
+  ficam legíveis entre os passos; o byte que vai para a ALU some. Ler `(HL)`
+  dentro do fetch e gastar o M2 aplicando dá o mesmo `A`, as mesmas flags, os
+  mesmos 2 M-cycles e os mesmos 8 T-cycles — **passou verde nos 251 testes**. Quem
+  o pega é trocar o conteúdo de `(HL)` **entre** os dois `step`:
+  `the_bus_access_of_86_happens_in_the_m2_and_not_during_the_fetch`, algoz único.
+- **`alu.rs` é módulo próprio e `apply` é função livre sobre `Registers`.** A ALU
+  não precisa do `Bus` nem do estado da máquina. A fronteira separa "quem decide o
+  instante" (`mcycle.rs`) de "quem faz a conta" (`alu.rs`), que são as duas
+  classes de erro deste projeto e não se olham. A quarta função de M-cycle
+  compartilhada **não** nasceu aqui: "ler `(HL)` e entregar à ALU" tem um sítio
+  só, e `AluFromHl(AluOp)` já cobre o 1.6b e o 1.6c sem linha nova.
 
 ## Bloqueios
 
@@ -1456,3 +1489,49 @@ contorno previsto no prompt de bootstrap.
     de destino) e o `PC`. O 1.6 tem `alu a,imm8` e o 1.10 tem `CALL u16` e os
     saltos condicionais; nos dois o operando é lido em passos que o estado final
     não distingue.
+
+44. **O erro de instante tem dois regimes, e só um deles é a classe que este
+    projeto vem medindo.** Cinco iterações mediram a mesma proporção (9/10 na
+    0015, 10/11 na 0016, 7/8 na 0018, 8/10 na 0019, 14/15 na 0021): o erro de
+    instante deixa quase toda a suíte verde. A 0022 partiu a classe em dois, com
+    detecções opostas, e a linha divisória é a **coluna de T-cycles**:
+
+    - **Barulhento** — o erro gasta um M-cycle a mais. O `$86` em três passos
+      (latcha no M2, aplica num `internal`) muda o total de 8 para 12 T-cycles.
+      **4 algozes**, morre em qualquer suíte.
+    - **Silencioso** — o erro cabe nos passos que já existem. O `$86` lendo
+      `(HL)` dentro do fetch e aplicando no M2 preserva tudo o que é observável.
+      **0 algozes entre 251 testes.**
+
+    A classe silenciosa exige **um passo sobrando** onde o efeito se esconda.
+    `ADD A,(HL)` tem dois passos e os dois são acesso, então o único lugar que
+    sobra é *dentro* do M1, empilhado com o fetch — o que quebra a invariante do
+    1.3 (no máximo um acesso por `step`) sem tocar em nada que um teste de estado
+    final veja.
+
+    **Procedimento:** quando um mutante de instante morrer com muitos algozes,
+    desconfie de que ele não é o mutante da classe. A classe preserva o total de
+    T-cycles. Se o mutante escrito não preserva, ele ainda não foi escrito.
+    **Corolário para o 1.6e:** `INC (HL)`/`DEC (HL)` têm três passos, com um read
+    e um write no mesmo endereço — lá cabem as duas formas.
+
+45. **A nota 43 tem uma terceira forma: quando o valor não para em lugar nenhum,
+    quem observa o instante é o estímulo, não a asserção.** A nota 32 nasceu
+    dizendo "asserção depois de cada M-cycle" sobre a **memória**; a 0021
+    acrescentou o **`PC`**. As duas pressupõem uma testemunha — um lugar onde o
+    valor fica e que dá para ler entre os passos. O `HL` do 1.4c, o `SP` do
+    1.5b/c e o `PC` do 1.5d são testemunhas.
+
+    O operando de uma ALU não é. Ele é lido, entra na conta e some; o que fica é
+    o resultado, que é igual nas duas versões. Nenhuma asserção entre `step`
+    distingue "leu no M1" de "leu no M2" — porque não há o que olhar.
+
+    **O que funciona é mexer na fonte no meio da instrução:** `step`, escrever
+    outro valor em `(HL)`, `step`, e ver qual dos dois o resultado denuncia. Isso
+    não é uma asserção a mais, é um estímulo a mais, e nenhuma das notas
+    anteriores o pedia.
+
+    **Onde isto volta a valer:** toda instrução cujo acesso alimenta um cálculo
+    em vez de um registrador — o resto do 1.6, o `BIT` do 1.9, e os desvios
+    condicionais do 1.10, onde o byte lido decide o `PC` e não fica em campo
+    nenhum.

@@ -3,10 +3,10 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0030 — `ADD SP,i8` (`$E8`), 4 M-cycles ([doc](docs/iterations/0030-add-sp-e8.md)). `Z`/`N` = `0` literais; `H`/`C` calculados sobre o **byte baixo** de `SP` + `i8` (carry do bit 3 e do bit 7), não sobre o par de 16 bits como o 1.7b — **erro de primeira tentativa: assumi H/C de 16 bits, a spec corrigiu**. Segundo erro: escrevi a metade baixa de SP no M2 (ReadImmediate); a coluna põe no M3 (internal). Bateria: **6/6 pegos, 1/1 controles verdes**.
-**Iteração anterior:** 0029 — `ADD HL,r16` ([doc](docs/iterations/0029-add-hl-r16.md)).
-**Duas iterações atrás:** 0028 — `INC`/`DEC r16` ([doc](docs/iterations/0028-cpu-inc-dec-r16.md)).
-**Próxima tarefa:** ROADMAP **1.7d** — `LD HL,SP+e8` (`$F8`), 1 opcode, **3** M-cycles (`fetch → read(i8) → internal`). Mesma coluna de flags do 1.7c (`Z=0`/`N=0`, `H`/`C` sobre byte baixo), mas um M-cycle a menos porque o destino é `HL` (par de registrador), não `SP` (que exige write pelo barramento). O 1.7c estabeleceu o padrão para os dois: `ReadImmediate` calcula flags e latcha; `Internal` escreve a metade baixa; a diferença é que `$F8` não tem o quarto M-cycle e o destino é `HL`. A armadilha central é a mesma do 1.7c (H/C de 8 bits, não 16), e o teste pode reaproveitar a estrutura. `decoded_elsewhere` já inclui `$F8`? Não — `$F8` ainda não está em `decoded_elsewhere`, então o sweep da iteração vai precisar adicioná-lo.
+**Última iteração concluída:** 0031 — `LD HL,SP+i8` (`$F8`), 3 M-cycles ([doc](docs/iterations/0031-ld-hl-sp-e8.md)). Mesma coluna de flags do 1.7c: `Z`/`N` = `0` literais; `H`/`C` sobre o byte baixo. **Erro de primeira tentativa: assumi HL=0 pós-boot no teste de M-cycle** — `after_boot_rom` seta HL com base no checksum; corrigido com `set_hl(0)` explícito. Bateria: **6/6 pegos, 1/1 controles verdes**.
+**Iteração anterior:** 0030 — `ADD SP,i8` (`$E8`) ([doc](docs/iterations/0030-add-sp-e8.md)).
+**Duas iterações atrás:** 0029 — `ADD HL,r16` ([doc](docs/iterations/0029-add-hl-r16.md)).
+**Próxima tarefa:** ROADMAP **1.8** — rotações e shifts: `RLCA` (`$07`), `RRCA` (`$0F`), `RLA` (`$17`), `RRA` (`$1F`). 4 opcodes, 1 byte cada, 4 T-cycles, 1 M-cycle (`fetch`). A armadilha central: essas quatro **zeram `Z` incondicionalmente** (coluna `0`), enquanto os equivalentes prefixados por `CB` (`RLC A` = `CB 07`, `RRC A` = `CB 0F`, `RL A` = `CB 17`, `RR A` = `CB 1F`) **calculam `Z`** — mesmo nome de instrução, flag diferente. `N` e `H` são `0` literais; `C` recebe o bit deslocado para fora. A especificação é só 4 linhas na tabela (todas iguais: `Z=0 N=0 H=0 C`), mas a implementação é o primeiro código de rotação do projeto — um módulo `rotate.rs` ou funções em `alu.rs` (a decidir). Nenhum dos 4 está em `decoded_elsewhere`.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -37,7 +37,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **321** (eram **314** antes da 0030).
+Testes do workspace: **337** (eram **321** antes da 0031).
 
 ## Invariantes
 

@@ -21,7 +21,9 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 ## M1 — CPU (sem gráficos)
 
 - [x] 1.1 Registradores AF/BC/DE/HL/SP/PC, flags Z/N/H/C, pares de 8/16 bits. **Sem máscara no nibble baixo de `F`**: o Pan Docs no commit fixado não descreve os bits 3–0 nem menciona `POP AF` — ver [doc da 0009](docs/iterations/0009-cpu-registers.md). Se a máscara for necessária, quem cobra é o 1.13.
-- [ ] 1.2 `Bus` trait + MMU: WRAM, HRAM, echo RAM, região proibida. Estado pós-boot (pular boot ROM).
+- [ ] 1.2 `Bus` + MMU: WRAM, HRAM, echo RAM, região proibida. Estado pós-boot (pular boot ROM).
+  - [x] 1.2a Decodificação de endereço e RAM interna: o mapa de memória inteiro em regiões, WRAM, echo RAM, HRAM, região proibida `$FEA0`–`$FEFF`, e o roteamento das duas janelas do cartucho. Sem valores iniciais — ver [doc da 0010](docs/iterations/0010-bus-memory-map.md). **`Bus` é `struct`, não `trait`** — o item dizia "trait", mas `CLAUDE.md` § Arquitetura diz que o `Bus` é o dono de tudo e que os componentes recebem `&mut Bus`; um trait com um único implementador poria vtable no caminho mais quente do emulador sem comprar nada. Extrair depois é mudança local.
+  - [ ] 1.2b Estado pós-boot: registradores da CPU e registradores de hardware (`$FF00`–`$FF7F`, `IE`) no hand-off da boot ROM, que este emulador pula.
 - [ ] 1.3 Laço M-cycle: `step()` avança 1 M-cycle. Fetch/decode/execute como máquina de estados.
 - [ ] 1.4 Opcodes: loads 8-bit.
 - [ ] 1.5 Opcodes: loads 16-bit + stack (PUSH/POP).

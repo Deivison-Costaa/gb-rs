@@ -242,7 +242,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
   - [x] 1.10c `CALL cc,u16` (`$C4` `$CC` `$CD` `$D4` `$DC`) — 5 opcodes, 3/6 M-cycles, timing condicional (12/24 T). Sem desvio: `fetch → read(low) → read(high)`; com desvio: `→ internal → write(PC:upper→(--SP)) → write(PC:lower→(--SP))`. Primeira instrução com `PUSH` implícito e o primeiro `internal` que decide condição entre a leitura do operando e a escrita na pilha.
      - [x] 1.10d `RET cc` (`$C0` `$C8` `$D0` `$D8`) + `RET` (`$C9`) + `RETI` (`$D9`) — 6 opcodes, 2/4-5 M-cycles, timing condicional (8/20 T). Sem desvio: `fetch → internal`; com desvio: `→ read((SP++)→lower) → read((SP++)→upper) → internal(set PC)`. O `internal` do M2 decide a condição; é o mesmo que o `POP` faz mas sem escrever em registrador — `SP` avança, os bytes lidos vão para `PC`. `RETI` é `RET` + `EI` em hardware; a ativação do IME entra aqui ou fica delegada para o 1.11/2.2.
   - [x] 1.10e `RST` (`$C7` `$CF` `$D7` `$DF` `$E7` `$EF` `$F7` `$FF`) — 8 opcodes, 4 M-cycles (16 T), `fetch → internal → write(PC:upper→(--SP)) → write(PC:lower→(--SP))`. Essencialmente `CALL` para endereço fixo (`$00 $08 $10 $18 $20 $28 $30 $38`), sem condição e sem leitura de operando do fluxo.
-- [ ] 1.11 Opcodes: misc — `DAA`, `CPL`, `SCF`, `CCF`, `DI`, `EI`, `NOP`, `STOP`.
+- [x] 1.11 Opcodes: misc — `DAA`, `CPL`, `SCF`, `CCF`, `DI`, `EI`, `NOP`, `STOP`.
 - [ ] 1.12 Stub da porta serial (FF01/FF02) → `gb-cli` imprime em stdout.
 - [ ] 1.13 blargg `cpu_instrs/individual/01` a `05`.
 - [ ] 1.14 blargg `cpu_instrs/individual/06` a `11` + `cpu_instrs.gb` completo.

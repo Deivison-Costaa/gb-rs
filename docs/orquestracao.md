@@ -466,3 +466,46 @@ três eram armadilhas:
 
 O padrão das três é o mesmo: a configuração "mais segura" de cada campo, marcada
 por reflexo, quebraria o processo sem proteger nada.
+
+## 2026-07-26 — O agente escrevia o título certo; o merge é que jogava fora
+
+Correção de uma entrada anterior. Depois do PR #40, o orquestrador ficou
+acompanhando quantos PRs saíam no formato `iter NNNN:` e anotou "3 em 7",
+"4 em 8", concluindo que **o agente obedecia de forma intermitente**. Estava
+errado, e o erro era de método: contar resultados sem procurar a variável.
+
+`gh pr merge --squash` monta o assunto do commit assim:
+
+| commits no PR | assunto em `main` |
+|---|---|
+| **1** | o assunto **do commit** — o título do PR é descartado |
+| **2 ou mais** | o **título do PR** |
+
+Medido nos PRs #41 a #52: **10 de 10, sem exceção.** Os cinco que "desobedeciam"
+(#41, #44, #45, #48, #52) são exatamente os de um commit. Os cinco que
+"obedeciam" (#42, #43, #47, #49, #51) são os de dois ou mais. O agente escreveu
+o título certo em todos.
+
+É o inverso exato do defeito do PR #40, e por isso passou despercebido: lá,
+`gh pr create --fill` degradava o título com **2+** commits; aqui,
+`gh pr merge --squash` descarta o título com **1**. As duas regras juntas não
+deixam janela — obedecer o `CLAUDE.md` ("prefira 4 commits pequenos a 1 grande")
+conserta o segundo e piorava o primeiro.
+
+**Correção:** `gh pr merge --squash --subject "$TITULO"`, que não depende de
+quantos commits o PR tem.
+
+### O parêntese vazio
+
+O mesmo PR #52 entrou em `main` como `feat(cpu): CALL cc,u16 (    )`. A mensagem
+do commit citava `($C4 $CC $CD $D4 $DC)` entre **aspas duplas**, e o shell
+expandiu os cinco para vazio. Num projeto em que todo opcode se escreve `$XX`,
+aspas duplas em mensagem de commit é uma armadilha permanente — agora está no
+passo 10, com aspas simples.
+
+Não dá para consertar em `main` sem reescrever histórico. Fica como está.
+
+**A lição de método é a mesma das duas vezes:** taxa de acerto que oscila sem
+explicação não é falta de disciplina do agente — é variável não observada. Eu
+tinha o dado (a contagem de commits estava em cada PR) e passei sete iterações
+sem cruzar com ele, porque já tinha uma explicação que servia.

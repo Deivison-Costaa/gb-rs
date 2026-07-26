@@ -132,19 +132,27 @@ justamente o que escondeu dois sub-itens do 1.7 de uma varredura.
 
 ```
 git add -A
-git commit -m "feat(escopo): descrição"     # Conventional Commits, um por unidade lógica
+
+# Opcode em aspas duplas some: `$C4` vira string vazia na expansão do shell.
+# Use aspas simples em mensagem que cite opcode. O `feat(cpu): CALL cc,u16 (    )`
+# do PR #52 é o que acontece quando se esquece — e não sai mais de `main`.
+git commit -m 'feat(escopo): descrição'     # Conventional Commits, um por unidade lógica
 git push -u origin iter/NNNN-slug
 
-# Escreva o título. NÃO use --fill: com mais de um commit ele cai para o nome
-# da branch, e como o merge é squash isso vira o título em `main` para sempre.
-gh pr create --title "iter NNNN: <o que entrega> (ROADMAP X.Y)" --body "..."
+TITULO='iter NNNN: <o que entrega> (ROADMAP X.Y)'
+
+# NÃO use --fill: com mais de um commit ele cai para o nome da branch.
+gh pr create --title "$TITULO" --body "..."
 
 # `gh pr checks --watch` sai com exit 1, sem esperar, se o GitHub ainda não
 # registrou os runs. Espere aparecerem antes de observar.
 for i in $(seq 1 30); do gh pr checks >/dev/null 2>&1 && break; sleep 10; done
 gh pr checks --watch
 
-gh pr merge --squash --delete-branch
+# `--subject` é obrigatório. Sem ele, um PR de UM commit é squashado com o
+# assunto do commit e o título do PR é jogado fora; com dois ou mais, o título
+# é usado. Medido em 10 de 10 PRs (#41 a #52), sem exceção.
+gh pr merge --squash --delete-branch --subject "$TITULO"
 git checkout main && git pull
 ```
 

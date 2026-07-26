@@ -59,13 +59,20 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     versão errada**; ver [doc da 0016](docs/iterations/0016-cpu-ld-r16mem.md).
     Que o endereço é o valor de antes é confirmado fora da § Block 0, na
     § OAM Corruption Bug do `06-ppu.md` ("before the operation").
-  - [ ] 1.4d Endereço absoluto e a página `$FF00`: `LD (u16),A` / `LD A,(u16)`
+  - [x] 1.4d Endereço absoluto e a página `$FF00`: `LD (u16),A` / `LD A,(u16)`
     (`$EA $FA`), `LD (FF00+u8),A` / `LD A,(FF00+u8)` (`$E0 $F0`) e
     `LD (FF00+C),A` / `LD A,(FF00+C)` (`$E2 $F2`) — 6 opcodes.
-    **É aqui que a tabela de micro-operações se decide**, e não no 1.4a: a
-    0013 previu que o 1.4 traria casos suficientes para generalizar, e traz —
-    mas só com os quatro sub-itens no lugar. Generalizar a partir das três
-    formas do 1.4a seria a nota 8 outra vez, com um terço dos dados.
+    **Era aqui que a tabela de micro-operações se decidia, e ela se decidiu
+    contra si mesma:** quatro sub-itens esperando dados, e o desenho escolhido
+    é `State` por variante de forma + **uma** função compartilhada
+    (`Cpu::access`), o último passo das três formas — a generalização nasceu
+    onde a repetição existia, não onde se apostava. `$E2`/`$F2` têm **1** byte
+    (`C` é o operando; as tabelas antigas erram), e os seis são reconhecidos um
+    a um, sem máscara — qualquer uma frouxa leva `$E8`/`$F8` (o 1.7). Iteração
+    da **transição de motorista**: começada em sessão de Claude Code que morreu
+    no RED→GREEN, retomada e concluída por Kimi K3/OpenCode — ver
+    [doc da 0017](docs/iterations/0017-cpu-ld-absolute-ff00.md) e `STATUS.md`,
+    nota 33.
 - [ ] 1.5 Opcodes: loads 16-bit + stack (PUSH/POP).
 - [ ] 1.6 Opcodes: ALU 8-bit (ADD/ADC/SUB/SBC/AND/OR/XOR/CP/INC/DEC) — **atenção ao half-carry**.
 - [ ] 1.7 Opcodes: ALU 16-bit + `ADD SP,e8` / `LD HL,SP+e8` (flags contraintuitivas).

@@ -145,10 +145,15 @@ importar para o item da vez.
 
 ## Bloqueios
 
-_(nenhum)_
+**1.10b `JP cc,u16` + `JP HL`** — a iteração 0040 estourou o teto de 45
+minutos com 17 passos, travando duas vezes sem causa determinada. Os 17 testes
+que ela chegou a escrever estão em `iter/0040-jp-cond-hl` (commit `wip:`), sem
+implementação e sem verificação. A próxima tentativa começa do zero em `main`;
+se quiser aproveitar, confira antes, porque nada ali foi rodado.
 
-A proteção de branch **funcionou** no plano atual — não foi preciso o
-contorno previsto no prompt de bootstrap.
+A `main` passou a ter **proteção de branch** em 26/07: PR obrigatório (sem
+exigir aprovação), `check` e `scoreboard` verdes, valendo inclusive para admin.
+O passo 10 continua funcionando como está; push direto em `main` não.
 
 ## Notas
 

@@ -153,6 +153,9 @@ const LDH_A_IMM8: u8 = 0xF0;
 const LD_IMM16_A: u8 = 0xEA;
 const LD_A_IMM16: u8 = 0xFA;
 
+const LD_SP_HL: u8 = 0xF9;
+const LD_IMM16_SP: u8 = 0x08;
+
 const HIGH_PAGE: u16 = 0xFF00;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -181,6 +184,14 @@ enum StoreImmediateToHl {
     Write,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StoreStackPointer {
+    ReadAddressLow,
+    ReadAddressHigh,
+    WriteLowHalf,
+    WriteHighHalf,
+}
+
 // match de Cpu::step é total sem _ =>: estado novo quebra a compilação.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -199,6 +210,9 @@ enum State {
     HighPageC(Direction),
     HighPageImmediate(Direction, HighPageImmediate),
     Absolute(Direction, Absolute),
+    // A coluna do $F9 não põe seta em passo nenhum: o instante é escolha (ver docs/iterations/0021).
+    CopyHlToStackPointer,
+    StoreStackPointer(StoreStackPointer),
     Locked(Lockup),
 }
 
@@ -245,6 +259,8 @@ impl Cpu {
                 self.high_page_immediate(bus, direction, phase)
             }
             State::Absolute(direction, phase) => self.absolute(bus, direction, phase),
+            State::CopyHlToStackPointer => self.copy_hl_to_stack_pointer(),
+            State::StoreStackPointer(phase) => self.store_stack_pointer(bus, phase),
             State::Locked(lockup) => State::Locked(lockup),
         };
     }
@@ -266,7 +282,9 @@ impl Cpu {
             | State::PopPair(..)
             | State::HighPageC(_)
             | State::HighPageImmediate(..)
-            | State::Absolute(..) => None,
+            | State::Absolute(..)
+            | State::CopyHlToStackPointer
+            | State::StoreStackPointer(_) => None,
         }
     }
 
@@ -305,6 +323,8 @@ impl Cpu {
             LDH_A_IMM8 => State::HighPageImmediate(Direction::Load, HighPageImmediate::ReadOffset),
             LD_IMM16_A => State::Absolute(Direction::Store, Absolute::ReadLowByte),
             LD_A_IMM16 => State::Absolute(Direction::Load, Absolute::ReadLowByte),
+            LD_SP_HL => State::CopyHlToStackPointer,
+            LD_IMM16_SP => State::StoreStackPointer(StoreStackPointer::ReadAddressLow),
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
             }
@@ -560,6 +580,36 @@ impl Cpu {
             }
             Absolute::Access => {
                 self.access(bus, direction, self.latch);
+                State::Fetch
+            }
+        }
+    }
+
+    const fn copy_hl_to_stack_pointer(&mut self) -> State {
+        self.registers.sp = self.registers.hl();
+        State::Fetch
+    }
+
+    // `read(u16:lower)` sem seta: o endereço é latch, como no $FA. As duas
+    // escritas são M-cycles distintos e a de baixo vai no endereço mais baixo.
+    fn store_stack_pointer(&mut self, bus: &mut Bus, phase: StoreStackPointer) -> State {
+        match phase {
+            StoreStackPointer::ReadAddressLow => {
+                self.latch = u16::from(self.read_at_pc(bus));
+                State::StoreStackPointer(StoreStackPointer::ReadAddressHigh)
+            }
+            StoreStackPointer::ReadAddressHigh => {
+                self.latch |= u16::from(self.read_at_pc(bus)) << 8;
+                State::StoreStackPointer(StoreStackPointer::WriteLowHalf)
+            }
+            StoreStackPointer::WriteLowHalf => {
+                let [_, low] = self.registers.sp.to_be_bytes();
+                bus.write(self.latch, low);
+                State::StoreStackPointer(StoreStackPointer::WriteHighHalf)
+            }
+            StoreStackPointer::WriteHighHalf => {
+                let [high, _] = self.registers.sp.to_be_bytes();
+                bus.write(self.latch.wrapping_add(1), high);
                 State::Fetch
             }
         }

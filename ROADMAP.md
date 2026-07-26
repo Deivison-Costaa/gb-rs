@@ -254,7 +254,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 ## M2 — Timing e interrupções
 
 - [x] 2.1 Timer: DIV, TIMA, TMA, TAC + comportamento de overflow (delay de 4 ciclos).
-- [ ] 2.2 Interrupções: IE/IF/IME, vetores, timing de despacho, `EI` com delay de 1 instrução.
+- [x] 2.2 Interrupções: IE/IF/IME, vetores, timing de despacho, `EI` com delay de 1 instrução.
 - [ ] 2.3 `HALT` + o bug do HALT.
 - [ ] 2.4 blargg `instr_timing`, `mem_timing`, `mem_timing-2`, `halt_bug`.
 

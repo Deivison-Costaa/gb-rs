@@ -349,7 +349,7 @@ fn ret_conditional_not_taken_does_not_modify_stack() {
 // --- RETI ($D9) ---
 
 #[test]
-fn reti_behaves_like_ret_and_sets_ime() {
+fn reti_behaves_like_ret_and_sets_ime_with_delay() {
     let ret_addr = 0x0500u16;
     let (mut cpu, mut bus) = machine_with_stack(&[0xD9], 0xC000, ret_addr);
     let sp_antes = initial_sp(&cpu);
@@ -359,7 +359,11 @@ fn reti_behaves_like_ret_and_sets_ime() {
     assert!(cpu.is_between_instructions());
     assert_eq!(cpu.registers.pc, ret_addr);
     assert_eq!(cpu.registers.sp, sp_antes.wrapping_add(2));
-    assert!(cpu.ime, "RETI deve habilitar IME");
+    assert!(!cpu.ime, "IME ainda 0 após RETI — delay de 1 instrução");
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert!(cpu.ime, "IME deve ser 1 após o delay de 1 instrução");
 }
 
 #[test]
@@ -376,10 +380,10 @@ fn reti_takes_four_m_cycles() {
     cpu.step(&mut bus); // M3: read((SP++)->upper)
     assert!(!cpu.is_between_instructions());
 
-    cpu.step(&mut bus); // M4: internal(set PC, IME=1)
+    cpu.step(&mut bus); // M4: internal(set PC, ei_pending/ei_wait)
     assert!(cpu.is_between_instructions());
     assert_eq!(cpu.registers.pc, ret_addr);
-    assert!(cpu.ime, "IME deve ser 1 apos RETI");
+    assert!(!cpu.ime, "IME ainda 0 após RETI — delay de 1 instrução");
 }
 
 #[test]

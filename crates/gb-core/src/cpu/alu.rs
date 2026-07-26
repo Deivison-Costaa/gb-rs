@@ -1,4 +1,4 @@
-//! ALU de 8 bits (ROADMAP 1.6a). spec: `02-cpu.md` § The Carry Flag, § The BCD Flags.
+//! ALU de 8 bits (ROADMAP 1.6a/1.6b). spec: `02-cpu.md` § The Carry Flag, § The BCD Flags.
 
 use crate::cpu::{Flag, Registers};
 
@@ -6,16 +6,29 @@ use crate::cpu::{Flag, Registers};
 pub(super) enum AluOp {
     Add,
     AddWithCarry,
+    Subtract,
+    SubtractWithCarry,
+    Compare,
 }
 
-// H é o carry do nibble baixo e C o do byte; o carry de entrada faz parte do
-// resultado, então conta para os dois (ver docs/iterations/0022).
+// H/C invertem magnitude entre soma e subtração; o carry/empréstimo de entrada conta nos dois (ver docs/iterations/0023).
 pub(super) fn apply(registers: &mut Registers, op: AluOp, operand: u8) {
-    let carry_in = match op {
-        AluOp::Add => 0,
-        AluOp::AddWithCarry => u8::from(registers.flag(Flag::C)),
-    };
+    match op {
+        AluOp::Add => add(registers, operand, 0),
+        AluOp::AddWithCarry => {
+            let carry_in = u8::from(registers.flag(Flag::C));
+            add(registers, operand, carry_in);
+        }
+        AluOp::Subtract => subtract(registers, operand, 0, true),
+        AluOp::SubtractWithCarry => {
+            let carry_in = u8::from(registers.flag(Flag::C));
+            subtract(registers, operand, carry_in, true);
+        }
+        AluOp::Compare => subtract(registers, operand, 0, false),
+    }
+}
 
+fn add(registers: &mut Registers, operand: u8, carry_in: u8) {
     let accumulator = registers.a;
     let total = u16::from(accumulator) + u16::from(operand) + u16::from(carry_in);
     let half = (accumulator & 0x0F) + (operand & 0x0F) + carry_in;
@@ -31,4 +44,20 @@ pub(super) fn apply(registers: &mut Registers, op: AluOp, operand: u8) {
     registers.set_flag(Flag::N, false);
     registers.set_flag(Flag::H, half > 0x0F);
     registers.set_flag(Flag::C, total > 0xFF);
+}
+
+// N é `1` literal no 1.6b; `writes_result` separa SUB/SBC (escrevem A) de CP (só produz flags).
+fn subtract(registers: &mut Registers, operand: u8, carry_in: u8, writes_result: bool) {
+    let accumulator = registers.a;
+    let half_borrow = (accumulator & 0x0F) < (operand & 0x0F) + carry_in;
+    let borrowed = u16::from(accumulator) < u16::from(operand) + u16::from(carry_in);
+    let result = accumulator.wrapping_sub(operand).wrapping_sub(carry_in);
+
+    if writes_result {
+        registers.a = result;
+    }
+    registers.set_flag(Flag::Z, result == 0);
+    registers.set_flag(Flag::N, true);
+    registers.set_flag(Flag::H, half_borrow);
+    registers.set_flag(Flag::C, borrowed);
 }

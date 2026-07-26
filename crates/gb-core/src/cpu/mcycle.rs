@@ -157,10 +157,14 @@ const LD_A_IMM16: u8 = 0xFA;
 const LD_SP_HL: u8 = 0xF9;
 const LD_IMM16_SP: u8 = 0x08;
 
-// `10 ooo rrr`: a operação em 5-3, o operando em 2-0. Só `000` e `001` aqui.
+// `10 ooo rrr`: a operação em 5-3, o operando em 2-0. `100`/`101`/`110`
+// (`AND`/`XOR`/`OR`) são o 1.6c.
 const ALU_A_R8_MASK: u8 = 0b1111_1000;
 const ADD_A_R8_PATTERN: u8 = 0b1000_0000;
 const ADC_A_R8_PATTERN: u8 = 0b1000_1000;
+const SUB_A_R8_PATTERN: u8 = 0b1001_0000;
+const SBC_A_R8_PATTERN: u8 = 0b1001_1000;
+const CP_A_R8_PATTERN: u8 = 0b1011_1000;
 
 const HIGH_PAGE: u16 = 0xFF00;
 
@@ -340,6 +344,13 @@ impl Cpu {
             _ if opcode & ALU_A_R8_MASK == ADC_A_R8_PATTERN => {
                 self.alu_a_r8(AluOp::AddWithCarry, opcode)
             }
+            _ if opcode & ALU_A_R8_MASK == SUB_A_R8_PATTERN => {
+                self.alu_a_r8(AluOp::Subtract, opcode)
+            }
+            _ if opcode & ALU_A_R8_MASK == SBC_A_R8_PATTERN => {
+                self.alu_a_r8(AluOp::SubtractWithCarry, opcode)
+            }
+            _ if opcode & ALU_A_R8_MASK == CP_A_R8_PATTERN => self.alu_a_r8(AluOp::Compare, opcode),
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
             }

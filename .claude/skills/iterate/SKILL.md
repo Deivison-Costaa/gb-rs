@@ -86,6 +86,10 @@ mata antes de seguir. Cuidado com o rebuild por mtime — nota 14.
 Copie `docs/iterations/TEMPLATE.md` para `docs/iterations/NNNN-slug.md` e
 preencha.
 
+Escreva só o que você observou de dentro da iteração. Número do PR, custo,
+turnos e duração são medidos por fora e moram em `docs/metricas.csv` — não
+tente adivinhá-los nem voltar depois para preenchê-los.
+
 O campo **`Erros de primeira tentativa`** é o mais importante do projeto
 inteiro. Seja específico e honesto:
 

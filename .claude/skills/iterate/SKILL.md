@@ -142,7 +142,9 @@ git push -u origin iter/NNNN-slug
 TITULO='iter NNNN: <o que entrega> (ROADMAP X.Y)'
 
 # NÃO use --fill: com mais de um commit ele cai para o nome da branch.
-gh pr create --title "$TITULO" --body "..."
+# Guarde a URL: é de onde sai o número do PR, que não existe antes daqui.
+URL=$(gh pr create --title "$TITULO" --body "...")
+PR="(#${URL##*/})"
 
 # `gh pr checks --watch` sai com exit 1, sem esperar, se o GitHub ainda não
 # registrou os runs. Espere aparecerem antes de observar.
@@ -152,7 +154,11 @@ gh pr checks --watch
 # `--subject` é obrigatório. Sem ele, um PR de UM commit é squashado com o
 # assunto do commit e o título do PR é jogado fora; com dois ou mais, o título
 # é usado. Medido em 10 de 10 PRs (#41 a #52), sem exceção.
-gh pr merge --squash --delete-branch --subject "$TITULO"
+#
+# E o `(#N)` tem de entrar à mão: o GitHub só o acrescenta quando monta o
+# assunto sozinho. Sem ele, `git log` deixa de apontar para a discussão do PR —
+# foi o que aconteceu com o 532d68a e o c269137.
+gh pr merge --squash --delete-branch --subject "$TITULO $PR"
 git checkout main && git pull
 ```
 

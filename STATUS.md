@@ -3,10 +3,10 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0032 — `RLCA`/`RRCA`/`RLA`/`RRA`, 1 M-cycle ([doc](docs/iterations/0032-rotates.md)). As quatro zeram `Z` incondicionalmente (coluna `0`); `N`/`H` = `0` literais; `C` recebe o bit deslocado para fora. Funções em `alu.rs` (não em módulo separado). **Erro de primeira tentativa: `Z` calculado como `result == 0`** — a intuição de "toda ALU calcula Z" erra aqui, e o handoff da 0031 pré-anunciou com exatidão. Bateria: **7/7 pegos, 1/1 controles verdes**.
-**Iteração anterior:** 0031 — `LD HL,SP+i8` (`$F8`) ([doc](docs/iterations/0031-ld-hl-sp-e8.md)).
-**Duas iterações atrás:** 0030 — `ADD SP,i8` (`$E8`) ([doc](docs/iterations/0030-add-sp-e8.md)).
-**Próxima tarefa:** ROADMAP **1.9** — prefixo CB completo (BIT/RES/SET/rot). A tabela `03-opcodes.md` § `$CB prefix instructions` lista 11 grupos (RLC, RRC, RL, RR, SLA, SRA, SWAP, SRL, BIT, RES, SET) × 8 operandos (`r8`: B C D E H L (HL) A), total de **88 opcodes de 2 bytes** (2 M-cycles = 8 T-cycles cada). A armadilha central é a mesma da 0032 ao contrário: os CB-equivalentes (`CB 07` = `RLC A`, etc.) **calculam** `Z`/`N`/`H`/`C` onde os não-prefixados zeram — e as quatro funções de rotação em `alu.rs` **não servem** (zeram Z incondicionalmente). BIT é o único que não escreve no operando (só flag); RES/SET manipulam bits individuais do operando. O `(HL)` é read-modify-write (como `INC (HL)` do 1.6e): fetch(CB) → fetch(opcode) → read((HL)) → write((HL)), 4 M-cycles = 16 T-cycles. O decode do CB acontece em duas etapas: o `$CB` entra no fetch (Block 3, `11 001 011`) e dispara um segundo fetch que lê o opcode real. **Este item é grande** (~300 linhas de diff prováveis) — se for quebrar, quebre por grupo de flag (rotações/shifts primeiro, BIT/SET/RES depois). Nenhum dos 88 está em `decoded_elsewhere`.
+**Última iteração concluída:** 0033 — CB prefix decode + RLC (`CB 00`–`CB 07`) ([doc](docs/iterations/0033-cb-prefix-decode-rlc.md)). O `$CB` no `fetch` transita para `State::CbFetch` (segundo fetch com decode próprio, 2 M-cycles para registrador, 4 para `(HL)` read-modify-write como `INC (HL)`). `alu::rlc` devolve `(resultado, carry)` sem tocar em `Registers` — quem chama decide as flags com `Z` calculado (ao contrário do `RLCA` que zera incondicionalmente). **Erro de primeira tentativa: Z=0 incondicional (reuso de `alu::rlca`)** — o handoff pré-anunciou a armadilha e ela não virou código, mas o registro de memória está correto. Bateria: **7/7 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0032 — `RLCA`/`RRCA`/`RLA`/`RRA` ([doc](docs/iterations/0032-rotates.md)).
+**Duas iterações atrás:** 0031 — `LD HL,SP+i8` (`$F8`) ([doc](docs/iterations/0031-ld-hl-sp-e8.md)).
+**Próxima tarefa:** ROADMAP **1.9b** — RRC + RL + RR (`CB 08`–`CB 1F`, 24 opcodes). O mecanismo de `CbFetch` e `CbRotHl` já está estabelecido; o trabalho é acrescentar as três operações no `cb_fetch`, no `CbRotOp` e na `cb_rot_hl`. A armadilha persiste: `Z` calculado (todas as CB rotações), `N=0`, `H=0`, `C` = bit deslocado para fora. `RL` e `RR` são rotações via carry: o `C` antigo entra no bit 0 (RL) ou bit 7 (RR). Cada nova operação precisa de uma função em `alu.rs` no estilo de `rlc` (devolve resultado, quem chama decide flags), e NÃO pode reusar `rla`/`rra` que zeram Z. Nenhum dos 24 opcodes está em `decoded_elsewhere` (são todos segundos bytes de CB).
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -37,7 +37,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **352** (eram **337** antes da 0032).
+Testes do workspace: **369** (eram **352** antes da 0033 — +17 do novo arquivo `cpu_cb_rlc`).
 
 ## Invariantes
 

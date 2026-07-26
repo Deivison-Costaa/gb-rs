@@ -230,7 +230,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     barramento) — não presuma a mesma forma só porque a flag é igual.
 - [x] 1.8 Opcodes: rotações e shifts (RLCA/RRCA/RLA/RRA — divergem do prefixo CB no flag Z).
 - [ ] 1.9 Opcodes: prefixo CB completo (BIT/RES/SET/rot).
-  - [ ] 1.9a CB decode + RLC (`CB 00`–`CB 07`) — mecanismo de dois M-cycles: o `$CB` no fetch transita para um segundo fetch que lê e decodifica o opcode real. RLC calcula `Z` (result == 0), enquanto o `RLCA` não-prefixado zera incondicionalmente — mesma armadilha da 0032 ao contrário. `(HL)` é read-modify-write em 4 M-cycles (16 T-cycles).
+  - [x] 1.9a CB decode + RLC (`CB 00`–`CB 07`) — mecanismo de dois M-cycles: o `$CB` no fetch transita para um segundo fetch que lê e decodifica o opcode real. RLC calcula `Z` (result == 0), enquanto o `RLCA` não-prefixado zera incondicionalmente — mesma armadilha da 0032 ao contrário. `(HL)` é read-modify-write em 4 M-cycles (16 T-cycles).
   - [ ] 1.9b RRC + RL + RR (`CB 08`–`CB 1F`).
   - [ ] 1.9c SLA + SRA + SWAP + SRL (`CB 20`–`CB 3F`).
   - [ ] 1.9d BIT (`CB 40`–`CB 7F`) — `Z` = bit testado, `N=0`, `H=1`, `C` intocado. `(HL)` são 12 T-cycles (read sem write).

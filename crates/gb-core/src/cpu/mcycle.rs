@@ -195,6 +195,11 @@ const DEC_R16_PATTERN: u8 = 0b0000_1011;
 const ADD_HL_R16_MASK: u8 = 0b1100_1111;
 const ADD_HL_R16_PATTERN: u8 = 0b0000_1001;
 
+const RLCA: u8 = 0x07;
+const RRCA: u8 = 0x0F;
+const RLA: u8 = 0x17;
+const RRA: u8 = 0x1F;
+
 const ADD_SP_I8: u8 = 0xE8;
 const LD_HL_SP_I8: u8 = 0xF8;
 
@@ -396,6 +401,22 @@ impl Cpu {
 
         match opcode {
             NOP => State::Fetch,
+            RLCA => {
+                alu::rlca(&mut self.registers);
+                State::Fetch
+            }
+            RRCA => {
+                alu::rrca(&mut self.registers);
+                State::Fetch
+            }
+            RLA => {
+                alu::rla(&mut self.registers);
+                State::Fetch
+            }
+            RRA => {
+                alu::rra(&mut self.registers);
+                State::Fetch
+            }
             JP_U16 => State::JumpImmediate(JumpImmediate::ReadLowByte),
             HALT => State::Locked(Lockup::UndecodedOpcode(opcode)),
             LD_R8_R8_FIRST..=LD_R8_R8_LAST => self.load_r8_r8(opcode),

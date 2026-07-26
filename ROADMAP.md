@@ -228,7 +228,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     (`fetch → read(i8) → internal`), a mesma coluna de flags do 1.7c mas um
     M-cycle a menos (escreve em `HL`, um par de registrador, não em `SP` pelo
     barramento) — não presuma a mesma forma só porque a flag é igual.
-- [ ] 1.8 Opcodes: rotações e shifts (RLCA/RRCA/RLA/RRA — divergem do prefixo CB no flag Z).
+- [x] 1.8 Opcodes: rotações e shifts (RLCA/RRCA/RLA/RRA — divergem do prefixo CB no flag Z).
 - [ ] 1.9 Opcodes: prefixo CB completo (BIT/RES/SET/rot).
 - [ ] 1.10 Opcodes: jumps, calls, rets, RST — com timing condicional correto. `JP u16` (`C3`) já saiu no 1.3; o que sobra aqui é o difícil — os desvios condicionais duram tempos diferentes conforme tomem ou não o desvio (`8 / 12`, `12 / 24`), e essa é a coluna que a tabela dá em dois valores.
 - [ ] 1.11 Opcodes: misc — `DAA`, `CPL`, `SCF`, `CCF`, `DI`, `EI`, `NOP`, `STOP`.

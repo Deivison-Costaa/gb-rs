@@ -1,34 +1,10 @@
 //! Guarda comportamental do `scripts/scoreboard.sh` — ROADMAP 0.2b.
-//!
-//! O `scoreboard.csv` é a série temporal que vira gráfico na apresentação
-//! (ROADMAP 8.2). O modo de falha que interessa não é o script explodir — isso
-//! `set -e` já resolve, e a CI pinta de vermelho. É o script **terminar
-//! bem-sucedido sem ter anexado nada**: nenhuma ROM encontrada, `find` mudo,
-//! laço que não executou nenhuma volta. O job fica verde, o artefato sobe com o
-//! CSV de ontem, e a série para de crescer sem que ninguém receba um sinal.
-//!
-//! Foi exatamente esse o cenário da nota 7 do `STATUS.md` visto do outro lado:
-//! lá o script morria em silêncio, aqui ele poderia sair `0` em silêncio. Os
-//! dois se detectam do mesmo jeito — perguntando ao CSV se ele cresceu.
-//!
-//! Os testes rodam o script de verdade, num diretório temporário próprio, com
-//! `SCOREBOARD_CSV` e `ROMS_DIR` apontados para lá. **Nunca** tocam o
-//! `scoreboard.csv` versionado na raiz: contaminá-lo com linhas de teste
-//! corromperia o dado da apresentação.
-//!
-//! `GB_CLI` aponta para o binário que o próprio `cargo test` acabou de
-//! construir. Sem isso, `find_gb_cli` cairia no `cargo build --release` de
-//! best-effort — um cargo aninhado dentro de um teste do cargo, disputando o
-//! lock do diretório de build.
-//!
-//! `unwrap`/`expect` são permitidos aqui: R6 proíbe fora de teste.
 
 #![cfg(unix)]
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-/// `crates/gb-cli` → `crates` → raiz do workspace.
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -37,9 +13,6 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-/// Diretório de trabalho exclusivo deste caso de teste, sempre zerado antes de
-/// usar. Mora sob `target/` para sair no `cargo clean` e já estar no
-/// `.gitignore`.
 fn sandbox(name: &str) -> PathBuf {
     let dir = workspace_root().join("target/tests-tmp").join(name);
     if dir.exists() {
@@ -49,10 +22,6 @@ fn sandbox(name: &str) -> PathBuf {
     dir
 }
 
-/// Roda o `scoreboard.sh` contra um sandbox com as ROMs falsas dadas.
-///
-/// As "ROMs" são arquivos vazios: o `gb-cli` de hoje sai `2` sem sequer abrir o
-/// arquivo, e o que este teste mede é o script, não o emulador.
 fn run_scoreboard(dir: &Path, roms: &[&str]) -> Output {
     let roms_dir = dir.join("roms");
     for rom in roms {
@@ -73,7 +42,6 @@ fn run_scoreboard(dir: &Path, roms: &[&str]) -> Output {
         .expect("executar scripts/scoreboard.sh")
 }
 
-/// Linhas de dado do CSV — o cabeçalho não conta.
 fn data_rows(dir: &Path) -> usize {
     let csv = dir.join("scoreboard.csv");
     let text = std::fs::read_to_string(&csv)
@@ -93,17 +61,6 @@ fn describe(out: &Output) -> String {
     )
 }
 
-/// ROADMAP 0.2b — o caso que importa: nenhuma linha anexada é **erro**.
-///
-/// Sem ROMs, o laço não roda e o CSV fica só com o cabeçalho. Sair `0` aqui é
-/// afirmar "medi 0 de 0 ROMs e está tudo bem", quando o que houve foi não medir
-/// nada.
-///
-/// O teste exige a **mensagem**, não só o código de saída — e não por
-/// preciosismo: na primeira versão ele passou verde contra o script antigo,
-/// que morria três linhas antes com `total: variável não associada`. Falhar não
-/// é a mesma coisa que falhar pelo motivo certo, e um teste que não distingue
-/// os dois estava medindo um bug com o outro.
 #[test]
 fn scoreboard_fails_when_no_row_is_appended() {
     let dir = sandbox("scoreboard-vazio");
@@ -125,8 +82,6 @@ fn scoreboard_fails_when_no_row_is_appended() {
     assert_eq!(data_rows(&dir), 0, "não havia ROM para medir");
 }
 
-/// Controle positivo. Sem ele, um script que falhasse *sempre* passaria no
-/// teste acima — a vacuidade da nota 8 do `STATUS.md`, de cabeça para baixo.
 #[test]
 fn scoreboard_succeeds_and_appends_one_row_per_rom() {
     let dir = sandbox("scoreboard-uma-rom");
@@ -140,9 +95,6 @@ fn scoreboard_succeeds_and_appends_one_row_per_rom() {
     assert_eq!(data_rows(&dir), 1, "uma ROM, uma linha\n{}", describe(&out));
 }
 
-/// O CSV é acumulativo (invariante do projeto): a segunda execução anexa à
-/// primeira, não a substitui. É também o que garante que a checagem de
-/// crescimento compara com o tamanho **anterior**, e não com zero.
 #[test]
 fn scoreboard_appends_to_an_existing_csv_without_truncating() {
     let dir = sandbox("scoreboard-acumula");

@@ -1,21 +1,4 @@
 //! Guarda comportamental do `scripts/publish-scoreboard.sh` — ROADMAP 0.2c.
-//!
-//! O `scoreboard.sh` faz a série crescer **dentro do runner**. Quando o job
-//! acaba, o runner é descartado e as linhas que a CI produziu somem: o que
-//! sobrevive no git é só o que uma iteração commitou à mão. O artefato não
-//! resolve isso — ele guarda o CSV por 90 dias em um zip por execução, não
-//! monta a série.
-//!
-//! Este script fecha o ciclo publicando o CSV acumulado numa branch de dados.
-//! **Não em `main`:** a proteção de `main` exige PR, e o `GITHUB_TOKEN` não tem
-//! bypass (ver `docs/iterations/0004-ci-serie-persistida.md`).
-//!
-//! Os testes montam um repositório git de mentira — um bare fazendo de
-//! `origin`, um clone de trabalho — dentro de `target/tests-tmp/`. **Nunca**
-//! tocam o repositório real nem o `scoreboard.csv` versionado: publicar linhas
-//! de teste na branch de dados corromperia o dado da apresentação.
-//!
-//! `unwrap`/`expect` são permitidos aqui: R6 proíbe fora de teste.
 
 #![cfg(unix)]
 
@@ -25,7 +8,6 @@ use std::process::{Command, Output};
 const CSV_HEADER: &str = "timestamp,commit,suite,rom,status,ciclos";
 const DATA_BRANCH: &str = "scoreboard-data";
 
-/// `crates/gb-cli` → `crates` → raiz do workspace.
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -34,8 +16,6 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-/// Diretório exclusivo do caso de teste, sempre zerado antes de usar. Mora sob
-/// `target/` para sair no `cargo clean` e já estar no `.gitignore`.
 fn sandbox(name: &str) -> PathBuf {
     let dir = workspace_root().join("target/tests-tmp").join(name);
     if dir.exists() {
@@ -54,7 +34,6 @@ fn describe(out: &Output) -> String {
     )
 }
 
-/// Roda `git` no diretório dado e exige sucesso.
 fn git(dir: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
         .current_dir(dir)
@@ -70,9 +49,6 @@ fn git(dir: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
-/// Uma linha de dado plausível do CSV. O conteúdo não importa para o script —
-/// ele trata a linha como opaca —, mas linhas distintas é o que deixa ver quem
-/// sobreviveu à publicação.
 fn row(n: u32) -> String {
     format!("2026-07-25T00:00:{n:02}Z,abc123,\"blargg/cpu_instrs\",\"{n:02}.gb\",crash,0")
 }
@@ -87,8 +63,6 @@ fn csv_with(rows: &[String]) -> String {
     text
 }
 
-/// Repositório de mentira: um bare (`origin`) e um clone de trabalho com um
-/// commit inicial em `main` e um `scoreboard.csv` com as linhas dadas.
 struct Repo {
     remote: PathBuf,
     work: PathBuf,
@@ -137,8 +111,6 @@ impl Repo {
             .expect("executar scripts/publish-scoreboard.sh")
     }
 
-    /// O conteúdo do `scoreboard.csv` **no remoto**, que é o que interessa:
-    /// o que ficou no clone de trabalho não sobrevive ao fim do job.
     fn published_csv(&self) -> String {
         git(
             &self.remote,
@@ -171,11 +143,6 @@ impl Repo {
             .success()
     }
 
-    /// Semeia a branch de dados **por fora do script**, com porcelana comum.
-    ///
-    /// De propósito não usa o mesmo `hash-object`/`commit-tree` do script: se o
-    /// mecanismo do script estiver quebrado, semear com ele quebraria junto e o
-    /// teste passaria por vacuidade.
     fn seed_data_branch(&self, dir: &Path, rows: &[String]) {
         let seed = dir.join("seed");
         git(
@@ -196,9 +163,6 @@ impl Repo {
         git(&seed, &["push", "-q", "origin", DATA_BRANCH]);
     }
 
-    /// Instala um `pre-receive` que reprova o primeiro push e aceita os
-    /// seguintes — o jeito determinístico de encenar a corrida entre duas
-    /// execuções da CI.
     fn reject_first_push(&self) {
         use std::os::unix::fs::PermissionsExt;
         let hook = self.remote.join("hooks/pre-receive");
@@ -222,7 +186,6 @@ impl Repo {
 
 // --- os casos -------------------------------------------------------------
 
-/// O caso base: a branch não existe, e a primeira execução a cria com a série.
 #[test]
 fn publish_creates_the_data_branch_on_the_first_run() {
     let dir = sandbox("publish-cria-branch");
@@ -245,12 +208,6 @@ fn publish_creates_the_data_branch_on_the_first_run() {
     );
 }
 
-/// O caso que dá sentido ao resto: **nada do que já está publicado pode sumir**.
-///
-/// Encena outra execução da CI que publicou uma linha que este runner não tem
-/// (o clone dele é de um commit anterior). Sobrescrever a branch com o CSV
-/// local seria trocar a série por um pedaço dela — perda silenciosa, e é a
-/// série inteira que vira gráfico no ROADMAP 8.2.
 #[test]
 fn publish_keeps_rows_that_another_run_had_already_published() {
     let dir = sandbox("publish-preserva-alheio");
@@ -274,11 +231,6 @@ fn publish_keeps_rows_that_another_run_had_already_published() {
     );
 }
 
-/// Publicar duas vezes a mesma coisa não gera commit novo.
-///
-/// Sem isso, todo push em `main` que não mudasse o placar ainda assim empilharia
-/// um commit vazio de conteúdo na branch de dados — e um `rev-list` deixaria de
-/// dizer quantas execuções mediram alguma coisa.
 #[test]
 fn publish_is_a_no_op_when_there_is_nothing_new() {
     let dir = sandbox("publish-idempotente");
@@ -299,9 +251,6 @@ fn publish_is_a_no_op_when_there_is_nothing_new() {
     assert_eq!(repo.published_rows(), vec![row(1), row(2)]);
 }
 
-/// Duas execuções da CI podem terminar juntas; a segunda a empurrar leva um
-/// push rejeitado. Desistir aí perderia a medição — o script tem de refazer
-/// sobre o topo novo e tentar de novo.
 #[test]
 fn publish_retries_when_the_push_is_rejected() {
     let dir = sandbox("publish-retenta");
@@ -317,8 +266,6 @@ fn publish_retries_when_the_push_is_rejected() {
     assert_eq!(repo.published_rows(), vec![row(1)]);
 }
 
-/// CSV só com cabeçalho é o mesmo modo de falha da 0.2b visto daqui: publicar
-/// "zero linhas" com sucesso é afirmar que mediu e estava tudo bem.
 #[test]
 fn publish_fails_when_the_csv_has_no_data_rows() {
     let dir = sandbox("publish-csv-vazio");

@@ -1,48 +1,10 @@
 //! ROADMAP 1.2b-ii — os registradores de hardware no hand-off da boot ROM.
-//!
-//! Spec: `docs/reference/01-memory-map.md` § Console state after boot ROM
-//! hand-off → *Hardware registers* (Pan Docs `fe246067b695`). A tabela tem
-//! **quatro colunas de modelo** (DMG0, DMG / MGB, SGB / SGB2, CGB / AGB) e este
-//! emulador é DMG: vale a segunda.
-//!
-//! A seção abre com um aviso que convém não esquecer ao ler os vermelhos daqui:
-//!
-//! > Some of the information below is highly volatile, due to the complexity of
-//! > some of the boot ROM behaviors; thus, some of it may contain errors.
-//!
-//! Três coisas que a tabela diz e que a intuição erra, e que por isso ganham
-//! teste próprio:
-//!
-//! 1. `OBP0`/`OBP1` são marcados `??` — *"left entirely uninitialized"*. Não são
-//!    `$00` nem `$FF`; o valor não é dado, e quem o escolhe é este emulador.
-//! 2. Há linhas `---` na coluna DMG: `KEY0`, `KEY1`, `VBK`, `HDMA1`–`HDMA5`,
-//!    `RP`, `BGPI`/`BGPD`, `OGPI`/`OGPD`, `SVBK` são registradores de CGB e
-//!    **não existem** neste console. `BANK` (`$FF50`) é `---` em *todas* as
-//!    colunas. `---` não é zero.
-//! 3. A tabela **não cobre** os 128 endereços de `$FF00`–`$FF7F`: dá valor a 41
-//!    e marca 15 como `---`. Sobre os outros **72** — entre eles a wave RAM
-//!    inteira, `$FF30`–`$FF3F` — ela não diz nada, e o que a spec não diz não
-//!    vira valor inventado (R1).
-//!
-//! O que **não** está sendo medido: semântica de leitura e escrita por
-//! registrador. Que `TAC` só tenha 3 bits úteis, que `LY` seja read-only, que
-//! escrever em `DIV` o zere, que `IF` tenha os 3 bits altos presos em 1 — tudo
-//! isso é dos componentes que ainda não existem (timer 2.1, interrupções 2.2,
-//! PPU 3.1, APU M6). Esta iteração entrega **o valor inicial**, e um byte
-//! guardado não é um contador emulado.
-//!
-//! `unwrap`/`expect` são permitidos aqui: a R6 proíbe fora de teste.
 
 use gb_core::bus::Bus;
 use gb_core::cart::{Cartridge, OPEN_BUS};
 
-/// Valor arbitrário para as escritas de sonda. Não é `$00` nem `$FF`: os dois
-/// aparecem como valor legítimo de registrador na tabela, e uma sonda que
-/// coincida com o conteúdo esperado não distingue "guardou" de "não mudou".
 const PROBE: u8 = 0x5A;
 
-/// Cartucho mudo. Nada aqui toca as janelas do cartucho; ele existe porque o
-/// `Bus` precisa de um.
 struct SilentCartridge;
 
 impl Cartridge for SilentCartridge {
@@ -57,17 +19,8 @@ fn bus() -> Bus {
     Bus::new(Box::new(SilentCartridge))
 }
 
-// ---------------------------------------------------------------------------
-// A tabela § Hardware registers, coluna DMG / MGB — transcrita
-// ---------------------------------------------------------------------------
-
-/// `None` = a tabela marca a linha como `??`, *não inicializado*.
 type Cell = Option<u8>;
 
-/// A coluna **DMG / MGB**, linha a linha, na ordem da spec.
-///
-/// As linhas `---` (registradores que só existem no CGB) ficam de fora: elas não
-/// têm valor porque não têm registrador, e estão em [`CGB_ONLY`].
 const DMG_COLUMN: &[(u16, &str, Cell)] = &[
     (0xFF00, "P1", Some(0xCF)),
     (0xFF01, "SB", Some(0x00)),
@@ -113,11 +66,6 @@ const DMG_COLUMN: &[(u16, &str, Cell)] = &[
     (0xFFFF, "IE", Some(0x00)),
 ];
 
-/// As linhas `---` da coluna DMG: registrador que **não existe** neste console.
-///
-/// `BANK` (`$FF50`) entra aqui embora seja `---` nas quatro colunas — ele é o
-/// registrador que desmapeia a boot ROM, e a tabela é tirada a `PC = $0100`,
-/// quando ela já saiu do mapa.
 const CGB_ONLY: &[(u16, &str)] = &[
     (0xFF4C, "KEY0"),
     (0xFF4D, "KEY1"),
@@ -136,12 +84,6 @@ const CGB_ONLY: &[(u16, &str)] = &[
     (0xFF70, "SVBK"),
 ];
 
-/// Os endereços de `$FF00`–`$FF7F` que a tabela simplesmente **não menciona**.
-///
-/// Não é o mesmo caso do `---`: ali a spec afirma ausência, aqui ela se cala.
-/// A wave RAM (`$FF30`–`$FF3F`) é o exemplo que dói: são 16 bytes de memória
-/// real, que o § FF30–FF3F descreve em detalhe, e sobre cujo conteúdo no
-/// hand-off esta tabela não diz uma palavra. Ela chega com a APU (ROADMAP 6.4).
 fn unnamed_io_addresses() -> Vec<u16> {
     let named: Vec<u16> = DMG_COLUMN
         .iter()
@@ -154,10 +96,6 @@ fn unnamed_io_addresses() -> Vec<u16> {
         .collect()
 }
 
-/// Confere a **transcrição** antes de usá-la para julgar o código.
-///
-/// Endereço repetido entre as três listas, ou endereço fora da faixa, daria um
-/// verde que não mediu o que diz medir (`STATUS.md`, nota 8).
 #[test]
 fn the_transcribed_column_partitions_the_io_range_exactly_once() {
     let mut seen: Vec<u16> = DMG_COLUMN
@@ -180,10 +118,6 @@ fn the_transcribed_column_partitions_the_io_range_exactly_once() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// Os valores da coluna DMG / MGB
-// ---------------------------------------------------------------------------
-
 #[test]
 fn every_named_register_holds_the_dmg_column_value_at_hand_off() {
     let bus = bus();
@@ -201,11 +135,6 @@ fn every_named_register_holds_the_dmg_column_value_at_hand_off() {
 
 #[test]
 fn this_is_the_dmg_mgb_column_and_not_one_of_the_other_three() {
-    // Controle negativo da leitura da tabela, e não zelo: **três** células
-    // separam a coluna DMG0 da DMG / MGB, e as três são de componentes que
-    // ainda não existem — ou seja, de bytes que ninguém vai conferir tão cedo.
-    // Copiar a coluna vizinha daria um hand-off inteiro, plausível, com um
-    // `LY = $91` (última linha da tela!) que só destoaria dentro de um jogo.
     let bus = bus();
 
     let wrong_column = [
@@ -227,24 +156,6 @@ fn this_is_the_dmg_mgb_column_and_not_one_of_the_other_three() {
     }
 }
 
-// ---------------------------------------------------------------------------
-// `??` — as duas linhas que a tabela recusa a preencher
-// ---------------------------------------------------------------------------
-
-/// A nota de rodapé de `OBP0`/`OBP1`, inteira:
-///
-/// > These registers are left entirely uninitialized. Their value tends to be
-/// > most often $00 or $FF, but the value is especially not reliable if your
-/// > software runs after e.g. a flashcart or multicart selection menu.
-///
-/// Ou seja: a spec **não dá** o valor, e avisa que os dois candidatos óbvios são
-/// tendência e não regra. Este emulador escolhe `$00`, o mesmo que já escolheu
-/// para a WRAM e a HRAM (0010) — constante é o que dá teste reprodutível.
-///
-/// O teste existe para que a escolha fique dita em algum lugar que quebre se
-/// mudar, e **não** porque `$00` seja o valor certo: não há valor certo. Jogo que
-/// dependa disto tem bug, e a própria nota manda sempre escrever nesses dois
-/// antes de exibir objetos.
 #[test]
 fn obp0_and_obp1_are_uninitialized_in_the_spec_and_zero_by_choice_here() {
     let mut bus = bus();
@@ -258,9 +169,6 @@ fn obp0_and_obp1_are_uninitialized_in_the_spec_and_zero_by_choice_here() {
         );
     }
 
-    // Não inicializado é diferente de inexistente: são as paletas de objeto da
-    // PPU, e a memória está lá. Se `write` não pegar, o 3.1 vai encontrar um
-    // registrador oco onde devia haver uma paleta.
     for addr in [0xFF48u16, 0xFF49] {
         bus.write(addr, PROBE);
         assert_eq!(
@@ -271,10 +179,6 @@ fn obp0_and_obp1_are_uninitialized_in_the_spec_and_zero_by_choice_here() {
         );
     }
 }
-
-// ---------------------------------------------------------------------------
-// `---` — o que não existe no DMG
-// ---------------------------------------------------------------------------
 
 #[test]
 fn the_cgb_only_registers_do_not_exist_on_this_console() {
@@ -299,10 +203,6 @@ fn the_cgb_only_registers_do_not_exist_on_this_console() {
 
 #[test]
 fn the_addresses_the_table_never_mentions_have_no_owner_yet() {
-    // Silêncio da spec, não afirmação dela. Barramento aberto aqui é a mesma
-    // decisão do 1.2a para VRAM e OAM: ausência de componente ligado, fixada por
-    // teste para ser visível. Quem trouxer a APU (6.4) derruba a wave RAM daqui,
-    // e é o teste avisando que chegou a hora.
     let mut bus = bus();
     let unnamed = unnamed_io_addresses();
 
@@ -329,10 +229,6 @@ fn the_addresses_the_table_never_mentions_have_no_owner_yet() {
     }
 }
 
-// ---------------------------------------------------------------------------
-// `IE` — a última linha da tabela, e a única fora de `$FF00`–`$FF7F`
-// ---------------------------------------------------------------------------
-
 #[test]
 fn ie_starts_at_zero_and_is_a_register_of_its_own() {
     let mut bus = bus();
@@ -358,21 +254,8 @@ fn ie_starts_at_zero_and_is_a_register_of_its_own() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// A fronteira desta iteração
-// ---------------------------------------------------------------------------
-
 #[test]
 fn the_named_registers_have_storage_and_no_read_semantics_yet() {
-    // O que esta iteração entrega é **valor inicial**, e o que ela deliberadamente
-    // não entrega é comportamento. Um byte guardado não é um contador emulado: o
-    // `DIV` daqui vale $AB e vai continuar valendo $AB para sempre, porque não há
-    // timer (2.1); escrever nele devia zerá-lo e não zera; o `LY` é read-only no
-    // hardware e aqui aceita escrita.
-    //
-    // Isto é divergência conhecida, não descuido — e está fixada por teste para
-    // que quem ligar o timer ou a PPU encontre o aviso em vez de um byte solto
-    // com cara de implementação pronta.
     let mut bus = bus();
 
     for (addr, name) in [(0xFF04u16, "DIV"), (0xFF44, "LY"), (0xFF07, "TAC")] {
@@ -389,11 +272,6 @@ fn the_named_registers_have_storage_and_no_read_semantics_yet() {
 
 #[test]
 fn the_hand_off_state_is_what_bus_new_gives_because_the_boot_rom_is_skipped() {
-    // Não há um `Bus::after_boot_rom` separado, e a assimetria com
-    // `Registers::after_boot_rom` (1.2b-i) é de propósito: lá o estado depende
-    // do checksum da ROM, então havia o que um construtor carregar. Aqui a
-    // coluna é literal, e este emulador não tem outro estado em que estar — ele
-    // nunca roda a boot ROM.
     let bus = bus();
 
     assert_ne!(

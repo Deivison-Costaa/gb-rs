@@ -3,10 +3,10 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0031 — `LD HL,SP+i8` (`$F8`), 3 M-cycles ([doc](docs/iterations/0031-ld-hl-sp-e8.md)). Mesma coluna de flags do 1.7c: `Z`/`N` = `0` literais; `H`/`C` sobre o byte baixo. **Erro de primeira tentativa: assumi HL=0 pós-boot no teste de M-cycle** — `after_boot_rom` seta HL com base no checksum; corrigido com `set_hl(0)` explícito. Bateria: **6/6 pegos, 1/1 controles verdes**.
-**Iteração anterior:** 0030 — `ADD SP,i8` (`$E8`) ([doc](docs/iterations/0030-add-sp-e8.md)).
-**Duas iterações atrás:** 0029 — `ADD HL,r16` ([doc](docs/iterations/0029-add-hl-r16.md)).
-**Próxima tarefa:** ROADMAP **1.8** — rotações e shifts: `RLCA` (`$07`), `RRCA` (`$0F`), `RLA` (`$17`), `RRA` (`$1F`). 4 opcodes, 1 byte cada, 4 T-cycles, 1 M-cycle (`fetch`). A armadilha central: essas quatro **zeram `Z` incondicionalmente** (coluna `0`), enquanto os equivalentes prefixados por `CB` (`RLC A` = `CB 07`, `RRC A` = `CB 0F`, `RL A` = `CB 17`, `RR A` = `CB 1F`) **calculam `Z`** — mesmo nome de instrução, flag diferente. `N` e `H` são `0` literais; `C` recebe o bit deslocado para fora. A especificação é só 4 linhas na tabela (todas iguais: `Z=0 N=0 H=0 C`), mas a implementação é o primeiro código de rotação do projeto — um módulo `rotate.rs` ou funções em `alu.rs` (a decidir). Nenhum dos 4 está em `decoded_elsewhere`.
+**Última iteração concluída:** 0032 — `RLCA`/`RRCA`/`RLA`/`RRA`, 1 M-cycle ([doc](docs/iterations/0032-rotates.md)). As quatro zeram `Z` incondicionalmente (coluna `0`); `N`/`H` = `0` literais; `C` recebe o bit deslocado para fora. Funções em `alu.rs` (não em módulo separado). **Erro de primeira tentativa: `Z` calculado como `result == 0`** — a intuição de "toda ALU calcula Z" erra aqui, e o handoff da 0031 pré-anunciou com exatidão. Bateria: **7/7 pegos, 1/1 controles verdes**.
+**Iteração anterior:** 0031 — `LD HL,SP+i8` (`$F8`) ([doc](docs/iterations/0031-ld-hl-sp-e8.md)).
+**Duas iterações atrás:** 0030 — `ADD SP,i8` (`$E8`) ([doc](docs/iterations/0030-add-sp-e8.md)).
+**Próxima tarefa:** ROADMAP **1.9** — prefixo CB completo (BIT/RES/SET/rot). A tabela `03-opcodes.md` § `$CB prefix instructions` lista 11 grupos (RLC, RRC, RL, RR, SLA, SRA, SWAP, SRL, BIT, RES, SET) × 8 operandos (`r8`: B C D E H L (HL) A), total de **88 opcodes de 2 bytes** (2 M-cycles = 8 T-cycles cada). A armadilha central é a mesma da 0032 ao contrário: os CB-equivalentes (`CB 07` = `RLC A`, etc.) **calculam** `Z`/`N`/`H`/`C` onde os não-prefixados zeram — e as quatro funções de rotação em `alu.rs` **não servem** (zeram Z incondicionalmente). BIT é o único que não escreve no operando (só flag); RES/SET manipulam bits individuais do operando. O `(HL)` é read-modify-write (como `INC (HL)` do 1.6e): fetch(CB) → fetch(opcode) → read((HL)) → write((HL)), 4 M-cycles = 16 T-cycles. O decode do CB acontece em duas etapas: o `$CB` entra no fetch (Block 3, `11 001 011`) e dispara um segundo fetch que lê o opcode real. **Este item é grande** (~300 linhas de diff prováveis) — se for quebrar, quebre por grupo de flag (rotações/shifts primeiro, BIT/SET/RES depois). Nenhum dos 88 está em `decoded_elsewhere`.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -37,7 +37,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **337** (eram **321** antes da 0031).
+Testes do workspace: **352** (eram **337** antes da 0032).
 
 ## Invariantes
 

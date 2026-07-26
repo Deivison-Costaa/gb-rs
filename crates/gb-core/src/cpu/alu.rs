@@ -97,3 +97,45 @@ pub(super) fn decrement(registers: &mut Registers, value: u8) -> u8 {
     registers.set_flag(Flag::H, value & 0x0F == 0);
     result
 }
+
+pub(super) fn rlca(registers: &mut Registers) {
+    let a = registers.a;
+    let carry_out = (a & 0x80) != 0;
+    registers.a = (a << 1) | u8::from(carry_out);
+    registers.set_flag(Flag::Z, false);
+    registers.set_flag(Flag::N, false);
+    registers.set_flag(Flag::H, false);
+    registers.set_flag(Flag::C, carry_out);
+}
+
+pub(super) fn rrca(registers: &mut Registers) {
+    let a = registers.a;
+    let carry_out = (a & 0x01) != 0;
+    registers.a = (a >> 1) | (u8::from(carry_out) << 7);
+    registers.set_flag(Flag::Z, false);
+    registers.set_flag(Flag::N, false);
+    registers.set_flag(Flag::H, false);
+    registers.set_flag(Flag::C, carry_out);
+}
+
+pub(super) fn rla(registers: &mut Registers) {
+    let a = registers.a;
+    let carry_out = (a & 0x80) != 0;
+    let carry_in = u8::from(registers.flag(Flag::C));
+    registers.a = (a << 1) | carry_in;
+    registers.set_flag(Flag::Z, false);
+    registers.set_flag(Flag::N, false);
+    registers.set_flag(Flag::H, false);
+    registers.set_flag(Flag::C, carry_out);
+}
+
+pub(super) fn rra(registers: &mut Registers) {
+    let a = registers.a;
+    let carry_out = (a & 0x01) != 0;
+    let carry_in = u8::from(registers.flag(Flag::C)) << 7;
+    registers.a = (a >> 1) | carry_in;
+    registers.set_flag(Flag::Z, false);
+    registers.set_flag(Flag::N, false);
+    registers.set_flag(Flag::H, false);
+    registers.set_flag(Flag::C, carry_out);
+}

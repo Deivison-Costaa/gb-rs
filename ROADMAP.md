@@ -230,6 +230,12 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     barramento) — não presuma a mesma forma só porque a flag é igual.
 - [x] 1.8 Opcodes: rotações e shifts (RLCA/RRCA/RLA/RRA — divergem do prefixo CB no flag Z).
 - [ ] 1.9 Opcodes: prefixo CB completo (BIT/RES/SET/rot).
+  - [x] 1.9a CB decode + RLC (`CB 00`–`CB 07`) — mecanismo de dois M-cycles: o `$CB` no fetch transita para um segundo fetch que lê e decodifica o opcode real. RLC calcula `Z` (result == 0), enquanto o `RLCA` não-prefixado zera incondicionalmente — mesma armadilha da 0032 ao contrário. `(HL)` é read-modify-write em 4 M-cycles (16 T-cycles).
+  - [ ] 1.9b RRC + RL + RR (`CB 08`–`CB 1F`).
+  - [ ] 1.9c SLA + SRA + SWAP + SRL (`CB 20`–`CB 3F`).
+  - [ ] 1.9d BIT (`CB 40`–`CB 7F`) — `Z` = bit testado, `N=0`, `H=1`, `C` intocado. `(HL)` são 12 T-cycles (read sem write).
+  - [ ] 1.9e RES (`CB 80`–`CB BF`) — sem flags, `(HL)` é read-modify-write.
+  - [ ] 1.9f SET (`CB C0`–`CB FF`) — sem flags, `(HL)` é read-modify-write.
 - [ ] 1.10 Opcodes: jumps, calls, rets, RST — com timing condicional correto. `JP u16` (`C3`) já saiu no 1.3; o que sobra aqui é o difícil — os desvios condicionais duram tempos diferentes conforme tomem ou não o desvio (`8 / 12`, `12 / 24`), e essa é a coluna que a tabela dá em dois valores.
 - [ ] 1.11 Opcodes: misc — `DAA`, `CPL`, `SCF`, `CCF`, `DI`, `EI`, `NOP`, `STOP`.
 - [ ] 1.12 Stub da porta serial (FF01/FF02) → `gb-cli` imprime em stdout.

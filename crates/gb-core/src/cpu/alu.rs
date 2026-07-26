@@ -98,6 +98,14 @@ pub(super) fn decrement(registers: &mut Registers, value: u8) -> u8 {
     result
 }
 
+// CB RLC: rotação à esquerda com Z calculado (ao contrário do RLCA).
+// spec: docs/reference/03-opcodes.md § Opcodes com prefixo CB
+pub(super) fn rlc(value: u8) -> (u8, bool) {
+    let carry = (value & 0x80) != 0;
+    let result = (value << 1) | u8::from(carry);
+    (result, carry)
+}
+
 pub(super) fn rlca(registers: &mut Registers) {
     let a = registers.a;
     let carry_out = (a & 0x80) != 0;

@@ -272,10 +272,11 @@ fn f_round_trips_all_eight_bits() {
 #[test]
 fn the_default_is_zeroed_and_is_not_the_post_boot_state() {
     // Guarda de regressão, não medição: afirma uma *ausência*. O estado
-    // pós-boot (A=$01, F=Z…, SP=$FFFE, PC=$0100 no DMG) é do ROADMAP 1.2, e
-    // `docs/reference/01-memory-map.md` § Console state after boot ROM
-    // hand-off é onde ele está escrito. Se alguém o adiantar para cá, este
-    // teste avisa — e a conversa é sobre qual item da escada faz isso.
+    // pós-boot (A=$01, F=Z…, SP=$FFFE, PC=$0100 no DMG) chegou no 1.2b-i e
+    // mora em `Registers::after_boot_rom`, com os testes em
+    // `tests/cpu_boot_state.rs`. Ele **não** é o `Default`, e não podia ser:
+    // depende do checksum do cabeçalho da ROM. Se alguém fundir os dois, este
+    // teste avisa.
     let regs = Registers::default();
 
     assert_eq!(regs.af(), 0x0000);

@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0010 — decodificação de endereço e RAM interna do `Bus` ([doc](docs/iterations/0010-bus-memory-map.md)). Os dois avisos que a 0009 deixou escritos se confirmaram na spec, e o método mudou: em vez de anotar de cabeça o que eu *teria* escrito, escrevi mesmo — um esqueleto descartável com a versão de memória — e rodei a suíte contra ele. Ver a nota 20, que é o achado da iteração.
-**Próxima tarefa:** ROADMAP 1.2b — estado pós-boot: registradores da CPU e registradores de hardware no hand-off da boot ROM. Ler `docs/reference/01-memory-map.md` § Console state after boot ROM hand-off (R1 + nota 15). **Três armadilhas visíveis na própria tabela:** (a) há **cinco colunas** de modelo (DMG0, DMG, MGB, SGB, SGB2) e este emulador é **DMG** — DMG0 é outra coisa (`B=$FF`, `LY=$91`, `STAT=$81`) e copiar a coluna errada dá um estado plausível e errado; (b) o `F` do DMG não é constante: a nota de rodapé diz que `H` e `C` dependem do **checksum do cabeçalho** (`$00` → limpos, senão setados), então o valor sai da ROM carregada e não de um literal; (c) `OBP0`/`OBP1` são marcados como **não inicializados** — inventar `$00` ali é inventar, e a spec ainda avisa que os valores da seção são "highly volatile […] may contain errors". Lembrar que `$FFFF` (`IE`) e `$FF00`–`$FF7F` ainda não têm componente no `Bus`: quem os ligar tem de mexer no `match` do `read`/`write` e derrubar `the_regions_without_an_owner_are_open_bus_and_swallow_writes`, que é o teste avisando, não atrapalhando.
+**Última iteração concluída:** 0011 — estado da CPU no hand-off da boot ROM ([doc](docs/iterations/0011-cpu-boot-state.md)). O 1.2b era grande demais e foi quebrado em dois; esta fez o **1.2b-i**. Das três armadilhas que a 0010 deixou anotadas, uma se materializou (o `F` constante) e as outras duas não. O achado é a nota 21: a R1 tem um terceiro modo de falha, a **spec ambígua**.
+**Próxima tarefa:** ROADMAP 1.2b-ii — registradores de hardware no hand-off: `$FF00`–`$FF7F` e `IE`, coluna **DMG / MGB** da tabela § Hardware registers em `docs/reference/01-memory-map.md` (R1 + nota 15). **O que a tabela já avisa:** (a) `OBP0`/`OBP1` são marcados como **não inicializados** — inventar `$00` ali é inventar, e a nota de rodapé é explícita; (b) `DIV=$AB`, `STAT=$85` e `LY=$00` são estado de componentes que só chegam no M2/M3, então guardá-los como byte solto é diferente de emulá-los, e o doc tem de dizer qual dos dois é; (c) `KEY0`, `KEY1`, `VBK`, `HDMA*`, `RP`, `BGPI/D`, `OGPI/D`, `SVBK` são `---` na coluna DMG (só CGB) — não são zero, não existem; (d) o `BANK` (`$FF50`) é `---` em **todas** as colunas. E a seção inteira vem com o aviso de que os valores são "highly volatile […] may contain errors". Ligar essa região ao `Bus` vai derrubar `the_regions_without_an_owner_are_open_bus_and_swallow_writes` — é o teste avisando que chegou a hora, não atrapalhando.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -35,7 +35,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **111** (eram 98 antes da 0010). Este número não é o placar
+Testes do workspace: **122** (eram 111 antes da 0011). Este número não é o placar
 — ele mede o que o projeto afirma sobre si mesmo, não o que o hardware cobra.
 
 ## Invariantes já estabelecidas
@@ -197,9 +197,25 @@ Testes do workspace: **111** (eram 98 antes da 0010). Este número não é o pla
   dividir os pares), há método. `F` não é campo endereçável no sentido do `r8`:
   a lista `r8` da spec é `b c d e h l [hl] a`, sem `f`.
 - **`Registers::default()` é tudo zero, e isso não é o estado pós-boot.**
-  `A=$01`, `SP=$FFFE`, `PC=$0100` são do 1.2b e estão em `01-memory-map.md`
-  § Console state after boot ROM hand-off. Zero é ausência de decisão, não
-  decisão errada — e há teste marcando a fronteira entre os dois itens.
+  O estado pós-boot é `Registers::after_boot_rom(HeaderChecksum)` (1.2b-i).
+  Zero é ausência de decisão, não decisão errada — e não dava para ser
+  `Default` nem querendo: o estado pós-boot **depende da ROM carregada**.
+- **`after_boot_rom` copia a coluna DMG, e as cinco colunas são consoles
+  diferentes.** DMG0 é a vizinha e é outro aparelho (`B=$FF`, `E=$C1`,
+  `HL=$8403`, `F=$00`): copiar errado dá um estado inteiro, plausível, que
+  boota, e que só destoa dentro de um jogo. `this_is_the_dmg_column_and_not_
+  one_of_the_other_four` transcreve as outras quatro como controle negativo,
+  porque nenhum `assert_eq!` de registrador isolado separa DMG de DMG0.
+- **O `F` pós-boot sai do checksum **gravado** em `$014D`, não do calculado.**
+  A nota de rodapé da coluna DMG diz que `H` e `C` são limpos quando "the
+  header checksum" é `$00` e setados nos outros 255 casos, e liga a palavra à
+  § 014D, que abre com *"This byte contains an 8-bit checksum"* — o sujeito é o
+  byte gravado; o calculado é a variável `checksum` do trecho em C. **Em
+  hardware a distinção não existe** (checksum divergente trava o boot ROM), e
+  por isso ela é invisível em toda ROM real. Existe aqui porque este emulador
+  pula o boot ROM e `cart::load` não julga o cabeçalho (0.4). É também por isso
+  que o parâmetro é `HeaderChecksum` e não `u8`: um byte solto deixaria a
+  escolha em cada chamador, onde ela some. Ver nota 21.
 
 - **O `Bus` é `struct`, não `trait`, e é o dono do estado.** O ROADMAP 1.2 dizia
   "trait"; o `CLAUDE.md` § Arquitetura diz que o `Bus` é o dono de tudo e que os
@@ -395,6 +411,12 @@ contorno previsto no prompt de bootstrap.
     próximo `const fn` — ou o primeiro `let ... else` mais novo que a MSRV —
     entra sem ninguém olhar. A nota continua **aberta**.
 
+    **A 0011 conferiu de novo, à mão, e passou:** `cargo +1.85 test --all` deu
+    **122/122**. Segundo ponto de dado, mesma fragilidade — dois acertos
+    seguidos por lembrança não são uma guarda, e o custo de fechar isso (um job
+    de CI em `1.85`) segue menor que o de descobrir o contrário num PR
+    vermelho. Continua **aberta**.
+
 14. **Bateria de mutação: o cargo decide rebuild por mtime.** Reverter o fonte
     com `mv arquivo.bak arquivo` — ou aplicar uma mutação que falha em silêncio
     — devolve o arquivo com mtime **anterior** ao do artefato, e o `cargo test`
@@ -488,10 +510,49 @@ contorno previsto no prompt de bootstrap.
     esqueleto errado, e quem pegou o erro foi a varredura de regiões, escrita
     para outra coisa.
 
-    É a nota 8 com o sinal trocado pela terceira vez — depois do guarda vacuoso
+    É a nota 8 com o sinal trocado pela terceira vez (quarta, com a 0011) — depois do guarda vacuoso
     (0001) e do vermelho pelo motivo errado (0003), agora o **guarda que mira no
     sintoma em vez da afirmação**. A correção foi afirmar a afirmação:
     `Region::of(0xFFFF) == Region::InterruptEnable`, e não a ausência de colisão.
     Sem o esqueleto, a suíte teria fechado 13/13 verde com um teste inútil dentro
     e ninguém saberia. **Um esqueleto errado é barato e mede o que a prosa não
     mede** — vale repetir em todo item de comportamento de hardware.
+
+    **Repetido na 0011, com resultado limpo e uma leitura a mais.** 8 dos 11
+    testes passaram contra o esqueleto e 3 pegaram o erro, que era um só e
+    estava exatamente onde a iteração anterior previu. Dois dos oito verdes
+    foram os **controles negativos da própria previsão** — a coluna DMG estava
+    certa de memória — e um foi verde por acidente: o teste do nibble baixo de
+    `F` passa contra `f: 0xB0`, porque `$B0` também tem o nibble zerado. Ele só
+    mede alguma coisa contra o mutante `f: 0x0F`. Sem o esqueleto isso passaria
+    por cobertura.
+
+    **Corolário de método:** o esqueleto tem de ter a **assinatura final**, não
+    só o corpo errado. Com assinatura diferente o vermelho é `error[E0432]`/
+    `E0061` e não mede asserção nenhuma — é a armadilha (a) da 0007 outra vez.
+
+21. **O terceiro modo de falha da R1: spec ambígua.** A regra supôs "o agente
+    não leu" (original); a nota 19 achou "a spec é omissa"; a 0011 achou
+    **"a spec é ambígua, e as duas leituras coincidem em todo caso real"**.
+
+    A nota de rodapé do `F` pós-boot diz "if the header checksum is $00", e
+    "header checksum" nomeia duas coisas: o byte gravado em `$014D` e o valor
+    calculado de `$0134`–`$014C`. Num Game Boy os dois sempre batem — checksum
+    divergente **trava o boot ROM** — então a leitura errada nunca produziria
+    diferença observável em ROM comercial, em ROM de teste ou em jogo. Só em
+    ROM corrompida, que é o caso que a 0007 decidiu tratar como cidadão de
+    primeira classe.
+
+    Isso é pior que omissão: omissão deixa um buraco visível, ambiguidade
+    entrega um valor plausível dos dois lados. E é pior que erro comum, porque
+    **nenhuma ROM do scoreboard vai falsificá-lo** — nem a Mooneye
+    `boot_regs-dmgABC` do 7.1, cuja ROM tem checksum válido como qualquer
+    outra. Decisão que nenhum teste futuro pode derrubar tem de ser fixada por
+    teste no dia em que é tomada, ou some.
+
+    O que funcionou é o movimento da nota 19 de novo: virar a dúvida em
+    **pergunta com endereço** — *qual byte, em que endereço?* — e ir atrás da
+    frase. A resposta estava em **outro arquivo** do `docs/reference/`
+    (`08-cartridges-mbc.md` § 014D, primeira frase), alcançada pelo link da
+    própria nota de rodapé. Reforça a nota 15: seguir os links da seção, não só
+    ler a seção.

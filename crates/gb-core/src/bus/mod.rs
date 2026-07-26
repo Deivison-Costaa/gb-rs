@@ -7,10 +7,17 @@ use crate::cart::{Cartridge, OPEN_BUS};
 use crate::serial::Serial;
 
 const DIV_ADDR: u16 = 0xFF04;
+const TIMA_ADDR: u16 = 0xFF05;
+const TAC_ADDR: u16 = 0xFF07;
 
 const SB_ADDR: u16 = 0xFF01;
 
 const SC_ADDR: u16 = 0xFF02;
+
+const TIMA_IDX: usize = 0x05;
+const TMA_IDX: usize = 0x06;
+const TAC_IDX: usize = 0x07;
+const IF_IDX: usize = 0x0F;
 
 const WRAM_LEN: usize = 8 * 1024;
 
@@ -57,6 +64,13 @@ impl Region {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TimerOverflow {
+    Idle,
+    Overflowed,
+    Reloading,
+}
+
 pub struct Bus {
     cartridge: Box<dyn Cartridge>,
     wram: [u8; WRAM_LEN],
@@ -65,6 +79,8 @@ pub struct Bus {
     ie: u8,
     serial: Serial,
     sys_counter: u16,
+    prev_and_result: bool,
+    tima_overflow: TimerOverflow,
 }
 
 impl Bus {
@@ -78,6 +94,8 @@ impl Bus {
             ie: boot::INTERRUPT_ENABLE,
             serial: Serial::new(),
             sys_counter: 0xAB00,
+            prev_and_result: false,
+            tima_overflow: TimerOverflow::Idle,
         }
     }
 
@@ -111,7 +129,37 @@ impl Bus {
             Region::WorkRam | Region::EchoRam => self.wram[wram_index(addr)] = value,
             Region::HighRam => self.hram[hram_index(addr)] = value,
             Region::IoRegisters => match addr {
-                DIV_ADDR => self.sys_counter = 0,
+                DIV_ADDR => {
+                    let old_and = self.and_result();
+                    self.sys_counter = 0;
+                    let new_and = self.and_result();
+                    if old_and && !new_and {
+                        self.increment_tima();
+                    }
+                    self.prev_and_result = new_and;
+                }
+                TIMA_ADDR => {
+                    let index = io_index(addr);
+                    match self.tima_overflow {
+                        TimerOverflow::Overflowed => {
+                            self.io[index] = value;
+                            self.tima_overflow = TimerOverflow::Idle;
+                        }
+                        TimerOverflow::Reloading => {}
+                        TimerOverflow::Idle => {
+                            self.io[index] = value;
+                        }
+                    }
+                }
+                TAC_ADDR => {
+                    let old_and = self.prev_and_result;
+                    self.io[TAC_IDX] = value;
+                    let new_and = self.and_result();
+                    if old_and && !new_and {
+                        self.increment_tima();
+                    }
+                    self.prev_and_result = new_and;
+                }
                 SB_ADDR | SC_ADDR => self.serial.write(addr, value),
                 _ => {
                     let index = io_index(addr);
@@ -131,7 +179,53 @@ impl Bus {
     }
 
     pub fn tick_timer(&mut self) {
+        if self.tima_overflow == TimerOverflow::Reloading {
+            self.tima_overflow = TimerOverflow::Idle;
+        }
+
+        if self.tima_overflow == TimerOverflow::Overflowed {
+            self.io[TIMA_IDX] = self.io[TMA_IDX];
+            self.io[IF_IDX] |= 0x04;
+            self.tima_overflow = TimerOverflow::Reloading;
+        }
+
+        let old_and = self.prev_and_result;
         self.sys_counter = self.sys_counter.wrapping_add(4);
+        let new_and = self.and_result();
+
+        if old_and && !new_and {
+            self.increment_tima();
+        }
+
+        self.prev_and_result = new_and;
+    }
+
+    fn and_result(&self) -> bool {
+        let tac = self.io[TAC_IDX];
+        let enable = (tac & 0x04) != 0;
+        if !enable {
+            return false;
+        }
+        let bit = clock_bit(tac & 0x03);
+        ((self.sys_counter >> bit) & 1) != 0
+    }
+
+    fn increment_tima(&mut self) {
+        let (tima, overflowed) = self.io[TIMA_IDX].overflowing_add(1);
+        self.io[TIMA_IDX] = tima;
+        if overflowed {
+            self.tima_overflow = TimerOverflow::Overflowed;
+        }
+    }
+}
+
+const fn clock_bit(select: u8) -> u32 {
+    match select {
+        0 => 9,
+        1 => 3,
+        2 => 5,
+        3 => 7,
+        _ => 9,
     }
 }
 

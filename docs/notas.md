@@ -1025,3 +1025,13 @@
 
     Lição: antes de interpretar um número de erro do blargg, abra o fonte da ROM
     e veja o que `print_a` imprime — é o byte em `(instr)`, não um contador.
+
+52. **O mapeamento do clock select do timer não é contíguo nem ordenado por
+    frequência.** A tabela do Pan Docs mapeia `00 → bit 9 (4096 Hz), 01 → bit 3
+    (262144 Hz), 10 → bit 5 (65536 Hz), 11 → bit 7 (16384 Hz)`. A primeira
+    intuição (bits 0, 1, 2, 3 em ordem crescente) erra porque o `sys_counter`
+    avança 4 por M-cycle, então o período visível é `2^(bit+1)/4` M-cycles. A
+    0050 confirmou cada entrada casando `2^(bit+1)/4` com a coluna
+    `Increment every` da spec. O default de `const fn clock_bit` retorna 9, mas
+    o braço `_` só é atingido para `select ≥ 4` — impossível dado que
+    `clock_bit` é chamada com `tac & 0x03`.

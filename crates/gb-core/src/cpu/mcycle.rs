@@ -328,6 +328,8 @@ enum State {
     CbFetch,
     // CB operação em (HL): read-modify-write em M-cycles separados.
     CbRotHl(CbRotOp, CbRotHlPhase),
+    // BIT (HL): lê sem escrever — o u8 é o índice do bit (ver docs/iterations/0036).
+    CbBit(u8),
     Locked(Lockup),
 }
 
@@ -385,6 +387,7 @@ impl Cpu {
             State::LdHlSpI8(phase) => self.ld_hl_sp_i8(bus, phase),
             State::CbFetch => self.cb_fetch(bus),
             State::CbRotHl(op, phase) => self.cb_rot_hl(bus, op, phase),
+            State::CbBit(bit) => self.cb_bit_hl(bus, bit),
             State::Locked(lockup) => State::Locked(lockup),
         };
     }
@@ -417,7 +420,8 @@ impl Cpu {
             | State::AddSpI8(_)
             | State::LdHlSpI8(_)
             | State::CbFetch
-            | State::CbRotHl(..) => None,
+            | State::CbRotHl(..)
+            | State::CbBit(_) => None,
         }
     }
 
@@ -978,15 +982,19 @@ impl Cpu {
     fn cb_fetch(&mut self, bus: &Bus) -> State {
         let opcode = self.read_at_pc(bus);
 
-        match (opcode >> 3) & 0b11111 {
-            0b00000 => self.cb_rlc(opcode),
-            0b00001 => self.cb_rrc(opcode),
-            0b00010 => self.cb_rl(opcode),
-            0b00011 => self.cb_rr(opcode),
-            0b00100 => self.cb_sla(opcode),
-            0b00101 => self.cb_sra(opcode),
-            0b00110 => self.cb_swap(opcode),
-            0b00111 => self.cb_srl(opcode),
+        match opcode >> 6 {
+            0b00 => match (opcode >> 3) & 0b11111 {
+                0b00000 => self.cb_rlc(opcode),
+                0b00001 => self.cb_rrc(opcode),
+                0b00010 => self.cb_rl(opcode),
+                0b00011 => self.cb_rr(opcode),
+                0b00100 => self.cb_sla(opcode),
+                0b00101 => self.cb_sra(opcode),
+                0b00110 => self.cb_swap(opcode),
+                0b00111 => self.cb_srl(opcode),
+                _ => State::Locked(Lockup::UndecodedOpcode(opcode)),
+            },
+            0b01 => self.cb_bit(opcode),
             _ => State::Locked(Lockup::UndecodedOpcode(opcode)),
         }
     }
@@ -1014,6 +1022,30 @@ impl Cpu {
             }
             R8::MemoryAtHl => State::CbRotHl(op, CbRotHlPhase::Read),
         }
+    }
+
+    fn cb_bit(&mut self, opcode: u8) -> State {
+        let bit_index = (opcode >> 3) & 0b111;
+        match R8::from_bits(opcode) {
+            R8::Register(register) => {
+                let value = self.read_r8(register);
+                let z = value & (1 << bit_index) == 0;
+                self.registers.set_flag(Flag::Z, z);
+                self.registers.set_flag(Flag::N, false);
+                self.registers.set_flag(Flag::H, true);
+                State::Fetch
+            }
+            R8::MemoryAtHl => State::CbBit(bit_index),
+        }
+    }
+
+    fn cb_bit_hl(&mut self, bus: &Bus, bit_index: u8) -> State {
+        let value = bus.read(self.registers.hl());
+        let z = value & (1 << bit_index) == 0;
+        self.registers.set_flag(Flag::Z, z);
+        self.registers.set_flag(Flag::N, false);
+        self.registers.set_flag(Flag::H, true);
+        State::Fetch
     }
 
     fn cb_rlc(&mut self, opcode: u8) -> State {

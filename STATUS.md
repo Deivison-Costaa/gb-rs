@@ -3,10 +3,10 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0035 — CB SLA + SRA + SWAP + SRL (`CB 20`–`CB 3F`) ([doc](docs/iterations/0035-cb-sla-sra-swap-srl.md)). 32 opcodes sobre o mecanismo da 0033: `cb_fetch` decodifica `0b00100` (SLA), `0b00101` (SRA), `0b00110` (SWAP), `0b00111` (SRL). `cb_rot` unifica o dispatch com as demais rotações. Funções ALU novas: `alu::sla(value)`, `alu::sra(value)`, `alu::swap(value)`, `alu::srl(value)`. `swap` retorna `carry = false` e usa `value.rotate_right(4)`. O `C = 0` incondicional do SWAP é tratado na ALU, não em `cb_rot`. **Nenhum erro de hardware**: a divergência SLL (Z80) × SWAP (GB) nos CB 30–3F estava pré-anunciada no handoff. Erros foram de API-Rust (clippy `manual_rotate`, closures heterogêneas em array) e de teste (A sobrescrito no loop multi-registro). Bateria: **7/7 pegos, 2/2 controles verdes**.
-**Iteração anterior:** 0034 — CB RRC + RL + RR (`CB 08`–`CB 1F`) ([doc](docs/iterations/0034-cb-rrc-rl-rr.md)).
-**Duas iterações atrás:** 0033 — CB prefix decode + RLC (`CB 00`–`CB 07`) ([doc](docs/iterations/0033-cb-prefix-decode-rlc.md)).
-**Próxima tarefa:** ROADMAP **1.9d** — BIT (`CB 40`–`CB 7F`, 64 opcodes). É um novo mecanismo dentro do prefixo CB: BIT não escreve no registrador, só testa um bit e ajusta flags (`Z` = bit testado, `N=0`, `H=1`, `C` intocado). `(HL)` são 12 T-cycles (read sem write — ao contrário de `cb_rot_hl`, que faz read-modify-write). A armadilha principal: o segundo byte do BIT usa bits 7-6 para selecionar a operação (0b01), bits 5-3 para o índice do bit, e bits 2-0 para o registrador — é a primeira operação CB que não cabe no dispatch por `(opcode >> 3) & 0b11111` porque o campo do bit está nos mesmos bits que o campo de operação das rotações. Será preciso um novo estado (`CbBit`) e uma nova função de dispatch que isola bits 7-6 primeiro. `H=1` é a primeira flag `H` não-zero numa operação CB, e a primeira desde o `AND` do 1.6c.
+**Última iteração concluída:** 0036 — BIT (`CB 40`–`CB 7F`) ([doc](docs/iterations/0036-cb-bit.md)). 64 opcodes, primeiro mecanismo novo em `cb_fetch`: o dispatch deixa de ser plano (`(opcode >> 3) & 0b11111`) e passa a ser hierárquico por bits 7-6 (`0b00 → rotações`, `0b01 → BIT`). Novo estado `CbBit(u8)` para a leitura do `(HL)` sem write-back (12 T-cycles, 3 M-cycles). Flags: `Z` = bit testado, `N=0`, `H=1`, `C` intocado — `H=1` é a primeira flag H não-zero numa operação CB. A armadilha do dispatch (bits 7-6 × bits 5-3) estava pré-anunciada no handoff e foi neutralizada de primeira. O comportamento do BIT é idêntico ao Z80 — sem divergência de spec. Bateria: **7/7 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0035 — CB SLA + SRA + SWAP + SRL (`CB 20`–`CB 3F`) ([doc](docs/iterations/0035-cb-sla-sra-swap-srl.md)).
+**Duas iterações atrás:** 0034 — CB RRC + RL + RR (`CB 08`–`CB 1F`) ([doc](docs/iterations/0034-cb-rrc-rl-rr.md)).
+**Próxima tarefa:** ROADMAP **1.9e** — RES (`CB 80`–`CB BF`, 64 opcodes). Bits 7-6 = 0b10, mesmo layout que BIT (bits 5-3 = índice do bit, bits 2-0 = registrador). Sem flags (`Z N H C` intocadas). `(HL)` é read-modify-write (4 M-cycles, 16 T-cycles) — o `cb_rot_hl` existente **não serve** porque não usa o campo de bit index. Será preciso um novo estado e uma nova função de dispatch `cb_res(opcode)`, análoga a `cb_bit` mas sem setar flags. O `(HL)` precisa de fases Read e Write como `CbRotHl`, mas mascarando com `!(1 << bit_index)` em vez de chamar a ALU. A reestruturação de `cb_fetch` feita na 0036 já tem o bucket `0b10` como `UndecodedOpcode` — é só preencher. **Notas relevantes:** a nota 8 (teste antes da implementação) continua valendo; a nota 14 (bateria de mutação e mtime) para os 8 índices de bit com valores que os distingam (achado da 0036).
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -37,7 +37,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **414** (eram **392** antes da 0035 — +22 do novo arquivo `cpu_cb_sla_sra_swap_srl`).
+Testes do workspace: **426** (eram **414** antes da 0036 — +12 do novo arquivo `cpu_cb_bit`).
 
 ## Invariantes
 

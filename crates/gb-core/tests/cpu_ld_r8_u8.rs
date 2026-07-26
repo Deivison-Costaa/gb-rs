@@ -316,7 +316,10 @@ fn the_block_this_item_decodes_is_exactly_the_eight_opcodes_of_00_ddd_110() {
             || opcode & 0b1100_1111 == 0b0000_0001
             || opcode & 0b1100_1111 == 0b1100_0101
             || opcode & 0b1100_1111 == 0b1100_0001
-            || matches!(opcode, 0xE0 | 0xE2 | 0xEA | 0xF0 | 0xF2 | 0xFA);
+            || matches!(
+                opcode,
+                0x08 | 0xE0 | 0xE2 | 0xEA | 0xF0 | 0xF2 | 0xF9 | 0xFA
+            );
         let in_block = opcode & 0b1100_0111 == 0b0000_0110;
 
         if in_block {

@@ -73,7 +73,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     no RED→GREEN, retomada e concluída por Kimi K3/OpenCode — ver
     [doc da 0017](docs/iterations/0017-cpu-ld-absolute-ff00.md) e `STATUS.md`,
     nota 33.
-- [ ] 1.5 Opcodes: loads 16-bit + stack (PUSH/POP). **Quebrado em quatro na
+- [x] 1.5 Opcodes: loads 16-bit + stack (PUSH/POP). **Quebrado em quatro na
   0018:** o grupo `x16/lsm` da tabela de gbops tem **14** opcodes
   (`01 08 11 21 31 C1 C5 D1 D5 E1 E5 F1 F5 F9`) e **cinco** formas de M-cycle
   distintas — 2, 3, 4 e 5 M-cycles. `LD HL,SP+i8` (`$F8`) **não** é deste grupo:
@@ -115,10 +115,24 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     contra ele no `PUSH` contra **3 de 10** no `POP` — o lado que escreve tolera
     o erro de instante em silêncio, o que lê grita. Ver
     [doc da 0020](docs/iterations/0020-cpu-pop-r16stk.md) e `STATUS.md`, nota 40.
-  - [ ] 1.5d Os dois avulsos: `LD SP,HL` (`$F9`, 2 M-cycles,
+  - [x] 1.5d Os dois avulsos: `LD SP,HL` (`$F9`, 2 M-cycles,
     `fetch → internal`) e `LD (u16),SP` (`$08`, **5** M-cycles e dois bytes
     escritos em endereços consecutivos — a instrução mais longa do projeto até
-    aqui). Nenhum dos dois cabe num bloco `rr`.
+    aqui). Nenhum dos dois cabe num bloco `rr`. **A iteração foi interrompida no
+    meio e retomada por outra sessão**, e a primeira metade não deixou relato —
+    o campo `Erros de primeira tentativa` mede aqui o que sobreviveu ao revisor,
+    não o que o autor percebeu. O `$F9` é o primeiro caso em que a spec local
+    **não decide** o instante (nota 21): a coluna não tem seta nem anotação em
+    passo nenhum, e as duas únicas linhas do arquivo que dizem quando o `SP`
+    recebe (`$33`, `$E8`) partem o par em duas metades com `Probably` — apontando
+    para o **contrário** do que ficou implementado. A escolha (par inteiro no
+    `internal`) ficou; a justificativa via `$F8`, que tem `internal` pelado e não
+    sustenta nada, foi o erro #2. O achado é o **M11**: ler os dois bytes do
+    endereço do `$08` no M2 dá a mesma memória, o mesmo `PC` e os mesmos 20
+    T-cycles, e passou verde nos 239 testes anteriores — quem o pega é uma
+    asserção de `PC` **entre** os M-cycles (nota 32 aplicada ao operando, não só
+    à memória). Ver [doc da 0021](docs/iterations/0021-cpu-ld-stack-pointer.md)
+    e `STATUS.md`, notas 42 e 43.
 - [ ] 1.6 Opcodes: ALU 8-bit (ADD/ADC/SUB/SBC/AND/OR/XOR/CP/INC/DEC) — **atenção ao half-carry**.
 - [ ] 1.7 Opcodes: ALU 16-bit + `ADD SP,e8` / `LD HL,SP+e8` (flags contraintuitivas).
 - [ ] 1.8 Opcodes: rotações e shifts (RLCA/RRCA/RLA/RRA — divergem do prefixo CB no flag Z).

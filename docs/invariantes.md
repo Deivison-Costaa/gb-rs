@@ -140,13 +140,16 @@
   `03-MODIFY_TIMIN` seguido de `$80` em `$0143` — sem a regra, o CGB flag iria
   impresso junto.
 
-- **`F` carrega os 8 bits: o `gb-core` não mascara o nibble baixo.** O folclore
-  diz que os bits 3–0 de `F` são sempre zero e que `POP AF` os descarta. Pode
-  ser verdade no silício, mas **não está na spec deste projeto**: a tabela do
-  § Flags Register termina no bit 4, e a string `POP AF` não aparece em nenhum
-  dos 75 arquivos do Pan Docs no commit fixado (`03-opcodes.md` descreve `F1`
-  sem mencionar máscara). Pela R1, o que não está na spec não vira código.
-  `f_keeps_the_bits_the_spec_does_not_describe` fixa a **ausência** da máscara,
+- **`F` mascara o nibble baixo (`& 0xF0`) nas escritas via opcode — adicionado
+  na 0047.** A spec local (`02-cpu.md` § Flags Register) é omissa sobre os bits
+  3–0; a decisão inicial (0009) foi não mascarar, seguindo a R1. A blargg
+  `cpu_instrs/08-misc` e `cpu_instrs/01-special` cobraram a máscara no POP AF,
+  que é a realidade do hardware (o registrador F físico só tem 4 bits).
+  `set_af_masks_the_low_nibble_of_f` e `pop_af_masks_the_low_nibble_of_f`
+  fixam a presença da máscara; o `struct Registers` ainda armazena 8 bits
+  (compatibilidade com futuros savestates), e `af()` lê o que está armazenado.
+  `PUSH AF` continua escrevendo os 8 bits — como o nibble baixo é 0 após
+  qualquer escrita por opcode, o byte na pilha sai naturalmente correto.
   para que ela não entre depois por hábito. **Previsão registrada, a conferir e
   não a retroajustar:** se a máscara for necessária, quem cobra é a blargg
   `cpu_instrs/01-special` no 1.13 — e nesse dia a fonte entra em
@@ -477,10 +480,10 @@
   define como duas tabelas — e é `af` × `sp` no índice 3 que os separa.
   `the_fourth_pair_of_r16stk_is_af_and_not_sp` e
   `the_fourth_pair_of_r16_is_sp_and_not_af` guardam os dois lados.
-- **`PUSH AF` escreve os 8 bits de `F`.** É a metade da decisão do 1.1 que
-  *escreve* o nibble baixo não mascarado; `POP AF` (1.5c) é a que lê.
-  `push_af_writes_the_whole_f_byte_including_the_low_nibble` fixa a **ausência**
-  da máscara aqui, e a previsão do 1.13 continua de pé, não retroajustada.
+- **`PUSH AF` escreve os 8 bits de `F`.** O nibble baixo de F é 0 em operação
+  normal (mascarado na 0047), mas `PUSH` escreve o byte como está armazenado.
+  `push_af_writes_the_whole_f_byte_including_the_low_nibble` fixa que a pilha
+  recebe o valor integral, sem segunda máscara.
 - **O `SP` dá a volta abaixo de `$0000`:** `PUSH` com `SP = $0000` escreve em
   `$FFFF` (o `IE`) e `$FFFE` (o último byte da HRAM). `wrapping_sub`, e o teste
   que o fixa é o **único** algoz do mutante `saturating_sub`.
@@ -506,10 +509,10 @@
 - **`write_r16_stk_low`/`_high` não reusam as do `R16`.** A quarta variante é
   `af` × `sp`, e `SP` é o único par cuja metade não é campo de 8 bits (1.5a).
   Converter entre as duas tabelas seria fazê-lo exatamente onde elas divergem.
-- **`POP AF` lê os 8 bits de `F`.** É a metade da decisão do 1.1 que *lê* o
-  nibble baixo não mascarado; `PUSH AF` (1.5b) é a que escreve. A previsão do
-  1.13 continua de pé e **não** foi retroajustada. `pop_af_loads_the_whole_f_byte_
-  including_the_low_nibble` fixa a ausência da máscara.
+- **`POP AF` mascara o nibble baixo de `F` (`& 0xF0`).** A máscara foi
+  adicionada na 0047 quando a blargg a cobrou. Antes o nibble baixo era
+  preservado (spec omissa, R1); agora reflete o hardware: os bits 3–0 de F
+  são sempre 0. `pop_af_masks_the_low_nibble_of_f` fixa a máscara.
 - **`$F1` é a única linha do bloco com flags, e o teste do `PUSH` não se
   espelha.** `no_push_touches_the_flags` vale para os quatro `PUSH` — inclusive o
   `PUSH AF`, que *lê* `F`. O espelho literal (`no_pop_touches_the_flags`) estaria

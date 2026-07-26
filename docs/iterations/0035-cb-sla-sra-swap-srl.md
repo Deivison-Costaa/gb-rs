@@ -2,10 +2,8 @@
 
 - **Data:** 2026-07-26
 - **Item do roadmap:** 1.9c
-- **PR:** #N
-- **Duração:** — min
-- **Custo reportado:** —
-- **Turnos:** 1
+
+> PR, custo, turnos e duração: `docs/metricas.csv`.
 
 ## Objetivo
 

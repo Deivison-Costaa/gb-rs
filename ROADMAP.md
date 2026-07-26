@@ -244,7 +244,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
   - [x] 1.10e `RST` (`$C7` `$CF` `$D7` `$DF` `$E7` `$EF` `$F7` `$FF`) — 8 opcodes, 4 M-cycles (16 T), `fetch → internal → write(PC:upper→(--SP)) → write(PC:lower→(--SP))`. Essencialmente `CALL` para endereço fixo (`$00 $08 $10 $18 $20 $28 $30 $38`), sem condição e sem leitura de operando do fluxo.
 - [x] 1.11 Opcodes: misc — `DAA`, `CPL`, `SCF`, `CCF`, `DI`, `EI`, `NOP`, `STOP`.
 - [x] 1.12 Stub da porta serial (FF01/FF02) → `gb-cli` imprime em stdout.
-- [ ] 1.13 blargg `cpu_instrs/individual/01` a `05`.
+- [x] 1.13 blargg `cpu_instrs/individual/01` a `05`.
 - [ ] 1.14 blargg `cpu_instrs/individual/06` a `11` + `cpu_instrs.gb` completo.
 
 **Marco M1: 11/11 cpu_instrs, zero código gráfico escrito.**

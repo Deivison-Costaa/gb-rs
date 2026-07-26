@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0009 — registradores e flags do SM83 ([doc](docs/iterations/0009-cpu-registers.md)). A pergunta que a 0008 deixou aberta foi respondida: o nibble baixo de `F` **não** está no Pan Docs (conferido nos 75 arquivos do commit fixado, não só nas seções importadas), e o 1.1 não mascara nada. Ver a invariante e a nota 19.
-**Próxima tarefa:** ROADMAP 1.2 — `Bus` trait + MMU: WRAM, HRAM, echo RAM, região proibida, estado pós-boot. Ler `docs/reference/01-memory-map.md` inteiro (R1 + nota 15). **Duas coisas que a spec diz e a memória erra:** (a) a echo RAM em `$E000`–`$FDFF` espelha `$C000`–`$DDFF`, e **não** os 8 KiB inteiros de WRAM — o espelho é mais curto que a fonte, e `addr - 0x2000` sobre a faixa toda inventa 512 bytes que não existem; (b) `$FEA0`–`$FEFF` não é um valor só: a § FEA0–FEFF range diz `$FF` **quando a OAM está bloqueada** e `$00` fora disso no DMG, o que amarra a região proibida ao modo da PPU (M3) e não a uma constante. **E a lição da 0009, que vale mais que as duas:** a spec ser *omissa* não é a spec *concordar*. Quando bater a certeza de que "todo mundo sabe que é assim", transforme em pergunta com endereço — *em que arquivo, em que linha?* — e vá procurar a linha.
+**Última iteração concluída:** 0010 — decodificação de endereço e RAM interna do `Bus` ([doc](docs/iterations/0010-bus-memory-map.md)). Os dois avisos que a 0009 deixou escritos se confirmaram na spec, e o método mudou: em vez de anotar de cabeça o que eu *teria* escrito, escrevi mesmo — um esqueleto descartável com a versão de memória — e rodei a suíte contra ele. Ver a nota 20, que é o achado da iteração.
+**Próxima tarefa:** ROADMAP 1.2b — estado pós-boot: registradores da CPU e registradores de hardware no hand-off da boot ROM. Ler `docs/reference/01-memory-map.md` § Console state after boot ROM hand-off (R1 + nota 15). **Três armadilhas visíveis na própria tabela:** (a) há **cinco colunas** de modelo (DMG0, DMG, MGB, SGB, SGB2) e este emulador é **DMG** — DMG0 é outra coisa (`B=$FF`, `LY=$91`, `STAT=$81`) e copiar a coluna errada dá um estado plausível e errado; (b) o `F` do DMG não é constante: a nota de rodapé diz que `H` e `C` dependem do **checksum do cabeçalho** (`$00` → limpos, senão setados), então o valor sai da ROM carregada e não de um literal; (c) `OBP0`/`OBP1` são marcados como **não inicializados** — inventar `$00` ali é inventar, e a spec ainda avisa que os valores da seção são "highly volatile […] may contain errors". Lembrar que `$FFFF` (`IE`) e `$FF00`–`$FF7F` ainda não têm componente no `Bus`: quem os ligar tem de mexer no `match` do `read`/`write` e derrubar `the_regions_without_an_owner_are_open_bus_and_swallow_writes`, que é o teste avisando, não atrapalhando.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -35,7 +35,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **98** (eram 85 antes da 0009). Este número não é o placar
+Testes do workspace: **111** (eram 98 antes da 0010). Este número não é o placar
 — ele mede o que o projeto afirma sobre si mesmo, não o que o hardware cobra.
 
 ## Invariantes já estabelecidas
@@ -197,9 +197,57 @@ Testes do workspace: **98** (eram 85 antes da 0009). Este número não é o plac
   dividir os pares), há método. `F` não é campo endereçável no sentido do `r8`:
   a lista `r8` da spec é `b c d e h l [hl] a`, sem `f`.
 - **`Registers::default()` é tudo zero, e isso não é o estado pós-boot.**
-  `A=$01`, `SP=$FFFE`, `PC=$0100` são do 1.2 e estão em `01-memory-map.md`
+  `A=$01`, `SP=$FFFE`, `PC=$0100` são do 1.2b e estão em `01-memory-map.md`
   § Console state after boot ROM hand-off. Zero é ausência de decisão, não
   decisão errada — e há teste marcando a fronteira entre os dois itens.
+
+- **O `Bus` é `struct`, não `trait`, e é o dono do estado.** O ROADMAP 1.2 dizia
+  "trait"; o `CLAUDE.md` § Arquitetura diz que o `Bus` é o dono de tudo e que os
+  componentes recebem `&mut Bus`. Ganhou o `CLAUDE.md`: trait com um único
+  implementador põe vtable no caminho mais quente que existe num emulador e não
+  compra nada. Se o 1.3 quiser memória plana para testar opcodes sem cartucho,
+  extrair a interface **então** é mudança local. A divergência está escrita no
+  próprio ROADMAP, não só no doc da iteração.
+- **`Bus::read`/`write` não avançam o tempo.** A R2 (cycle-stepped) vive no laço
+  do 1.3, que os chamará uma vez por M-cycle. Esconder o tique aqui dentro faria
+  cada acesso tiquetaquear por conta própria e tiraria a possibilidade de
+  posicionar o acesso *dentro* da instrução — que é exatamente o que a suíte
+  Mooneye mede.
+- **`Region` é público e separado do `Bus`.** O mapa de memória é fato sobre o
+  hardware, não sobre o que já está implementado: `$8000` é VRAM hoje, mesmo sem
+  PPU para atender. Isso deixa a tabela da § Memory Map testável endereço por
+  endereço contra a spec, e foi o que pegou a HRAM de 128 bytes. O `match` de
+  `Region::of` é total **sem** `_ =>`: faixa nova tem de quebrar a compilação.
+- **A região proibida `$FEA0`–`$FEFF` lê `$00`, não `$FF`.** A § FEA0–FEFF range
+  dá `$FF` **só quando a OAM está bloqueada**; no DMG, fora do bloqueio,
+  *"reads otherwise return $00"*. Como o bloqueio é estado da PPU e não há PPU
+  até o M3, a leitura é `$00`. Quando o 3.6 trouxer o bloqueio por modo, `$00`
+  vira o ramo "fora de bloqueio" de uma decisão de dois; a corrupção de OAM que
+  a spec cita na mesma frase é o 7.2. Escrita ali se perde — a spec descreve a
+  leitura como constante, o que já implica não haver célula.
+- **A HRAM tem 127 bytes: `$FF80`–`$FFFE`.** `$FFFF` é o `IE` e tem linha
+  própria na tabela. O byte a mais não é RAM, é registrador de interrupções
+  (2.2) — e **teste que procura aliasing não pega esse erro**, porque uma HRAM
+  de 128 bytes não pisa em `$FFFE`, só anexa um endereço. Ver nota 20.
+- **O echo é mais curto que a fonte.** `$E000`–`$FDFF` espelha `$C000`–`$DDFF`:
+  os 512 bytes finais da WRAM (`$DE00`–`$DFFF`) **não têm endereço de echo**. A
+  máscara de 13 bits que a § Echo RAM descreve (*"only the lower 13 bits of the
+  address lines are connected"*) dá isso de graça; o enunciado "echo é a WRAM
+  espelhada" é que é falso, e um teste escrito a partir dele afirmaria espelho
+  onde não há.
+- **Região sem dono lê `OPEN_BUS` e engole escrita — e há teste fixando isso.**
+  VRAM, OAM, `$FF00`–`$FF7F` e `IE` estão no mapa e não têm componente. Isso não
+  é afirmação sobre o hardware, é ausência de quem responda; o teste existe para
+  que seja decisão visível em vez de lacuna a descobrir depurando a PPU. Pânico
+  seria pior — `read` de emulador é o último lugar onde se quer achar erro de
+  roteamento (mesma escolha do `NoMbc`, 0.4). Quem ligar um desses componentes
+  vai derrubar `the_regions_without_an_owner_are_open_bus_and_swallow_writes`:
+  é o teste avisando que chegou a hora, não atrapalhando.
+- **A RAM interna começa zerada, e isso é escolha, não hardware.** A § Console
+  state after boot ROM hand-off diz que WRAM e HRAM são **aleatórias** ao ligar e
+  que os emuladores divergem (constante `$00`/`$FF`, ou sorteio). Constante é o
+  que dá teste reprodutível; jogo que dependa disso tem bug, e a própria spec
+  desaconselha. O teste nomeia a escolha para que ela quebre se mudar.
 
 ## Bloqueios
 
@@ -423,3 +471,27 @@ contorno previsto no prompt de bootstrap.
     Junto, registrar a previsão falsificável de qual ROM cobraria o contrário —
     assim, se o folclore estiver certo, o projeto descobre por evidência e com
     data, em vez de retroajustar a memória.
+
+20. **Escreva o erro de memória em código, não em prosa — e depois leia qual
+    teste falhou.** Até a 0009, o campo `Erros de primeira tentativa` era
+    preenchido de cabeça: "eu teria escrito X". Isso é lembrança do que se
+    pensou, e lembrança é justamente o que a R1 diz não ser confiável. A 0010
+    trocou o procedimento: primeiro os testes lidos da spec, depois um
+    **esqueleto descartável com a versão de memória**, e a suíte rodada contra
+    ele. O RED virou uma lista de nomes de teste em vez de uma impressão.
+
+    O que só apareceu por causa disso: **um dos testes falhou em pegar o erro
+    para o qual foi escrito.** O erro era "HRAM tem 128 bytes e engole o
+    `$FFFF`", e o teste procurava *aliasing* — escrever em `$FFFF` e ver se
+    `$FFFE` mudava. Não muda: uma HRAM de 128 bytes não colide com nada, ela
+    apenas anexa um endereço que pertence ao `IE`. O teste passou verde contra o
+    esqueleto errado, e quem pegou o erro foi a varredura de regiões, escrita
+    para outra coisa.
+
+    É a nota 8 com o sinal trocado pela terceira vez — depois do guarda vacuoso
+    (0001) e do vermelho pelo motivo errado (0003), agora o **guarda que mira no
+    sintoma em vez da afirmação**. A correção foi afirmar a afirmação:
+    `Region::of(0xFFFF) == Region::InterruptEnable`, e não a ausência de colisão.
+    Sem o esqueleto, a suíte teria fechado 13/13 verde com um teste inútil dentro
+    e ninguém saberia. **Um esqueleto errado é barato e mede o que a prosa não
+    mede** — vale repetir em todo item de comportamento de hardware.

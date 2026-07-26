@@ -30,16 +30,21 @@
 //! O 1.4a acrescentou 63 opcodes e **três** formas de M-cycle, todas da mesma
 //! família: `fetch`, e depois no máximo um acesso ao barramento. O 1.4b
 //! acrescentou mais oito e a **primeira** forma com dois acessos —
-//! `LD (HL),u8`, que lê o operando num M-cycle e escreve no seguinte.
+//! `LD (HL),u8`, que lê o operando num M-cycle e escreve no seguinte. O 1.4c
+//! acrescentou outros oito e nenhuma forma nova: as oito linhas são `fetch` mais
+//! um acesso, como o 1.4a. O que ele trouxe foi um **efeito colateral** dentro
+//! do passo do acesso (`write(A->(HL++))`), que é dimensão diferente de forma.
 //!
-//! Duas famílias ainda não são uma tabela. O que falta para decidir o desenho
-//! são as formas do 1.4c (efeito colateral sobre `HL`) e do 1.4d (endereço de
-//! 16 bits e a página `$FF00`); generalizar antes delas seria a nota 8 com
-//! metade dos dados. A decisão está marcada no ROADMAP, no 1.4d.
+//! Três sub-itens, e o que se repete é a família do 1.4a. O que falta para
+//! decidir o desenho são as formas do 1.4d (endereço absoluto de 16 bits e a
+//! página `$FF00`), que trazem o primeiro operando de dois bytes desde o
+//! `JP u16`; generalizar antes delas seria a nota 8 com três quartos dos dados.
+//! A decisão está marcada no ROADMAP, no 1.4d.
 //!
 //! O que **nasceu** aqui é menor e vem direto da spec: [`R8`], o operando de
-//! três bits da § Block 1. Isso não é antecipação — é a codificação que a
-//! tabela dá, e os 63 opcodes a exercitam inteira.
+//! três bits da § Block 1, e [`R16Mem`], o de dois bits da § Block 0. Isso não é
+//! antecipação — é a codificação que a tabela dá, e os opcodes de cada sub-item
+//! exercitam a sua inteira.
 //!
 //! # Onde entra o resto da máquina
 //!
@@ -115,9 +120,9 @@ pub enum Lockup {
     /// termina. Não são `NOP`.
     IllegalOpcode(u8),
     /// Opcode legítimo do SM83 que este emulador ainda não decodifica — hoje
-    /// **172** dos 245 que existem, e eles chegam nos itens 1.4c a 1.11 do
+    /// **164** dos 245 que existem, e eles chegam nos itens 1.4d a 1.11 do
     /// ROADMAP. Um deles é o [`HALT`], que só é "não decodificado" porque o
-    /// 2.3 ainda não chegou; os outros 171 nunca foram tentados.
+    /// 2.3 ainda não chegou; os outros 163 nunca foram tentados.
     ///
     /// Parar aqui, em vez de entrar em pânico, mantém o `gb-core` como máquina
     /// de estados: quem decide o que fazer com uma CPU parada é quem a roda.
@@ -223,6 +228,82 @@ const LD_R8_U8_MASK: u8 = 0b1100_0111;
 /// Ver [`LD_R8_U8_MASK`].
 const LD_R8_U8_PATTERN: u8 = 0b0000_0110;
 
+/// `$02 $0A $12 $1A $22 $2A $32 $3A` — o indireto por par de registradores
+/// (ROADMAP 1.4c).
+///
+/// `docs/reference/02-cpu.md`, § Block 0, layouts de bits de `ld [r16mem], a` e
+/// `ld a, [r16mem]`. As duas codificações diferem num bit só — o 3:
+///
+/// ```text
+/// Bits | Campo                 Bits | Campo
+///    7 | 0                        7 | 0
+///    6 | 0                        6 | 0
+///  5-4 | Dest (r16mem)          5-4 | Source (r16mem)
+///    3 | 0                        3 | 1
+///    2 | 0                        2 | 0
+///    1 | 1                        1 | 1
+///    0 | 0                        0 | 0
+/// ```
+///
+/// O outro operando não aparece no opcode porque não varia: é sempre `A`.
+///
+/// A máscara tem de deixar passar os bits 5-4 (o par) e **prender** o bit 3 (a
+/// direção), porque é ele que separa as duas famílias. Os vizinhos que ela não
+/// pode engolir estão todos a um bit de distância: `LD r16,u16` (`00 mm 0001`,
+/// o 1.5), `INC r16`/`DEC r16` (`00 mm 0011` e `00 mm 1011`, o 1.7) e
+/// `INC r8`/`DEC r8` (`00 ddd 100`/`101`, o 1.6).
+const LD_R16MEM_MASK: u8 = 0b1100_1111;
+/// `LD (r16mem),A` — ver [`LD_R16MEM_MASK`].
+const STORE_R16MEM_PATTERN: u8 = 0b0000_0010;
+/// `LD A,(r16mem)` — ver [`LD_R16MEM_MASK`].
+const LOAD_R16MEM_PATTERN: u8 = 0b0000_1010;
+
+/// O operando `r16mem` da spec: dois bits, quatro valores.
+///
+/// `docs/reference/02-cpu.md`, § CPU Instruction Set, tabela de placeholders:
+///
+/// ```text
+/// 0 | bc     2 | hl+
+/// 1 | de     3 | hl-
+/// ```
+///
+/// É o **terceiro** dos cinco blocos que a nota 24 do `STATUS.md` registra como
+/// emendados numa tabela só pela conversão para Markdown, sem cabeçalho e com os
+/// índices 0–3 repetidos quatro vezes. Não é o `r16` (`bc de hl sp`, do 1.5) nem
+/// o `r16stk` (`bc de hl af`, do PUSH/POP): quem confirma que a leitura é esta é
+/// a tabela de gbops, que enumera os oito opcodes um a um — `$22` é
+/// `LD (HL+),A` e `$32` é `LD (HL-),A`.
+///
+/// Os índices 2 e 3 são o conceito novo do sub-item: o único operando do projeto
+/// até aqui que **modifica** o registrador que usou como endereço.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum R16Mem {
+    /// Índice 0 — `bc`, sem efeito colateral.
+    Bc,
+    /// Índice 1 — `de`, sem efeito colateral.
+    De,
+    /// Índice 2 — `hl+`: o acesso é em `HL`, e `HL` sobe um depois.
+    HlIncrement,
+    /// Índice 3 — `hl-`: o acesso é em `HL`, e `HL` desce um depois.
+    HlDecrement,
+}
+
+impl R16Mem {
+    /// Decodifica os dois bits de um campo `r16mem`, que moram nos bits 5-4.
+    ///
+    /// O `_` do último braço é `0b11` e só ele, pelo mesmo motivo de
+    /// [`R8::from_bits`]: `match` sobre `u8` não é exaustivo sem ele, e a
+    /// alternativa seria um `unreachable!` que a R6 não quer no `gb-core`.
+    const fn from_opcode(opcode: u8) -> Self {
+        match (opcode >> 4) & 0b11 {
+            0 => Self::Bc,
+            1 => Self::De,
+            2 => Self::HlIncrement,
+            _ => Self::HlDecrement,
+        }
+    }
+}
+
 /// Os dois M-cycles de `LD (HL),u8` (`$36`) que vêm depois do `fetch`.
 ///
 /// A coluna de gbops é `fetch → read(u8) → write((HL))`: **três** M-cycles, 12
@@ -277,6 +358,17 @@ enum State {
     /// Dentro de `LD (HL),u8`. Ver [`StoreImmediateToHl`], onde está a única
     /// decisão de timing deste sub-item.
     StoreImmediateToHl(StoreImmediateToHl),
+    /// Dentro de `LD A,(r16mem)`. O M2 é `read((rr)->A)`, e para os pares
+    /// `hl+`/`hl-` é **também** onde `HL` se move: a coluna escreve o efeito
+    /// dentro do passo do acesso (`read((HL++)->A)`), não num passo à parte.
+    ///
+    /// O par viaja aqui em vez de o endereço já resolvido justamente por isso.
+    /// Guardar o endereço no `latch` no M1 daria o mesmo estado final e os
+    /// mesmos 8 T-cycles, e adiantaria o `HL±` em um M-cycle.
+    LoadFromR16Mem(R16Mem),
+    /// Dentro de `LD (r16mem),A`. O M2 é `write(A->(rr))`. Ver
+    /// [`State::LoadFromR16Mem`] para o porquê de o par viajar aqui.
+    StoreToR16Mem(R16Mem),
     /// A CPU parou, e não volta.
     Locked(Lockup),
 }
@@ -356,6 +448,8 @@ impl Cpu {
             State::StoreToHl(source) => self.store_to_hl(bus, source),
             State::LoadImmediate(dest) => self.load_immediate(bus, dest),
             State::StoreImmediateToHl(phase) => self.store_immediate_to_hl(bus, phase),
+            State::LoadFromR16Mem(source) => self.load_from_r16_mem(bus, source),
+            State::StoreToR16Mem(dest) => self.store_to_r16_mem(bus, dest),
             // O tempo passa; a CPU não. Ver [`Lockup`].
             State::Locked(lockup) => State::Locked(lockup),
         };
@@ -371,7 +465,9 @@ impl Cpu {
             | State::LoadFromHl(_)
             | State::StoreToHl(_)
             | State::LoadImmediate(_)
-            | State::StoreImmediateToHl(_) => None,
+            | State::StoreImmediateToHl(_)
+            | State::LoadFromR16Mem(_)
+            | State::StoreToR16Mem(_) => None,
         }
     }
 
@@ -398,6 +494,15 @@ impl Cpu {
             // O bloco `00 ddd 110` não é contíguo — os oito opcodes andam de 8
             // em 8 —, então é máscara e não faixa. Ver [`LD_R8_U8_MASK`].
             _ if opcode & LD_R8_U8_MASK == LD_R8_U8_PATTERN => Self::load_r8_u8(opcode),
+            // As duas famílias do 1.4c. Nada acontece no M1 além do fetch: o
+            // endereço vem de um par de registradores, e resolvê-lo aqui
+            // adiantaria o `HL±` em um M-cycle. Ver [`State::LoadFromR16Mem`].
+            _ if opcode & LD_R16MEM_MASK == STORE_R16MEM_PATTERN => {
+                State::StoreToR16Mem(R16Mem::from_opcode(opcode))
+            }
+            _ if opcode & LD_R16MEM_MASK == LOAD_R16MEM_PATTERN => {
+                State::LoadFromR16Mem(R16Mem::from_opcode(opcode))
+            }
             // Os onze `-` da coluna `GB CPU`. Ver [`Lockup::IllegalOpcode`].
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
@@ -522,6 +627,63 @@ impl Cpu {
                 )]
                 bus.write(self.registers.hl(), self.latch as u8);
                 State::Fetch
+            }
+        }
+    }
+
+    /// M2 de `LD A,(r16mem)`: `read((rr)->A)`.
+    ///
+    /// Um acesso ao barramento e a escrita em `A`, no mesmo M-cycle — a forma do
+    /// [`Cpu::load_from_hl`], com o endereço vindo de um par escolhido pelo
+    /// opcode em vez de sempre `HL`.
+    fn load_from_r16_mem(&mut self, bus: &Bus, source: R16Mem) -> State {
+        let address = self.address_from_r16_mem(source);
+        self.registers.a = bus.read(address);
+        State::Fetch
+    }
+
+    /// M2 de `LD (r16mem),A`: `write(A->(rr))`.
+    fn store_to_r16_mem(&mut self, bus: &mut Bus, dest: R16Mem) -> State {
+        let address = self.address_from_r16_mem(dest);
+        bus.write(address, self.registers.a);
+        State::Fetch
+    }
+
+    /// O endereço que um operando `r16mem` aponta, **e** o efeito colateral que
+    /// `hl+`/`hl-` deixam em `HL`.
+    ///
+    /// Devolve o valor de **antes** da modificação: é o que o `++`/`--` postfixo
+    /// da coluna de gbops diz (`write(A->(HL++))`), e a § OAM Corruption Bug
+    /// confirma pelo outro lado, ao dizer que o bug dispara conforme o conteúdo
+    /// de 16 bits *"(before the operation)"* caia na faixa da OAM.
+    ///
+    /// A função é `&mut self` porque metade dela é o efeito colateral, e é
+    /// chamada **do M2**, nunca do fetch: adiantá-la um M-cycle deixaria o
+    /// estado final e o total de T-cycles idênticos e moveria o instante em que
+    /// `HL` muda — o que o timer e a PPU veem, e o que a suíte Mooneye mede.
+    ///
+    /// `wrapping_add`/`wrapping_sub` porque um par de 16 bits dá a volta, como o
+    /// `PC` de [`Cpu::read_at_pc`]. Não é caso de erro, é a aritmética do
+    /// registrador.
+    ///
+    /// **O que esta função não modela:** em hardware o `HL±` não é aritmética
+    /// silenciosa. A § OAM Corruption Bug explica que a IDU põe o valor nas
+    /// linhas de endereço mesmo sem leitura nem escrita assertada, e é por isso
+    /// que essas quatro instruções corrompem a OAM *duas* vezes — uma pelo
+    /// acesso e outra pelo incremento. Isso é o ROADMAP 7.2.
+    fn address_from_r16_mem(&mut self, which: R16Mem) -> u16 {
+        match which {
+            R16Mem::Bc => self.registers.bc(),
+            R16Mem::De => self.registers.de(),
+            R16Mem::HlIncrement => {
+                let address = self.registers.hl();
+                self.registers.set_hl(address.wrapping_add(1));
+                address
+            }
+            R16Mem::HlDecrement => {
+                let address = self.registers.hl();
+                self.registers.set_hl(address.wrapping_sub(1));
+                address
             }
         }
     }

@@ -49,9 +49,16 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     M-cycles diferentes (`fetch → read(u8) → write((HL))`); juntá-los no M2 com
     um `internal` no M3 dá o mesmo total e adianta a escrita em um — ver
     [doc da 0015](docs/iterations/0015-cpu-ld-r8-u8.md).
-  - [ ] 1.4c Indireto por par de registradores: `LD (BC),A`, `LD A,(BC)`,
+  - [x] 1.4c Indireto por par de registradores: `LD (BC),A`, `LD A,(BC)`,
     `LD (DE),A`, `LD A,(DE)` (`$02 $0A $12 $1A`) e as quatro formas com `HL+`/
     `HL-` (`$22 $2A $32 $3A`) — 8 opcodes, e o efeito colateral sobre `HL`.
+    **Nenhuma forma de M-cycle nova:** as oito linhas são `fetch` mais um
+    acesso, como o 1.4a. O novo é o `++`/`--` escrito **dentro** do passo do
+    acesso — `HL` muda no M2, e resolver o endereço no fetch adianta o efeito em
+    um M-cycle com o mesmo estado final. **10 dos 11 testes passam contra essa
+    versão errada**; ver [doc da 0016](docs/iterations/0016-cpu-ld-r16mem.md).
+    Que o endereço é o valor de antes é confirmado fora da § Block 0, na
+    § OAM Corruption Bug do `06-ppu.md` ("before the operation").
   - [ ] 1.4d Endereço absoluto e a página `$FF00`: `LD (u16),A` / `LD A,(u16)`
     (`$EA $FA`), `LD (FF00+u8),A` / `LD A,(FF00+u8)` (`$E0 $F0`) e
     `LD (FF00+C),A` / `LD A,(FF00+C)` (`$E2 $F2`) — 6 opcodes.
@@ -122,6 +129,16 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [ ] 7.1 Suíte Mooneye acceptance no scoreboard.
 - [ ] 7.2 `oam_bug`, `interrupt_time`.
 - [ ] 7.3 Savestates (serde) + fast-forward + screenshot.
+- [ ] 7.4 Verificar a MSRV na CI: job em `1.85` (ou `cargo-msrv`) para que
+  `rust-version = "1.85"` deixe de ser promessa que ninguém checa. A CI usa
+  `dtolnay/rust-toolchain@stable`, então API mais nova que a MSRV compila, passa
+  no clippy e passa nos testes. **Sete iterações conferiram à mão** (0009, 0011,
+  0012, 0013, 0014, 0015, 0016 — a última deu 177/177 em `1.85`), sempre por
+  alguém ter lembrado. Item criado na 0016 porque a 0015 diagnosticou que o que
+  mantinha a dívida aberta era ela não existir aqui (`STATUS.md`, nota 13);
+  está em M7 e não em M0 para não preemptar o M1, e é puxável a qualquer momento.
+  Alternativa legítima: apagar a linha do `Cargo.toml` — declaração que ninguém
+  checa é pior que declaração nenhuma.
 
 ## M8 — Apresentação
 

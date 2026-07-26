@@ -12,9 +12,10 @@
 //!   [`crate::bus::Bus`] e o faz andar. É onde a R2 vive: [`Cpu::step`] avança
 //!   **um** M-cycle e retorna.
 //!
-//! O decodificador ainda é de duas instruções (`NOP` e `JP u16`); os outros 245
-//! opcodes chegam nos itens 1.4 a 1.11 e, até lá, param a CPU com
-//! [`Lockup::UndecodedOpcode`].
+//! O decodificador cobre **65** dos 245 opcodes que o SM83 tem: `NOP` e
+//! `JP u16` (1.3), mais o bloco `LD r8,r8` inteiro — `$40`–`$7F` sem o `$76`,
+//! que é `HALT` e fica para o 2.3 (1.4a). Os outros 180 chegam nos itens 1.4b
+//! a 1.11 e, até lá, param a CPU com [`Lockup::UndecodedOpcode`].
 
 mod mcycle;
 mod registers;

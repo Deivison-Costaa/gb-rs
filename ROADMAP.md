@@ -202,6 +202,31 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     — o operando é qualquer `r8` ou `(HL)`. Ver
     [doc da 0027](docs/iterations/0027-cpu-inc-dec-r8.md) e `STATUS.md`, nota 48.
 - [ ] 1.7 Opcodes: ALU 16-bit + `ADD SP,e8` / `LD HL,SP+e8` (flags contraintuitivas).
+  **Quebrado em quatro na 0028:** o grupo `x16/alu` da tabela de gbops tem **14**
+  opcodes e, como o 1.6, a quebra por regra de decodificação não serve — há só
+  duas formas de M-cycle (`fetch → internal` para os doze primeiros, `fetch →
+  read(i8) → internal [→ write]` para os dois últimos) mas **quatro** semânticas
+  de flag distintas. O corte é por coluna de flags. 14 = 8 + 4 + 1 + 1.
+  - [ ] 1.7a `INC r16` e `DEC r16` (`$03 $13 $23 $33 $0B $1B $2B $3B`) — 8
+    opcodes, as quatro colunas de flag em `-`: nenhuma é tocada, nem calculada
+    nem literal — a primeira vez que isso vale para um par de 16 bits inteiro
+    e não só para `C` (o 1.6e fez isso para `r8`). `fetch(escreve a metade
+    baixa) → internal(escreve a metade alta)`, 2 M-cycles.
+  - [ ] 1.7b `ADD HL,r16` (`$09 $19 $29 $39`) — 4 opcodes, `N` = `0` literal,
+    `H`/`C` calculados sobre o par de 16 bits inteiro (carry do bit 11 e do
+    bit 15) — ao contrário do `ADD SP,e8`/`LD HL,SP+e8` do 1.7c/1.7d, que
+    calculam sobre o byte baixo. `Z` não é afetada. Mesma forma de M-cycle do
+    1.7a.
+  - [ ] 1.7c `ADD SP,e8` (`$E8`) — 1 opcode, 4 M-cycles
+    (`fetch → read(i8) → internal → write`), o mais longo do grupo. `Z`/`N`
+    literais `0`; `H`/`C` calculados sobre o **byte baixo** de `SP` somado ao
+    imediato — regra de 8 bits sobre um valor de 16, não o par inteiro do
+    1.7b. `02-cpu.md` não tem essa seção; a nota 34/36 do 1.6a (ausência de
+    seta não é sempre latch) precisa ser reavaliada aqui antes de supor.
+  - [ ] 1.7d `LD HL,SP+e8` (`$F8`) — 1 opcode, 3 M-cycles
+    (`fetch → read(i8) → internal`), a mesma coluna de flags do 1.7c mas um
+    M-cycle a menos (escreve em `HL`, um par de registrador, não em `SP` pelo
+    barramento) — não presuma a mesma forma só porque a flag é igual.
 - [ ] 1.8 Opcodes: rotações e shifts (RLCA/RRCA/RLA/RRA — divergem do prefixo CB no flag Z).
 - [ ] 1.9 Opcodes: prefixo CB completo (BIT/RES/SET/rot).
 - [ ] 1.10 Opcodes: jumps, calls, rets, RST — com timing condicional correto. `JP u16` (`C3`) já saiu no 1.3; o que sobra aqui é o difícil — os desvios condicionais duram tempos diferentes conforme tomem ou não o desvio (`8 / 12`, `12 / 24`), e essa é a coluna que a tabela dá em dois valores.

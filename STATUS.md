@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0006 — `gb-cli info <rom>` ([doc](docs/iterations/0006-cli-info.md)). Com ela o **0.3 fecha**.
-**Próxima tarefa:** ROADMAP 0.4 — `Cartridge` trait + `NoMbc` (ROM-only, 32 KiB) em `gb-core`. É a primeira vez que o core vai **usar** o `$0147` em vez de só nomeá-lo. Ler `docs/reference/08-cartridges-mbc.md` § No MBC (linha ~523) antes de escrever (R1).
+**Última iteração concluída:** 0007 — `Cartridge` + `NoMbc` ([doc](docs/iterations/0007-cart-nombc.md)).
+**Próxima tarefa:** ROADMAP 0.5 — **mas leia a nota 15 antes de começar**: `scripts/fetch-test-roms.sh` já existe, já baixa as 121 ROMs e a CI o executa a cada push desde a 0002. A 0008 é iteração de *verificação e marcação*, não de implementação: confirme que o script cumpre o item, decida se falta guarda de teste, marque `[x]` e siga. Se sobrar tempo, o 1.1 (registradores) é o próximo trabalho de verdade — ler `docs/reference/02-cpu.md` antes (R1).
 **Marco atual:** M0 — Fundação
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -126,6 +126,34 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 - **Tabela de RAM não é fórmula.** `$04` são 128 KiB e `$05` são 64 KiB: a
   tabela não é monotônica, e qualquer `32 KiB << n` acerta parte dela e erra
   esses dois. `ram_size_is_a_table_and_it_is_not_monotonic` guarda.
+- **O cartucho fala com o barramento por dois métodos, e só.** `Cartridge` é
+  `read(u16) -> u8` e `write(u16, u8)`, porque é isso que o hardware expõe: o
+  MBC fica entre o barramento e os chips, e banco selecionado, RAM habilitada e
+  modo de banking são estado **interno** dele, escrito pelas mesmas escritas em
+  `$0000`–`$7FFF` que num cartucho sem MBC não fazem nada. Por isso `write`
+  existe em `NoMbc`, onde é no-op: quem chama é o `Bus`, que não sabe qual
+  mapeador está do outro lado. O `Bus` (1.2) roteia **só** `$0000`–`$7FFF` e
+  `$A000`–`$BFFF`; fora dali o cartucho responde `OPEN_BUS` em vez de entrar em
+  pânico — `read` de emulador é o pior lugar para descobrir erro de roteamento.
+  **Custo a medir no M1:** `Box<dyn Cartridge>` põe despacho dinâmico no caminho
+  mais quente que existe. Trocar por `enum` depois é mudança local.
+- **`OPEN_BUS = $FF` é constante nomeada.** O Pan Docs escreve "often `$FF`, but
+  not guaranteed" (§ MBC1, `$A000`–`$BFFF`): é valor típico de linha solta, não
+  número que algum chip produz. O nome carrega o "not guaranteed" para onde
+  alguém for depender dele.
+- **`cart::load` despacha por `$0147` e não julga o cabeçalho.** Checksum
+  errado, título ilegível e tamanho declarado divergente montam normalmente —
+  quem trava a máquina por checksum é o boot ROM, que este emulador pula. Hoje
+  só `$00` (ROM ONLY) monta. **`$08`/`$09` são recusados de propósito**, embora
+  sejam cartucho sem MBC: são a RAM opcional da § No MBC, e a nota de rodapé da
+  tabela de `$0147` diz que nenhum cartucho licenciado os usa e que *"the exact
+  behavior is unknown"*. Aceitá-los daria uma RAM que lê `$FF` e engole escrita
+  — save perdido em silêncio. Ver erro #1 da [0007](docs/iterations/0007-cart-nombc.md).
+- **`NoMbc` mapeia direto e não espelha.** `$0000`–`$7FFF` é o índice na ROM,
+  sem tradução; acima de 32 KiB, `NoMbc::new` recusa. Acima do fim de uma ROM
+  **menor** que a janela vem `OPEN_BUS`, e não o começo espelhado
+  (`addr % rom.len()`, o idioma comum): a spec não descreve chip menor, então
+  espelhar seria inventar fiação — e `% 0` ainda entra em pânico com ROM vazia.
 - **O título do cartucho é o trecho inicial de ASCII imprimível.** Nada no
   cabeçalho diz se ele tem 16, 15 ou 11 bytes úteis — o que sobra é código do
   fabricante (`$013F`–`$0142`, ASCII!) e CGB flag (`$0143`). Parar no primeiro
@@ -211,6 +239,17 @@ contorno previsto no prompt de bootstrap.
    verde): sem ele, "tudo foi pego" não distingue suíte boa de suíte que quebra
    com qualquer mudança.
 
+   **Na 0007 o procedimento virou rotina e ganhou duas leituras novas.** (a) O
+   primeiro vermelho foi `error[E0432]` — módulo inexistente. Erro de compilação
+   não mede asserção nenhuma; para ver o RED de verdade foi preciso um esqueleto
+   descartável, e contra ele **4 dos 13 testes passaram**, três por vacuidade
+   (afirmam *ausência* de comportamento). Esses três são guarda de regressão
+   futura, não medição do código de hoje — e vale saber a diferença. (b) A
+   bateria deu 9/9 pegas e 2/2 controles verdes, e isso **não** quer dizer que a
+   suíte está completa: os mutantes foram escritos por quem escreveu os testes,
+   na mesma sessão, então o ponto cego tende a ser o mesmo nos dois. 9/9 autoriza
+   dizer que os nove modos de falha imaginados doem; nada além disso.
+
 9. **Bash: `declare -A m` sem atribuição é variável NÃO associada.** Sob
    `set -u`, `${#m[@]}` e `${!m[@]}` abortam o script — inclusive dentro do
    `if` escrito para tratar o caso vazio. Sempre `declare -A m=()`.
@@ -272,4 +311,23 @@ contorno previsto no prompt de bootstrap.
     modo de falha é silencioso porque o resultado existe e é plausível — só
     pertence a outro experimento. Escreva o mutante com `touch`/`os.utime`
     explícito, e confira que a substituição casou **exatamente uma vez** antes
-    de rodar.
+    de rodar. **Funcionou na 0007** — 11 mutantes, zero resultado trocado.
+
+15. **A R1 diz "leia a seção correspondente"; a seção correspondente não é a
+    única.** Na 0007 a § No MBC descreve, em pé de igualdade com a ROM, uma RAM
+    opcional de 8 KiB — e a informação que a desqualifica mora 360 linhas acima,
+    numa **nota de rodapé** da tabela de `$0147`: nenhum cartucho licenciado usa
+    aquilo e "the exact behavior is unknown". Ler só a seção do item teria
+    produzido 8 KiB de RAM inventada com aparência de spec.
+
+    Isso vai reincidir no M1, onde o mesmo comportamento aparece em `02-cpu.md`,
+    na tabela do `03-opcodes.md` e nas notas de rodapé das duas. **Antes de
+    implementar, `grep` pelo registrador/opcode no arquivo inteiro** — não só na
+    seção que o `docs/reference/README.md` aponta.
+
+16. **O 0.5 já está feito, mas não marcado.** `scripts/fetch-test-roms.sh` existe
+    desde o scaffold, baixa as 121 ROMs por tag e sha256, e a CI o roda a cada
+    push desde a 0002 — o item continua `[ ]` porque nenhuma iteração o marcou.
+    Não "implemente" de novo: verifique contra o texto do item, decida se falta
+    guarda de teste, marque e siga. Se o ROADMAP tiver outros itens já entregues
+    pelo scaffold, o mesmo vale.

@@ -210,6 +210,9 @@ const CALL_COND_PATTERN: u8 = 0xC4;
 const RET_COND_MASK: u8 = 0xE7;
 const RET_COND_PATTERN: u8 = 0xC0;
 
+const RST_MASK: u8 = 0xC7;
+const RST_PATTERN: u8 = 0xC7;
+
 const CB_PREFIX: u8 = 0xCB;
 
 const RLCA: u8 = 0x07;
@@ -550,6 +553,10 @@ impl Cpu {
             0xD9 => State::ReturnImpl(ReturnPop::ReadLowByte, true),
             _ if opcode & RET_COND_MASK == RET_COND_PATTERN => {
                 State::ReturnConditional(Self::decode_jp_condition(opcode))
+            }
+            _ if opcode & RST_MASK == RST_PATTERN => {
+                self.latch = u16::from((opcode >> 3) & 7) * 8;
+                State::CallImmediate(Condition::Always, CallImmediate::Internal)
             }
             HALT => State::Locked(Lockup::UndecodedOpcode(opcode)),
             LD_R8_R8_FIRST..=LD_R8_R8_LAST => self.load_r8_r8(opcode),

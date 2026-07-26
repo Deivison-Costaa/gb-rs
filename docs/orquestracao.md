@@ -509,3 +509,31 @@ Não dá para consertar em `main` sem reescrever histórico. Fica como está.
 explicação não é falta de disciplina do agente — é variável não observada. Eu
 tinha o dado (a contagem de commits estava em cada PR) e passei sete iterações
 sem cruzar com ele, porque já tinha uma explicação que servia.
+
+## 2026-07-26 — O conserto do título apagou o número do PR
+
+O `--subject` do PR #53 funcionou na primeira iteração que o usou: o 532d68a
+entrou em `main` como `iter 0043: RST ($C7 $CF $D7 $DF $E7 $EF $F7 $FF)
+(ROADMAP 1.10e)` — formato certo, opcodes intactos (as aspas simples também
+pegaram).
+
+E **sem o `(#55)`**. O GitHub só acrescenta o backreference quando monta o
+assunto sozinho; com `--subject`, quem escreve é quem chama. Dois commits saíram
+assim antes de eu perceber: o 532d68a e o c269137 — este último o próprio PR que
+introduziu o conserto.
+
+O incômodo é maior do que parece porque **derruba o argumento com que eu removi
+o campo `PR` do template no #46**: "o `git log` já carrega `(#45)` no título do
+squash". Deixou de carregar exatamente nos commits feitos pela regra nova. Se eu
+não tivesse reparado agora, o resultado líquido das duas mudanças seria o número
+do PR não existir em lugar nenhum — nem no doc, nem no log.
+
+**Correção:** `gh pr create` devolve a URL; o número sai dela e vai no
+`--subject` à mão.
+
+**O padrão, que já é o terceiro deste tipo no projeto:** conserto de defeito de
+processo tende a criar outro no mesmo lugar, porque mexe num acoplamento que
+ninguém tinha mapeado. Os três — `--fill`, `--subject`, `(#N)` — são o mesmo
+campo disputado por três mecanismos diferentes do `gh`. Vale a regra: depois de
+consertar formatação de histórico, **olhar o commit resultante em `main`**, não
+o PR.

@@ -3,10 +3,10 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0039 — Quebra do 1.10 + JR cc,i8 (`$18` `$20` `$28` `$30` `$38`) ([doc](docs/iterations/0039-jr-breakdown.md)). 5 opcodes, 2-3 M-cycles, timing condicional (8/12 T). O `Condition` enum (Always/NotZero/Zero/NotCarry/Carry) é reutilizável pelos sub-itens seguintes. Bateria: **7/7 pegos, 2/2 controles verdes**. Item 1.10 quebrado em cinco sub-itens (1.10a–1.10e) por tipo de desvio.
-**Iteração anterior:** 0038 — SET (`CB C0`–`CB FF`) ([doc](docs/iterations/0038-cb-set.md)).
-**Duas iterações atrás:** 0037 — RES (`CB 80`–`CB BF`) ([doc](docs/iterations/0037-cb-res.md)).
-**Próxima tarefa:** ROADMAP **1.10b** — `JP cc,u16` (`$C2` `$CA` `$D2` `$DA`) + `JP HL` (`$E9`). `JP u16` incondicional (`$C3`) já existe no 1.3 como `JumpImmediate`; os condicionais reaproveitam a mesma forma de M-cycle (fetch → read(low) → read(high)) mas adicionam a fase `internal(set PC)` só se a condição bater. O enum `Condition` desta iteração é o mesmo — a parte nova é a máscara `opcode & 0xE7 == 0xC2` (quatro opcodes + `$C3` que já está fora) e a reutilização do latch de dois bytes do `JumpImmediate`. `JP HL` (`$E9`) é 1 M-cycle incondicional: `fetch` copia `HL` para `PC` — a forma mais simples do 1.10 inteiro, uma linha. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação), e a nota 38 (`grep` por mnemônico em `02-cpu.md` pode devolver zero). O `Condition` não precisa ser reescrito; o `JumpImmediate` existente é o ponto de partida para os condicionais, bastando uma fase extra `BranchDecision` entre `ReadHighByte` e `SetProgramCounter`.
+**Última iteração concluída:** 0040 — JP cc,u16 (`$C2` `$CA` `$D2` `$DA`) + JP HL (`$E9`) ([doc](docs/iterations/0040-jp-cond-hl.md)). 5 opcodes, 3-4 M-cycles (12/16 T). `State::JumpImmediate` ganhou campo `Condition`; `$C3` passa `Always` e o fluxo é idêntico ao de antes. `$E9` resolve no fetch em 1 M-cycle. Bateria: **6/6 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0039 — Quebra do 1.10 + JR cc,i8 (`$18` `$20` `$28` `$30` `$38`) ([doc](docs/iterations/0039-jr-breakdown.md)).
+**Duas iterações atrás:** 0038 — SET (`CB C0`–`CB FF`) ([doc](docs/iterations/0038-cb-set.md)).
+**Próxima tarefa:** ROADMAP **1.10c** — `CALL cc,u16` (`$C4` `$CC` `$CD` `$D4` `$DC`). `CALL` condicional é a extensão natural do `JP cc,u16`: mesma decisão condicional após ler os dois bytes do operando, mas o caminho "com desvio" adiciona um `PUSH` implícito de `PC` (push do endereço de retorno). Sem desvio: `fetch → read(low) → read(high)` (12 T); com desvio: `fetch → read(low) → read(high) → internal → write(upper→(--SP)) → write(lower→(--SP))` (24 T). O `internal` entre `read(high)` e o primeiro `write` decide a condição — é o mesmo ponto que esta iteração usa em `ReadHighByte`. O `CALL u16` (`$CD`) é o incondicional do grupo. O `evaluate_condition` e o `Condition` continuam os mesmos. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação). O `PUSH` implícito reaproveita `push_byte` (1.5b) — o `PC` pós-leitura do operando (que aponta para a instrução seguinte) é empilhado em duas escritas com `--SP`.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -37,7 +37,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **471** (eram **452** antes da 0039 — +19 do novo arquivo `cpu_jr`).
+Testes do workspace: **491** (eram **471** antes da 0040 — +20 do novo arquivo `cpu_jp`).
 
 ## Invariantes
 
@@ -145,11 +145,7 @@ importar para o item da vez.
 
 ## Bloqueios
 
-**1.10b `JP cc,u16` + `JP HL`** — a iteração 0040 estourou o teto de 45
-minutos com 17 passos, travando duas vezes sem causa determinada. Os 17 testes
-que ela chegou a escrever estão em `iter/0040-jp-cond-hl` (commit `wip:`), sem
-implementação e sem verificação. A próxima tentativa começa do zero em `main`;
-se quiser aproveitar, confira antes, porque nada ali foi rodado.
+Nenhum no momento.
 
 A `main` passou a ter **proteção de branch** em 26/07: PR obrigatório (sem
 exigir aprovação), `check` e `scoreboard` verdes, valendo inclusive para admin.

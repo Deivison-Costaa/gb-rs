@@ -2,8 +2,8 @@
 
 use crate::bus::Bus;
 use crate::cart::HeaderChecksum;
-use crate::cpu::Registers;
 use crate::cpu::alu::{self, AluOp};
+use crate::cpu::{Flag, Registers};
 
 const NOP: u8 = 0x00;
 const JP_U16: u8 = 0xC3;
@@ -190,6 +190,11 @@ const INC_DEC_R16_MASK: u8 = 0b1100_1111;
 const INC_R16_PATTERN: u8 = 0b0000_0011;
 const DEC_R16_PATTERN: u8 = 0b0000_1011;
 
+// `00 rr 1001`: `ADD HL,r16`. `N`=0 literal, `H`/`C` sobre o par de 16 bits
+// (carry do bit 11 e do bit 15). `Z` não é tocada.
+const ADD_HL_R16_MASK: u8 = 0b1100_1111;
+const ADD_HL_R16_PATTERN: u8 = 0b0000_1001;
+
 const HIGH_PAGE: u16 = 0xFF00;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -268,6 +273,9 @@ enum State {
     IncDecHl(IncDecOp, IncDecHl),
     // A metade baixa já foi escrita no fetch; falta o `internal` da metade alta.
     IncDecR16(R16),
+    // Source r16 carregado para o M2; destino é sempre HL. O H alto foi escrito
+    // no fetch (como o 1.7a); falta escrever a metade alta no internal.
+    AddHlR16(R16),
     Locked(Lockup),
 }
 
@@ -320,6 +328,7 @@ impl Cpu {
             State::AluImmediate(op) => self.alu_immediate(bus, op),
             State::IncDecHl(op, phase) => self.inc_dec_hl(bus, op, phase),
             State::IncDecR16(target) => self.finish_inc_dec_r16(target),
+            State::AddHlR16(source) => self.finish_add_hl_r16(source),
             State::Locked(lockup) => State::Locked(lockup),
         };
     }
@@ -347,7 +356,8 @@ impl Cpu {
             | State::AluFromHl(_)
             | State::AluImmediate(_)
             | State::IncDecHl(..)
-            | State::IncDecR16(_) => None,
+            | State::IncDecR16(_)
+            | State::AddHlR16(_) => None,
         }
     }
 
@@ -422,6 +432,7 @@ impl Cpu {
             _ if opcode & INC_DEC_R16_MASK == DEC_R16_PATTERN => {
                 self.inc_dec_r16(IncDecOp::Decrement, opcode)
             }
+            _ if opcode & ADD_HL_R16_MASK == ADD_HL_R16_PATTERN => self.add_hl_r16(opcode),
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
             }
@@ -776,6 +787,37 @@ impl Cpu {
     fn finish_inc_dec_r16(&mut self, target: R16) -> State {
         let [high, _] = self.latch.to_be_bytes();
         self.write_r16_high(target, high);
+        State::Fetch
+    }
+
+    // `ADD HL,r16`: mesma forma de M-cycle do 1.7a. `Z` não é tocada; `H`
+    // (carry do bit 11) e `C` (carry do bit 15) são calculados sobre o par
+    // inteiro. `N` = 0 literal.
+    fn add_hl_r16(&mut self, opcode: u8) -> State {
+        let source = R16::from_opcode(opcode);
+        let hl = self.registers.hl();
+        let operand = self.read_r16(source);
+        let result = hl.wrapping_add(operand);
+
+        let half = ((hl & 0x0FFF).wrapping_add(operand & 0x0FFF)) >> 12;
+        let carry = (hl as u32).wrapping_add(operand as u32) >> 16;
+
+        self.registers.set_flag(Flag::N, false);
+        self.registers.set_flag(Flag::H, half != 0);
+        self.registers.set_flag(Flag::C, carry != 0);
+
+        self.latch = result;
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "grava só a metade baixa de HL"
+        )]
+        self.write_r16_low(R16::Hl, result as u8);
+        State::AddHlR16(source)
+    }
+
+    fn finish_add_hl_r16(&mut self, _source: R16) -> State {
+        let [high, _] = self.latch.to_be_bytes();
+        self.write_r16_high(R16::Hl, high);
         State::Fetch
     }
 

@@ -213,7 +213,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     e não só para `C` (o 1.6e fez isso para `r8`). `fetch(escreve a metade
     baixa) → internal(escreve a metade alta)`, 2 M-cycles. Ver
     [doc da 0028](docs/iterations/0028-cpu-inc-dec-r16.md).
-  - [ ] 1.7b `ADD HL,r16` (`$09 $19 $29 $39`) — 4 opcodes, `N` = `0` literal,
+   - [x] 1.7b `ADD HL,r16` (`$09 $19 $29 $39`) — 4 opcodes, `N` = `0` literal,
     `H`/`C` calculados sobre o par de 16 bits inteiro (carry do bit 11 e do
     bit 15) — ao contrário do `ADD SP,e8`/`LD HL,SP+e8` do 1.7c/1.7d, que
     calculam sobre o byte baixo. `Z` não é afetada. Mesma forma de M-cycle do

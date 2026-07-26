@@ -449,6 +449,7 @@ fn decoded_elsewhere(opcode: u8) -> bool {
         || opcode & 0b1100_0111 == 0b0000_0110
         || opcode & 0b1100_0111 == 0b0000_0010
         || opcode & 0b1100_1111 == 0b0000_0001
+        || opcode & 0b1100_1111 == 0b1100_0101
 }
 
 #[test]

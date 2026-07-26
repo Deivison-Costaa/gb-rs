@@ -1,19 +1,7 @@
 //! ROADMAP 0.3a — o cabeçalho do cartucho, em `$0100`–`$014F`.
-//!
-//! Spec: `docs/reference/08-cartridges-mbc.md` § The Cartridge Header
-//! (Pan Docs `fe246067b695`). Os números aqui saíram de lá e não da memória
-//! do agente — ver o doc da iteração 0005 para onde as duas divergiram.
-//!
-//! As ROMs destes testes são **sintéticas**, montadas byte a byte. Nada de ler
-//! `tests/roms/`: aquilo é gitignored e baixado por script, então um teste que
-//! dependesse dele passaria vazio na máquina de quem não rodou o download —
-//! que é o modo de falha da nota 8 do `STATUS.md`.
-//!
-//! `unwrap`/`expect` são permitidos aqui: a R6 proíbe fora de teste.
 
 use gb_core::cart::{CartridgeHeader, HeaderError};
 
-/// Menor ROM que contém o cabeçalho inteiro: `$014F` é o último byte dele.
 const ROM_LEN: usize = 0x0150;
 
 const TITLE: usize = 0x0134;
@@ -22,24 +10,10 @@ const ROM_SIZE: usize = 0x0148;
 const RAM_SIZE: usize = 0x0149;
 const HEADER_CHECKSUM: usize = 0x014D;
 
-/// ROM zerada do tamanho mínimo. Cada teste escreve só o campo que lhe importa.
 fn blank_rom() -> Vec<u8> {
     vec![0x00; ROM_LEN]
 }
 
-/// O checksum como o boot ROM o calcula, transcrito da spec:
-///
-/// ```c
-/// uint8_t checksum = 0;
-/// for (uint16_t address = 0x0134; address <= 0x014C; address++) {
-///     checksum = checksum - rom[address] - 1;
-/// }
-/// ```
-///
-/// Este é o oráculo dos testes de checksum: veio da spec, não da implementação.
-/// Se a implementação copiasse este código e o teste comparasse os dois, o
-/// teste não mediria nada — por isso a forma aqui é a do laço em C, e a de lá
-/// é a que der na telha de quem implementa.
 fn boot_rom_checksum(rom: &[u8]) -> u8 {
     let mut checksum: u8 = 0;
     for &byte in &rom[0x0134..=0x014C] {
@@ -48,7 +22,6 @@ fn boot_rom_checksum(rom: &[u8]) -> u8 {
     checksum
 }
 
-/// Grava em `$014D` o checksum que o boot ROM aceitaria.
 fn seal(rom: &mut [u8]) {
     rom[HEADER_CHECKSUM] = boot_rom_checksum(rom);
 }
@@ -112,10 +85,6 @@ fn title_may_fill_all_sixteen_bytes() {
     assert_eq!(parse(&rom).title(), "SUPER MARIOLAND2");
 }
 
-/// Em cartuchos novos `$0143` é o CGB flag e `$013F`–`$0142` o código do
-/// fabricante — bytes que **não** são título e que nem ASCII são. Sem parar no
-/// primeiro byte não imprimível, um título de 15 caracteres arrastaria o
-/// `$80` junto.
 #[test]
 fn title_stops_at_the_cgb_flag() {
     let mut rom = blank_rom();
@@ -125,10 +94,6 @@ fn title_stops_at_the_cgb_flag() {
     assert_eq!(parse(&rom).title(), "POKEMON RED VER");
 }
 
-/// O caso que separa "parar no primeiro byte não imprimível" de "filtrar os
-/// bytes não imprimíveis": em cartucho novo, um título curto é seguido de `$00`
-/// e **depois** do código do fabricante, que é ASCII imprimível. Quem filtra em
-/// vez de parar cola o código do fabricante no fim do título.
 #[test]
 fn title_stops_before_the_manufacturer_code() {
     let mut rom = blank_rom();
@@ -176,9 +141,6 @@ fn cartridge_type_names_the_codes_from_the_table() {
     }
 }
 
-/// `$04` não está na tabela do Pan Docs. Não vira erro de parse: um `info` que
-/// se recusa a falar sobre a ROM esquisita é justamente o que não serve para
-/// diagnosticar ROM esquisita.
 #[test]
 fn cartridge_type_keeps_the_raw_code_when_it_is_not_in_the_table() {
     let mut rom = blank_rom();
@@ -211,9 +173,6 @@ fn rom_size_is_32_kib_shifted_by_the_code() {
     }
 }
 
-/// `$52`/`$53`/`$54` aparecem "only in unofficial docs", sem nenhum cartucho ou
-/// arquivo conhecido, e a própria spec diz que provavelmente estão errados.
-/// Mapeá-los seria plantar 1.1 MiB inventado num campo que o 0.3b vai imprimir.
 #[test]
 fn rom_size_refuses_the_unattested_codes() {
     for code in [0x52, 0x53, 0x54, 0x09, 0xFF] {
@@ -231,9 +190,6 @@ fn rom_size_refuses_the_unattested_codes() {
 // $0149 — tamanho da RAM
 // ---------------------------------------------------------------------------
 
-/// A RAM **não** segue fórmula: `$04` são 128 KiB e `$05` são 64 KiB. Qualquer
-/// `32 KiB << n` acerta parte da tabela e erra estes dois — que é o jeito mais
-/// fácil de ter um teste verde e um MBC1 quebrado no marco M4.
 #[test]
 fn ram_size_is_a_table_and_it_is_not_monotonic() {
     for (code, bytes) in [
@@ -254,10 +210,6 @@ fn ram_size_is_a_table_and_it_is_not_monotonic() {
     }
 }
 
-/// O erro que a spec pegou: `$01` é largamente documentado por aí como 2 KiB,
-/// e o Pan Docs diz "Unused" — chip de 2 KiB nunca foi usado em cartucho e a
-/// origem do valor é desconhecida. `None` é a resposta honesta; `Some(2048)`
-/// seria um número inventado com cara de medição.
 #[test]
 fn ram_size_code_one_is_unattested_not_two_kib() {
     let mut rom = blank_rom();
@@ -304,8 +256,6 @@ fn checksum_of_a_sealed_blank_rom_is_valid() {
     assert!(parse(&rom).checksum().is_valid());
 }
 
-/// O boot ROM trava a máquina se `$014D` não bater. Um bit trocado em qualquer
-/// byte de `$0134`–`$014C` tem de aparecer.
 #[test]
 fn checksum_catches_a_single_flipped_bit() {
     let mut rom = blank_rom();
@@ -329,9 +279,6 @@ fn checksum_catches_a_single_flipped_bit() {
     }
 }
 
-/// A outra ponta do intervalo: `$0133` (fim do logo) e `$014D`–`$014F` (o
-/// próprio checksum e o global) estão **fora** da soma. Um `..=0x014D` ou um
-/// `0x0133..` compilam igual e passam nos testes acima; só este os pega.
 #[test]
 fn checksum_ignores_bytes_outside_0134_014c() {
     let mut rom = blank_rom();

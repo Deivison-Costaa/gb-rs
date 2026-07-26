@@ -62,6 +62,29 @@ scoreboard). Sem exceção.
 
 `#![forbid(unsafe_code)]` em `gb-core`. `clippy -D warnings` passa limpo.
 
+### R7 — Comentário é exceção, não hábito
+
+Teto de **5%** de linhas de comentário por arquivo `.rs` (tolerância até 12%).
+`./scripts/comment-density.sh` mede; `crates/gb-core/tests/comment_density.rs`
+reprova quem passar.
+
+No código ficam só duas coisas, e curtas:
+
+1. **Mecanismo não óbvio** — por que a máscara da Echo RAM é de 13 bits, por
+   que a HRAM tem 127 bytes. Se o nome do item já diz o que ele é, não escreva
+   de novo em cima dele.
+2. **Registro in situ de erro de primeira tentativa** — uma linha, com o
+   ponteiro (`ver docs/iterations/NNNN`). A 0017 sobreviveu à morte da sessão
+   por causa deles; a história inteira mora no doc da iteração, escrito no
+   passo 7 do protocolo.
+
+Justificativa de decisão, divergência do ROADMAP, citação longa de spec e
+narrativa **não moram no código** — moram em `docs/iterations/NNNN-slug.md` e
+no `STATUS.md`, que é de onde o relatório final puxa. A fonte se aponta com
+uma linha (`spec: docs/reference/03-opcodes.md`), não com um parágrafo.
+
+Se um bloco precisa de um parágrafo para ser entendido, o problema é o bloco.
+
 ---
 
 ## Arquitetura

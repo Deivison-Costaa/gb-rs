@@ -1,27 +1,13 @@
 //! Guardas das invariantes estruturais do `gb-core` — R3 e R6 do `CLAUDE.md`.
-//!
-//! Estes testes não exercitam emulação. Eles verificam que o crate continua
-//! sendo o que o projeto decidiu que ele é: uma máquina de estados **pura**,
-//! sem I/O e sem `unsafe`. São baratos e pegam a regressão no PR em que ela
-//! acontece, em vez de três marcos depois, quando desfazer já custa caro.
-//!
-//! `unwrap`/`expect` são permitidos aqui: R6 proíbe fora de teste.
 
 use std::path::{Path, PathBuf};
 
-/// Crates de que `gb-core` pode depender sem violar a R3.
-///
-/// Vazia de propósito. Um crate só entra aqui depois de alguém verificar que
-/// ele não faz I/O — não basta "compilar sem `std::fs`". O ROADMAP 7.3
-/// (savestates) provavelmente vai querer `serde`; quando for a hora, o item
-/// que precisa dela adiciona aqui **e justifica no doc da iteração**.
 const ALLOWED_DEPENDENCIES: &[&str] = &[];
 
 fn crate_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// `crates/gb-core` → `crates` → raiz do workspace.
 fn workspace_root() -> PathBuf {
     crate_root()
         .parent()
@@ -35,16 +21,6 @@ fn read(path: &Path) -> String {
         .unwrap_or_else(|e| panic!("não consegui ler {}: {e}", path.display()))
 }
 
-/// Extrai os nomes declarados numa seção `[section]` de um manifesto Cargo.
-///
-/// Parser deliberadamente burro: varre da linha `[section]` até o próximo `[`,
-/// ignora comentários e linhas vazias, e devolve o que está à esquerda do `=`.
-/// Não é TOML de verdade — e não precisa ser. A forma de tabela
-/// (`[dependencies.foo]`) também é detectada, pelo prefixo do cabeçalho.
-///
-/// A alternativa seria puxar o crate `toml` só para isto, o que adicionaria
-/// uma dependência ao crate cuja ausência de dependências é justamente o que
-/// estamos medindo.
 fn names_in_section(manifest: &str, section: &str) -> Vec<String> {
     let header = format!("[{section}]");
     let table_prefix = format!("[{section}.");
@@ -110,8 +86,6 @@ fn section_parser_returns_empty_when_section_is_absent() {
     assert!(names_in_section("[package]\nname = \"x\"\n", "dependencies").is_empty());
 }
 
-/// R3 — `gb-core` não tem I/O. A forma mais barata de garantir isso é não
-/// deixar entrar o crate que faria o I/O.
 #[test]
 fn gb_core_has_no_unapproved_dependencies() {
     let manifest = read(&crate_root().join("Cargo.toml"));
@@ -129,8 +103,6 @@ fn gb_core_has_no_unapproved_dependencies() {
     );
 }
 
-/// R6 — `#![forbid(unsafe_code)]` em `gb-core`. O atributo protege o código;
-/// este teste protege o atributo.
 #[test]
 fn gb_core_forbids_unsafe() {
     let lib = read(&crate_root().join("src/lib.rs"));
@@ -140,8 +112,6 @@ fn gb_core_forbids_unsafe() {
     );
 }
 
-/// O workspace são exatamente estes três crates. Se um quarto aparecer sem
-/// passar pelo ROADMAP, é para doer.
 #[test]
 fn workspace_declares_the_three_crates() {
     let manifest = read(&workspace_root().join("Cargo.toml"));

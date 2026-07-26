@@ -1,56 +1,20 @@
 //! Guarda dos jobs do workflow de CI — ROADMAP 0.2a e 0.2b.
-//!
-//! A proteção de `main` exige que o job `check` fique verde. Isso garante que
-//! ele **rodou**, não que ele **verificou alguma coisa**: um passo com um `if:`
-//! falso é pulado e o job termina verde do mesmo jeito. Foi exatamente essa a
-//! situação criada pelo bootstrap — os três passos de qualidade ficaram atrás
-//! de uma guarda `[ -f Cargo.toml ]` que, se um dia voltasse a dar falso,
-//! desligaria fmt, clippy e testes **sem pintar nada de vermelho**.
-//!
-//! Este teste mora aqui, e não no próprio workflow, de propósito: guarda que
-//! vive dentro da coisa guardada some junto com ela. Rodando dentro de
-//! `cargo test --all`, ele reprova o PR que mexer no `ci.yml` para pior.
-//!
-//! Mora no `gb-cli` porque é o crate de ferramental do projeto — o que já
-//! carrega o contrato com `scripts/scoreboard.sh`. O `gb-core` é a máquina de
-//! estados pura e não deve saber que existe CI.
-//!
-//! `unwrap`/`expect` são permitidos aqui: R6 proíbe fora de teste.
 
 use std::path::{Path, PathBuf};
 
-/// O que o job `check` tem de rodar, como (rótulo, fragmentos obrigatórios).
-///
-/// Fragmentos, e não a linha de comando inteira, para o teste reprovar o que
-/// importa — clippy sem `-D warnings` é clippy decorativo — sem quebrar por
-/// uma flag nova qualquer. Mudou o comando de verdade? Mude aqui também, e
-/// que seja uma decisão, não um acidente.
 const REQUIRED_STEPS: &[(&str, &[&str])] = &[
     ("formatação", &["cargo fmt", "--check"]),
     ("clippy", &["cargo clippy", "-D warnings"]),
     ("testes", &["cargo test"]),
 ];
 
-/// Os passos do job `scoreboard` cujo veredito **é** o veredito do job.
-///
-/// Se qualquer um destes falhar sem derrubar o job, o placar da apresentação
-/// para de crescer em silêncio — o CSV do artefato passa a ser o de ontem e
-/// nada fica vermelho.
-///
-/// Os fragmentos incluem o `run: ` e o `./` de propósito. `scoreboard.sh` sozinho
-/// é substring de `publish-scoreboard.sh` (ROADMAP 0.2c), e `find` devolve o
-/// **primeiro** passo que casa: bastaria alguém reordenar os passos para a
-/// guarda passar a examinar o passo errado, sem nada ficar vermelho. Guarda que
-/// depende da ordem do arquivo que ela guarda não é guarda.
 const SCOREBOARD_STEPS: &[(&str, &[&str])] = &[
     ("download das ROMs", &["run: ./scripts/fetch-test-roms.sh"]),
     ("execução do placar", &["run: ./scripts/scoreboard.sh"]),
 ];
 
-/// ROADMAP 0.2c — o passo que publica a série na branch de dados.
 const PUBLISH_STEP: &[&str] = &["run: ./scripts/publish-scoreboard.sh"];
 
-/// `crates/gb-cli` → `crates` → raiz do workspace.
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -65,28 +29,20 @@ fn read_workflow() -> String {
         .unwrap_or_else(|e| panic!("não consegui ler {}: {e}", path.display()))
 }
 
-/// Um passo de um job, já sem a indentação do bloco: as chaves do passo
-/// (`run:`, `if:`, `uses:`) ficam na coluna zero.
 #[derive(Debug, PartialEq, Eq)]
 struct Step {
     body: String,
 }
 
 impl Step {
-    /// O passo cita todos estes fragmentos?
     fn mentions_all(&self, fragments: &[&str]) -> bool {
         fragments.iter().all(|f| self.body.contains(f))
     }
 
-    /// O passo tem a chave `key` no seu próprio nível?
-    ///
-    /// Coluna zero é o que distingue o `if:` do passo de um `if:` aninhado
-    /// dentro de um `with:` ou de um bloco `run: |`.
     fn has_key(&self, key: &str) -> bool {
         self.value_of(key).is_some()
     }
 
-    /// O valor da chave `key` do passo, já sem espaços em volta.
     fn value_of(&self, key: &str) -> Option<&str> {
         let prefix = format!("{key}:");
         self.body
@@ -105,17 +61,6 @@ fn is_meaningful(line: &str) -> bool {
     !trimmed.is_empty() && !trimmed.starts_with('#')
 }
 
-/// O corpo do job `job`, já sem a indentação do bloco: as chaves do job
-/// (`runs-on:`, `permissions:`, `steps:`) ficam na coluna zero, e o que estiver
-/// aninhado nelas continua aninhado.
-///
-/// Varredura por indentação, deliberadamente burra — mesma escolha (e mesmo
-/// motivo) do parser de manifesto em `gb-core/tests/purity.rs`: puxar um crate
-/// de YAML para o workspace só para ler o próprio arquivo de CI custa mais do
-/// que vale. Cobre a forma que este repositório usa, e os testes de parser
-/// abaixo dizem exatamente qual é essa forma.
-///
-/// Devolve vazio se o job não existir.
 fn job_body(workflow: &str, job: &str) -> Vec<String> {
     let lines: Vec<&str> = workflow.lines().collect();
 
@@ -160,12 +105,6 @@ fn job_body(workflow: &str, job: &str) -> Vec<String> {
         .collect()
 }
 
-/// O valor de `<scope>:` dentro do bloco `permissions:` do job, se houver.
-///
-/// O `GITHUB_TOKEN` deste repositório é **read** por padrão
-/// (`actions/permissions/workflow` → `default_workflow_permissions: "read"`).
-/// Um job que precise escrever tem de pedir, e pedir no job é o certo: dar
-/// escrita no topo do workflow daria escrita também ao `check`, que não precisa.
 fn job_permission(workflow: &str, job: &str, scope: &str) -> Option<String> {
     let body = job_body(workflow, job);
     let at = body
@@ -180,9 +119,6 @@ fn job_permission(workflow: &str, job: &str, scope: &str) -> Option<String> {
         .map(|l| l.trim()[prefix.len()..].trim().to_string())
 }
 
-/// Extrai os passos do job `job` de um workflow do GitHub Actions.
-///
-/// Devolve vazio se o job não existir, ou não tiver `steps:`.
 fn steps_of_job(workflow: &str, job: &str) -> Vec<Step> {
     let body = job_body(workflow, job);
 
@@ -261,10 +197,6 @@ fn step_scanner_splits_the_steps_of_the_named_job() {
     assert!(steps[2].mentions_all(&["cargo test"]));
 }
 
-/// `uses:` e `with:` são irmãs no YAML — a primeira só parece diferente por
-/// dividir a linha com o `- `. Tirar `item_indent + 2` colunas alinha as duas
-/// na coluna zero, e é isso que faz `has_key` significar "chave **do passo**".
-/// O que estiver mais fundo (`components:`, dentro do `with:`) continua fundo.
 #[test]
 fn step_scanner_puts_step_keys_at_column_zero_and_keeps_nesting() {
     let steps = steps_of_job(SAMPLE, "check");
@@ -302,7 +234,6 @@ fn step_scanner_returns_empty_for_an_absent_job() {
     assert!(steps_of_job(SAMPLE, "inexistente").is_empty());
 }
 
-/// O bloco `permissions:` do job não é um passo e não pode virar um.
 #[test]
 fn step_scanner_ignores_job_level_blocks_before_the_steps() {
     let steps = steps_of_job(SAMPLE, "outro");
@@ -335,7 +266,6 @@ fn permission_scanner_reads_the_job_level_permissions_block() {
 
 // --- a guarda de verdade --------------------------------------------------
 
-/// ROADMAP 0.2 — o job `check` roda fmt, clippy `-D warnings` e test.
 #[test]
 fn ci_check_job_runs_fmt_clippy_and_tests() {
     let steps = steps_of_job(&read_workflow(), "check");
@@ -352,8 +282,6 @@ fn ci_check_job_runs_fmt_clippy_and_tests() {
     }
 }
 
-/// ROADMAP 0.2a — e roda **sempre**. Um passo pulado é um passo que não mede
-/// nada, e o job termina verde mentindo.
 #[test]
 fn ci_quality_steps_are_unconditional() {
     let steps = steps_of_job(&read_workflow(), "check");
@@ -380,7 +308,6 @@ fn ci_quality_steps_are_unconditional() {
 // ele rodou, não que mediu. Aqui a preocupação é o inverso da 0.2a: não é o
 // passo ser pulado, é o passo **falhar sem derrubar o job**.
 
-/// ROADMAP 0.2b — o job existe e roda as duas coisas de que depende.
 #[test]
 fn ci_scoreboard_job_fetches_roms_and_runs_the_scoreboard() {
     let steps = steps_of_job(&read_workflow(), "scoreboard");
@@ -397,12 +324,6 @@ fn ci_scoreboard_job_fetches_roms_and_runs_the_scoreboard() {
     }
 }
 
-/// ROADMAP 0.2b — e o fracasso deles é o fracasso do job.
-///
-/// `continue-on-error: true` é o modo de falha específico desta iteração: o
-/// passo fica vermelho, o job fica verde, a proteção de `main` libera o merge e
-/// o `scoreboard.csv` congela sem que ninguém veja. `if:` reprova pelo motivo
-/// da 0.2a — passo pulado não mede nada.
 #[test]
 fn ci_scoreboard_steps_cannot_fail_silently() {
     let steps = steps_of_job(&read_workflow(), "scoreboard");
@@ -428,11 +349,6 @@ fn ci_scoreboard_steps_cannot_fail_silently() {
     }
 }
 
-/// ROADMAP 0.2b — quando o placar falha, é o artefato que se olha.
-///
-/// O `upload-artifact` só roda em passo de sucesso por padrão. Justamente na
-/// execução que interessa investigar — a que morreu no meio — o CSV parcial
-/// ficaria dentro do runner descartado. Este é o único `if:` desejado no job.
 #[test]
 fn ci_uploads_the_scoreboard_csv_even_on_failure() {
     let steps = steps_of_job(&read_workflow(), "scoreboard");
@@ -457,7 +373,6 @@ fn ci_uploads_the_scoreboard_csv_even_on_failure() {
 // sobra no git é só o que uma iteração commitou à mão. O passo de publicação é
 // o que fecha esse buraco.
 
-/// ROADMAP 0.2c — o job publica a série depois de medi-la.
 #[test]
 fn ci_scoreboard_job_publishes_the_series() {
     let steps = steps_of_job(&read_workflow(), "scoreboard");
@@ -468,11 +383,6 @@ fn ci_scoreboard_job_publishes_the_series() {
     );
 }
 
-/// ROADMAP 0.2c — e publica **depois** de medir.
-///
-/// Publicar antes do `scoreboard.sh` mandaria para a branch de dados o CSV do
-/// checkout, sem as linhas desta execução: um commit por push em `main` que não
-/// acrescenta nada. Continuaria verde, e a série continuaria congelada.
 #[test]
 fn ci_publishes_after_measuring() {
     let steps = steps_of_job(&read_workflow(), "scoreboard");
@@ -492,11 +402,6 @@ fn ci_publishes_after_measuring() {
     );
 }
 
-/// ROADMAP 0.2c — o `GITHUB_TOKEN` deste repositório é read por padrão.
-///
-/// Sem `contents: write` **no job**, o push é rejeitado por falta de permissão
-/// e o passo morre. Verificado na API, não suposto:
-/// `actions/permissions/workflow` → `default_workflow_permissions: "read"`.
 #[test]
 fn ci_scoreboard_job_asks_for_write_access() {
     assert_eq!(
@@ -508,12 +413,6 @@ fn ci_scoreboard_job_asks_for_write_access() {
     );
 }
 
-/// ROADMAP 0.2c — publicar só faz sentido no push para `main`.
-///
-/// Numa execução de PR o commit medido não está em `main`, e a série ganharia
-/// pontos de código que talvez nunca entre. Pior: PR vindo de fork recebe token
-/// somente-leitura, e o passo falharia sempre. Este é o segundo `if:` desejado
-/// do job — e, como o do artefato, é afirmado aqui para ser uma decisão.
 #[test]
 fn ci_publishes_only_on_push_to_main() {
     let steps = steps_of_job(&read_workflow(), "scoreboard");
@@ -535,8 +434,6 @@ fn ci_publishes_only_on_push_to_main() {
     }
 }
 
-/// ROADMAP 0.2c — e o fracasso dele é o fracasso do job, pelo mesmo motivo da
-/// 0.2b: série que para de crescer em silêncio é pior do que série nenhuma.
 #[test]
 fn ci_publish_step_cannot_fail_silently() {
     let steps = steps_of_job(&read_workflow(), "scoreboard");

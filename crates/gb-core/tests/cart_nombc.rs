@@ -1,43 +1,14 @@
 //! ROADMAP 0.4 — o trait `Cartridge` e o cartucho sem mapeador.
-//!
-//! Spec: `docs/reference/08-cartridges-mbc.md` § No MBC (Pan Docs
-//! `fe246067b695`), que cabe em três linhas:
-//!
-//! > Small games of not more than 32 KiB ROM do not require a MBC chip for
-//! > ROM banking. The ROM is directly mapped to memory at $0000-7FFF.
-//! > Optionally up to 8 KiB of RAM could be connected at $A000-BFFF, using
-//! > a discrete logic decoder in place of a full MBC chip.
-//!
-//! Três afirmações testáveis saem daí: **não mais que 32 KiB**, **mapeamento
-//! direto** (nada de banco chaveado em `$4000`–`$7FFF`) e **RAM opcional** —
-//! esta última fora do escopo do 0.4, o que os testes de `load` fixam.
-//!
-//! ROMs sintéticas, montadas byte a byte. Nada de ler `tests/roms/`: é
-//! gitignored e baixado por script, então o teste passaria vazio na máquina de
-//! quem não rodou o download — o modo de falha da nota 8 do `STATUS.md`.
-//!
-//! `unwrap`/`expect` são permitidos aqui: a R6 proíbe fora de teste.
 
 use gb_core::cart::{Cartridge, CartridgeError, HeaderError, NoMbc, OPEN_BUS, load};
 
 const KIB: usize = 1024;
 
-/// `$0147` — o tipo do cartucho, o byte que `load` despacha.
 const CARTRIDGE_TYPE: usize = 0x0147;
-/// `$014D` — o checksum do cabeçalho.
 const HEADER_CHECKSUM: usize = 0x014D;
-/// Menor ROM com o cabeçalho inteiro (`$014F` é o último byte dele).
 const MIN_ROM_LEN: usize = 0x0150;
-/// `$00` — ROM ONLY, o único tipo que o 0.4 monta.
 const ROM_ONLY: u8 = 0x00;
 
-/// Conteúdo de cada posição da ROM de teste.
-///
-/// Não é enfeite: o padrão precisa distinguir um endereço do seu vizinho **e**
-/// do endereço 16 KiB adiante, senão o teste do mapeamento direto não separa
-/// "mapeou certo" de "leu o banco errado". O XOR com o byte alto garante que
-/// `pattern(a)` e `pattern(a + 0x4000)` sempre difiram — é exatamente o bit
-/// que um mapeador mexeria.
 fn pattern(index: usize) -> u8 {
     (index as u8) ^ ((index >> 8) as u8)
 }
@@ -46,11 +17,6 @@ fn patterned_rom(len: usize) -> Vec<u8> {
     (0..len).map(pattern).collect()
 }
 
-/// ROM com cabeçalho legível e o tipo de cartucho pedido em `$0147`.
-///
-/// O checksum fica **errado de propósito** (o padrão escreve `$014D` como
-/// qualquer outro byte): `load` não é o boot ROM e não julga cabeçalho — ver
-/// `load_does_not_judge_the_header_checksum`.
 fn rom_of_type(code: u8, len: usize) -> Vec<u8> {
     assert!(len >= MIN_ROM_LEN, "ROM do fixture não tem cabeçalho");
     let mut rom = patterned_rom(len);
@@ -66,12 +32,6 @@ fn nombc(rom: Vec<u8>) -> NoMbc {
 // Mapeamento — § No MBC: "directly mapped to memory at $0000-7FFF"
 // ---------------------------------------------------------------------------
 
-/// A afirmação central da spec, endereço por endereço.
-///
-/// Varre os 32768 endereços em vez de amostrar as bordas: qualquer deslocamento
-/// (`addr - 0x4000` no segundo banco, um off-by-one na fronteira) tem de doer
-/// aqui, e um `for` sobre a janela inteira é mais barato de ler do que a lista
-/// de casos que se acha que cobre o assunto.
 #[test]
 fn maps_the_whole_32_kib_directly() {
     let rom = patterned_rom(32 * KIB);
@@ -87,7 +47,6 @@ fn maps_the_whole_32_kib_directly() {
     }
 }
 
-/// 32 KiB é o teto, e o teto é inclusivo — a spec diz "not more than 32 KiB".
 #[test]
 fn rejects_a_rom_one_byte_past_32_kib() {
     let len = 32 * KIB + 1;
@@ -100,13 +59,6 @@ fn rejects_a_rom_one_byte_past_32_kib() {
     );
 }
 
-/// ROM menor que a janela: o que sobra não é ROM nenhuma.
-///
-/// A spec descreve o cartucho de 32 KiB e **não diz** o que responde acima do
-/// fim de um chip menor. Espelhar (`addr % rom.len()`) seria inventar fiação;
-/// barramento aberto é o que o Pan Docs documenta para leitura sem quem
-/// responda (§ MBC1, `$A000`–`$BFFF`: "reads return open bus values (often
-/// $FF, but not guaranteed)").
 #[test]
 fn reads_past_the_end_of_a_short_rom_are_open_bus() {
     let rom = patterned_rom(16 * KIB);
@@ -126,9 +78,6 @@ fn reads_past_the_end_of_a_short_rom_are_open_bus() {
     }
 }
 
-/// Sem MBC não há registradores — e as janelas que o MBC1 usaria para eles são
-/// justamente `$0000`–`$1FFF`, `$2000`–`$3FFF`, `$4000`–`$5FFF` e
-/// `$6000`–`$7FFF` (4.2). Escrever ali num cartucho ROM ONLY não muda nada.
 #[test]
 fn writes_to_the_rom_area_are_ignored() {
     let rom = patterned_rom(32 * KIB);
@@ -148,7 +97,6 @@ fn writes_to_the_rom_area_are_ignored() {
 // RAM externa — fora do escopo do 0.4, e o teste diz que é de propósito
 // ---------------------------------------------------------------------------
 
-/// `$A000`–`$BFFF` sem RAM conectada: ninguém responde, nada é guardado.
 #[test]
 fn the_external_ram_window_is_open_bus() {
     let mut cart = nombc(patterned_rom(32 * KIB));
@@ -168,10 +116,6 @@ fn the_external_ram_window_is_open_bus() {
     }
 }
 
-/// Endereços que o `Bus` (1.2) nunca vai rotear para cá. O contrato do trait é
-/// definido só nas duas janelas do cartucho; responder barramento aberto no
-/// resto é para o dia em que alguém errar o roteamento — pânico em `read` de
-/// emulador é o pior lugar possível para descobrir isso.
 #[test]
 fn addresses_outside_the_cartridge_are_open_bus() {
     let cart = nombc(patterned_rom(32 * KIB));
@@ -201,12 +145,6 @@ fn load_dispatches_rom_only_to_nombc() {
     );
 }
 
-/// Tipo com mapeador que ainda não existe, e tipo que não existe em lugar
-/// nenhum, dão o mesmo veredito: `load` não monta.
-///
-/// O caso `$42` importa por si: código fora da tabela do Pan Docs faz
-/// `CartridgeType::name()` devolver `None`, e tratar "não sei o que é" como
-/// ROM ONLY seria rodar um cartucho desconhecido como se fosse simples.
 #[test]
 fn load_refuses_types_it_cannot_map() {
     for code in [0x01u8, 0x03, 0x05, 0x11, 0x13, 0x19, 0x42, 0xFF] {
@@ -225,15 +163,6 @@ fn load_refuses_types_it_cannot_map() {
     }
 }
 
-/// `$08` e `$09` são cartucho sem MBC **com** RAM — a segunda frase da § No
-/// MBC. Ainda assim são recusados, e o motivo está na tabela de `$0147`:
-///
-/// > No licensed cartridge makes use of this option. The exact behavior is
-/// > unknown.
-///
-/// Montá-los como ROM ONLY daria um cartucho cuja RAM lê `$FF` e engole
-/// escrita: o jogo perderia o save em silêncio. Recusar é a resposta honesta
-/// enquanto não houver comportamento documentado para copiar.
 #[test]
 fn load_refuses_rom_plus_ram_because_the_spec_calls_it_unknown() {
     for code in [0x08u8, 0x09] {
@@ -265,10 +194,6 @@ fn load_propagates_the_header_error() {
     );
 }
 
-/// Quem trava a máquina com checksum errado é o boot ROM, e este emulador o
-/// pula (1.2). O mapeador não é juiz de cabeçalho: recusar aqui tornaria
-/// indiagnosticável justamente a ROM corrompida que alguém quer investigar —
-/// a mesma decisão que o `gb-cli info` tomou na 0006.
 #[test]
 fn load_does_not_judge_the_header_checksum() {
     let mut rom = rom_of_type(ROM_ONLY, 32 * KIB);
@@ -280,8 +205,6 @@ fn load_does_not_judge_the_header_checksum() {
     );
 }
 
-/// Estes erros vão parar na tela do usuário via `gb-cli`. Mensagem que não diz
-/// qual byte ou qual tamanho causou o problema obriga quem lê a ir ao código.
 #[test]
 fn error_messages_carry_the_offending_value() {
     let too_large = NoMbc::new(patterned_rom(64 * KIB))

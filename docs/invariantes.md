@@ -352,11 +352,16 @@
   `RLCA`/`RRCA`/… (`00 ddd 111`) — e **nenhum teste de comportamento do
   sub-item os menciona**, porque eles não são deste sub-item. A bateria mediu:
   os dois mutantes de máscara só morrem na varredura dos 256.
-- **`decoded_elsewhere` é duplicada de propósito em cada arquivo de sub-item.**
-  A lista de "opcodes que outro item já decodifica" cresce a cada PR, e extraí-la
-  para um lugar só faria a atualização acontecer sozinha. O controle negativo
-  existe justamente para obrigar quem acrescenta opcode a vir declarar o que
-  acrescentou; um ponto de verdade compartilhado tiraria isso dele.
+- **`decoded_elsewhere` mora só em `tests/support/mod.rs` desde a 0026 — a
+  duplicação de propósito foi revertida.** Esta mesma linha, até a 0025,
+  defendia o oposto: que a cópia por arquivo obrigava quem acrescentasse
+  opcode a vir declarar o que acrescentou. O ROADMAP 0.6 decidiu que o custo
+  cresceu rápido demais (9 arquivos na 0023, 12 na 0025) para o benefício
+  continuar valendo a pena, e consolidou. Cada consumidor ganha
+  `mod support; use support::decoded_elsewhere;` — opcode novo ainda se
+  declara, só que num lugar só. Ver nota 47: consolidar tirou uma proteção
+  acidental que a redundância dava de graça, e os 12 `sweep`s precisaram de
+  um ramo a mais para não perdê-la.
 - **Ainda não há tabela de micro-operações, e a data mudou.** A 0013 previu que
   ela nasceria no 1.4. Com o 1.4 quebrado em quatro, o 1.4a tem três formas e
   todas da mesma família (`fetch` + no máximo um acesso), e generalizar dali
@@ -615,3 +620,10 @@
   decodifica. O procedimento (procurar por `0x00..=0xFF`/`for opcode in`)
   continua sendo o que acha todos de uma vez.
 
+- **Os 12 `sweep`s verificam a alegação positiva de `decoded_elsewhere`, não só
+  a negativa.** Até a 0026, cada `sweep` só testava `!decoded_elsewhere(opcode)
+  → assert Undecoded`; se a função dissesse `true`, o `sweep` pulava em
+  silêncio, sem checar se o opcode estava mesmo decodificado. Agora o
+  `if/else if` tem um ramo a mais: `decoded_elsewhere(opcode) → assert None`.
+  A bateria de mutação da 0026 é o que provou que o ramo que faltava importava
+  — ver nota 47.

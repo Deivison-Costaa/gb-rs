@@ -11,6 +11,9 @@ use gb_core::bus::Bus;
 use gb_core::cart::{CartridgeHeader, NoMbc};
 use gb_core::cpu::{Cpu, Flag, Lockup, Registers};
 
+mod support;
+use support::decoded_elsewhere;
+
 const ENTRY: usize = 0x0100;
 const ENTRY_ADDRESS: u16 = 0x0100;
 
@@ -327,27 +330,6 @@ fn no_opcode_of_this_item_writes_to_memory() {
     }
 }
 
-fn decoded_elsewhere(opcode: u8) -> bool {
-    opcode == 0x00
-        || opcode == 0xC3
-        || ((0x40..=0x7F).contains(&opcode) && opcode != 0x76)
-        || opcode & 0b1100_0111 == 0b0000_0110
-        || opcode & 0b1100_0111 == 0b0000_0010
-        || opcode & 0b1100_1111 == 0b0000_0001
-        || opcode & 0b1100_1111 == 0b1100_0101
-        || opcode & 0b1100_1111 == 0b1100_0001
-        || (0x80..=0x9F).contains(&opcode)
-        || (0xB8..=0xBF).contains(&opcode)
-        || matches!(
-            opcode,
-            0x08 | 0xE0 | 0xE2 | 0xEA | 0xF0 | 0xF2 | 0xF9 | 0xFA
-        )
-        || matches!(
-            opcode,
-            0xC6 | 0xCE | 0xD6 | 0xDE | 0xE6 | 0xEE | 0xF6 | 0xFE
-        )
-}
-
 #[test]
 fn the_blocks_this_item_decodes_are_exactly_the_twenty_four_opcodes_of_100_101_and_110() {
     const ILLEGAL: [u8; 11] = [
@@ -377,7 +359,13 @@ fn the_blocks_this_item_decodes_are_exactly_the_twenty_four_opcodes_of_100_101_a
                 Some(Lockup::IllegalOpcode(opcode)),
                 "${opcode:02X} continua sendo um dos onze que não existem"
             );
-        } else if !decoded_elsewhere(opcode) {
+        } else if decoded_elsewhere(opcode) {
+            assert_eq!(
+                cpu.lockup(),
+                None,
+                "${opcode:02X}: decodificado por outro sub-item"
+            );
+        } else {
             assert_eq!(
                 cpu.lockup(),
                 Some(Lockup::UndecodedOpcode(opcode)),

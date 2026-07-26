@@ -17,7 +17,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
   - [x] 0.3b `gb-cli info <rom>`: leitura do arquivo, parsing de argumentos, impressão e códigos de saída.
 - [x] 0.4 `Cartridge` trait + `NoMbc` (ROM-only, 32KB). A RAM opcional da § No MBC **não** entrou: os tipos que a declaram (`$08`/`$09`) são os que o Pan Docs marca como comportamento desconhecido — ver [doc da 0007](docs/iterations/0007-cart-nombc.md).
 - [x] 0.5 `scripts/fetch-test-roms.sh`: baixa blargg, mooneye, dmg-acid2 para `tests/roms/`. Entregue pelo scaffold; a [0008](docs/iterations/0008-fetch-test-roms-guard.md) verificou (121 ROMs, três suítes) e cobriu com teste hermético. O fallback ainda entrega menos do que promete — `STATUS.md`, nota 17.
-- [ ] 0.6 Consolidar o controle negativo de decodificação. Hoje a lista de "este opcode é decodificado em outro arquivo" está **duplicada em 12 arquivos** de teste (`decoded_elsewhere` na maioria, `previously_decoded` em um), e cada opcode novo obriga a editar os 12 — a [0022](docs/iterations/0022-cpu-add-adc-r8.md) e a [0023](docs/iterations/0023-cpu-sub-sbc-cp-r8.md) registraram o atrito de forma independente, e na 0023 o arquivo de nome divergente quase escapou do `grep`. Extrair para um helper único compartilhado pelos testes, de modo que opcode novo se declare **num lugar só**. O teste que guarda isso é a própria varredura dos 256 opcodes: ela tem de continuar reprovando opcode decodificado duas vezes ou nenhuma.
+- [x] 0.6 Consolidar o controle negativo de decodificação. `decoded_elsewhere` mora em `tests/support/mod.rs`; os 12 arquivos consumidores usam `mod support; use support::decoded_elsewhere;`. [0026](docs/iterations/0026-decoded-elsewhere-single-source.md).
 
 ## M1 — CPU (sem gráficos)
 

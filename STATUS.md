@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0004 — a série gerada pela CI é publicada em `scoreboard-data` ([doc](docs/iterations/0004-ci-serie-persistida.md))
-**Próxima tarefa:** ROADMAP 0.3 — parser do header do cartucho (0x0100–0x014F) + `gb-cli info <rom>`. Primeiro item com spec de hardware: ler `docs/reference/08-cartridges-mbc.md` antes (R1).
+**Última iteração concluída:** 0005 — `CartridgeHeader::parse` lê o cabeçalho do cartucho ([doc](docs/iterations/0005-cart-header.md))
+**Próxima tarefa:** ROADMAP 0.3b — `gb-cli info <rom>`: leitura do arquivo, parsing de argumentos, impressão e códigos de saída. O parser já existe e é puro; falta a casca de I/O. Ler `docs/reference/08-cartridges-mbc.md` se for imprimir campo novo (R1).
 **Marco atual:** M0 — Fundação
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -103,6 +103,22 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
   binário existir, conforme R5) — os itens 0.3 e 1.12 têm de cumprir:
   `gb-cli run <rom> --headless --max-cycles <n>`, saindo `0` = pass, `1` = fail,
   outro = crash, com o token `cycles=<n>` em algum ponto da saída.
+- **No `cart`, código desconhecido não é erro; `None` não é número inventado.**
+  `CartridgeType`/`RomSize`/`RamSize` guardam o byte cru e devolvem `None`
+  quando ele não está na tabela do Pan Docs — o único erro de `parse` é
+  estrutural (`TooShort`). Em particular, RAM `$01` e ROM `$52`/`$53`/`$54` são
+  `None` **de propósito**: a spec diz que são valores sem cartucho conhecido e
+  de origem desconhecida. Não os mapeie "para ficar completo" — o campo vai ser
+  impresso e lido como medição. Ver erros #1 e #2 da
+  [0005](docs/iterations/0005-cart-header.md).
+- **Tabela de RAM não é fórmula.** `$04` são 128 KiB e `$05` são 64 KiB: a
+  tabela não é monotônica, e qualquer `32 KiB << n` acerta parte dela e erra
+  esses dois. `ram_size_is_a_table_and_it_is_not_monotonic` guarda.
+- **O título do cartucho é o trecho inicial de ASCII imprimível.** Nada no
+  cabeçalho diz se ele tem 16, 15 ou 11 bytes úteis — o que sobra é código do
+  fabricante (`$013F`–`$0142`, ASCII!) e CGB flag (`$0143`). Parar no primeiro
+  byte não imprimível é diferente de filtrar os não imprimíveis, e a diferença
+  só aparece com título curto; ver erro #3 da 0005.
 
 ## Bloqueios
 
@@ -172,6 +188,14 @@ contorno previsto no prompt de bootstrap.
    prova o vermelho com a mensagem certa.** Guarda nova deve afirmar o
    *motivo* da falha, não só o código de saída.
 
+   **Terceira reincidência na 0005**, agora medida em vez de suposta: das 12
+   mutações aplicadas ao parser, 11 foram pegas e **1 passou verde**, apontando
+   o único caso que a suíte de 19 testes não cobria. Rodar a bateria custa
+   minutos e diz *qual* teste falta — reler os testes com mais atenção não diz.
+   **Inclua sempre um controle negativo** (mutação equivalente, que deve ficar
+   verde): sem ele, "tudo foi pego" não distingue suíte boa de suíte que quebra
+   com qualquer mudança.
+
 9. **Bash: `declare -A m` sem atribuição é variável NÃO associada.** Sob
    `set -u`, `${#m[@]}` e `${!m[@]}` abortam o script — inclusive dentro do
    `if` escrito para tratar o caso vazio. Sempre `declare -A m=()`.
@@ -201,3 +225,10 @@ contorno previsto no prompt de bootstrap.
     `protected branch hook declined`, procede; se passar, o 0.2c podia ter sido
     literal e vale registrar. Custa uma execução; ninguém fez ainda. Ver nota 7
     para o preço de anotar inferência como medição.
+
+12. **O parser do cabeçalho nunca viu ROM de verdade.** A 0005 o validou só
+    contra ROMs sintéticas montadas nos testes — o que fecha a fórmula, não a
+    realidade. O 0.3b roda sobre as 121 ROMs de `tests/roms/` e é o primeiro
+    contato com cabeçalho escrito por outra pessoa. A regra do título
+    (invariante acima) é a mais provável de destoar; se destoar, o dado é do
+    doc da 0006, não conserto silencioso.

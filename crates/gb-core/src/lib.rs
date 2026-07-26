@@ -7,10 +7,14 @@
 //!
 //! Hoje o crate lê o cabeçalho do cartucho (ROADMAP 0.3a), monta o cartucho
 //! sem mapeador (0.4), tem o banco de registradores da CPU (1.1), o barramento
-//! que decide quem responde a cada endereço (1.2a) e o estado com que a máquina
-//! começa a rodar quando se pula a boot ROM: os registradores da CPU (1.2b-i) e
-//! os de hardware (1.2b-ii). Falta o laço de M-cycles (1.3), que é quem vai
-//! ligar a CPU ao `Bus`.
+//! que decide quem responde a cada endereço (1.2a), o estado com que a máquina
+//! começa a rodar quando se pula a boot ROM — registradores da CPU (1.2b-i) e
+//! de hardware (1.2b-ii) — e o laço que faz a CPU andar sobre o `Bus`, um
+//! M-cycle por chamada ([`cpu::Cpu::step`], 1.3).
+//!
+//! O decodificador conhece duas instruções, `NOP` e `JP u16`. As outras 245
+//! param a CPU com [`cpu::Lockup::UndecodedOpcode`] e chegam nos itens 1.4 a
+//! 1.11.
 
 #![forbid(unsafe_code)]
 

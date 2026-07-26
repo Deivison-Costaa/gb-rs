@@ -1,5 +1,7 @@
 //! MBC1 minimal: ROM banking, sem RAM. spec: `docs/reference/08-cartridges-mbc.md` § MBC1.
 //! ROADMAP 4.2, adiantado parcialmente na 0046 para destravar o 1.13.
+//! Testes de banking pertencem ao 4.2; sem eles clippy enxerga dead code.
+#![allow(dead_code)]
 
 use std::fmt;
 use std::ops::RangeInclusive;

@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0005 — `CartridgeHeader::parse` lê o cabeçalho do cartucho ([doc](docs/iterations/0005-cart-header.md))
-**Próxima tarefa:** ROADMAP 0.3b — `gb-cli info <rom>`: leitura do arquivo, parsing de argumentos, impressão e códigos de saída. O parser já existe e é puro; falta a casca de I/O. Ler `docs/reference/08-cartridges-mbc.md` se for imprimir campo novo (R1).
+**Última iteração concluída:** 0006 — `gb-cli info <rom>` ([doc](docs/iterations/0006-cli-info.md)). Com ela o **0.3 fecha**.
+**Próxima tarefa:** ROADMAP 0.4 — `Cartridge` trait + `NoMbc` (ROM-only, 32 KiB) em `gb-core`. É a primeira vez que o core vai **usar** o `$0147` em vez de só nomeá-lo. Ler `docs/reference/08-cartridges-mbc.md` § No MBC (linha ~523) antes de escrever (R1).
 **Marco atual:** M0 — Fundação
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -53,8 +53,20 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
   M1, quando houver tempo de execução real para justificar o custo de CI.
 - **Códigos de saída do `gb-cli`** (contrato do `scoreboard.sh`): `0` pass,
   `1` fail, `124` timeout, **qualquer outro** = erro do emulador. Enquanto não
-  houver emulador, o binário sai `2`. Nunca reaproveite `0`/`1` para "não
+  houver emulador, `run` sai `2`. Nunca reaproveite `0`/`1` para "não
   implementado" — isso planta um veredito falso no `scoreboard.csv`.
+  **Os erros do próprio `gb-cli` usam `sysexits.h`:** `64` uso, `65` dado
+  inválido (ROM lida, conteúdo não serve), `66` entrada ilegível (caminho
+  errado, diretório, sem permissão). Começam em 64 justamente para não colidir
+  com código de aplicação. Moram em `crates/gb-cli/src/exit.rs`, com o porquê;
+  `crates/gb-cli/tests/info_command.rs` guarda cada um, inclusive o `2` do
+  `run` — que some sem ninguém notar quando se mexe no despacho de argumentos.
+- **`gb-cli info <rom>` relata, não julga.** Tipo de cartucho fora da tabela,
+  RAM sem tamanho atestado, checksum que não bate: tudo sai `0` e vira texto.
+  O único erro de conteúdo é estrutural (ROM que acaba antes de `$014F` → `65`).
+  A ROM que trava o boot ROM é exatamente a que alguém quer diagnosticar.
+  Relatório em `stdout`, erro em `stderr`, e com erro o `stdout` fica **vazio**:
+  relatório pela metade tem cara de dado bom.
 - **Os três passos de qualidade do job `check` são incondicionais.** Nada de
   `if:` em `cargo fmt` / `cargo clippy -- -D warnings` / `cargo test` — passo
   pulado deixa o job verde sem ter medido nada, e é `check` verde que a proteção
@@ -118,7 +130,10 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
   cabeçalho diz se ele tem 16, 15 ou 11 bytes úteis — o que sobra é código do
   fabricante (`$013F`–`$0142`, ASCII!) e CGB flag (`$0143`). Parar no primeiro
   byte não imprimível é diferente de filtrar os não imprimíveis, e a diferença
-  só aparece com título curto; ver erro #3 da 0005.
+  só aparece com título curto; ver erro #3 da 0005. **Validado contra ROM real
+  na 0006:** `blargg/mem_timing-2/rom_singles/03-modify_timing.gb` tem
+  `03-MODIFY_TIMIN` seguido de `$80` em `$0143` — sem a regra, o CGB flag iria
+  impresso junto.
 
 ## Bloqueios
 
@@ -226,9 +241,35 @@ contorno previsto no prompt de bootstrap.
     literal e vale registrar. Custa uma execução; ninguém fez ainda. Ver nota 7
     para o preço de anotar inferência como medição.
 
-12. **O parser do cabeçalho nunca viu ROM de verdade.** A 0005 o validou só
-    contra ROMs sintéticas montadas nos testes — o que fecha a fórmula, não a
-    realidade. O 0.3b roda sobre as 121 ROMs de `tests/roms/` e é o primeiro
-    contato com cabeçalho escrito por outra pessoa. A regra do título
-    (invariante acima) é a mais provável de destoar; se destoar, o dado é do
-    doc da 0006, não conserto silencioso.
+12. ~~**O parser do cabeçalho nunca viu ROM de verdade.**~~ **Resolvida na
+    0006, e a previsão errou para o lado bom.** As 121 ROMs de `tests/roms/`
+    passaram por `gb-cli info`: 121/121 parseadas, 121/121 com checksum
+    válido, 121/121 com o tamanho declarado em `$0148` igual ao tamanho do
+    arquivo. A regra do título — a apontada como mais provável de destoar —
+    **não destoou**, e ganhou uma ROM real que a discrimina (ver invariante).
+
+    **O que a varredura não cobriu:** `desconhecido` aparece **zero** vezes nas
+    121. Os ramos de RAM `$01`, ROM `$52` e tipo fora da tabela continuam
+    cobertos só por ROM sintética. O corpus é homogêneo — toolchain de homebrew
+    moderna, não o mercado de cartuchos. Não conclua da varredura que aqueles
+    ramos são código morto.
+
+13. **A MSRV é promessa que ninguém verifica.** `rust-version = "1.85"` está no
+    `Cargo.toml` e **nada** o testa: a CI usa `dtolnay/rust-toolchain@stable`,
+    então API nova compila, passa no clippy e passa nos testes. A 0006 escreveu
+    `u32::is_multiple_of` (Rust 1.87) e só não entrou porque foi notado à mão —
+    ironicamente, é o que o próprio clippy recomenda no lugar de `% == 0`.
+    Fecharia com um job de CI em `1.85` ou um `cargo-msrv`; nenhum item do
+    ROADMAP cobre isso hoje. Ou se fecha, ou se apaga a linha do `Cargo.toml`:
+    declaração que ninguém checa é pior que declaração nenhuma.
+
+14. **Bateria de mutação: o cargo decide rebuild por mtime.** Reverter o fonte
+    com `mv arquivo.bak arquivo` — ou aplicar uma mutação que falha em silêncio
+    — devolve o arquivo com mtime **anterior** ao do artefato, e o `cargo test`
+    seguinte roda contra o binário do mutante **anterior**. Aconteceu duas vezes
+    na 0006 (erros #5 e #6): uma varredura leu `64 MiB` num cartucho e uma
+    mutação do checksum recebeu o veredito da mutação de código de saída. O
+    modo de falha é silencioso porque o resultado existe e é plausível — só
+    pertence a outro experimento. Escreva o mutante com `touch`/`os.utime`
+    explícito, e confira que a substituição casou **exatamente uma vez** antes
+    de rodar.

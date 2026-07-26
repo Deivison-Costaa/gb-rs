@@ -73,7 +73,38 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     no RED→GREEN, retomada e concluída por Kimi K3/OpenCode — ver
     [doc da 0017](docs/iterations/0017-cpu-ld-absolute-ff00.md) e `STATUS.md`,
     nota 33.
-- [ ] 1.5 Opcodes: loads 16-bit + stack (PUSH/POP).
+- [ ] 1.5 Opcodes: loads 16-bit + stack (PUSH/POP). **Quebrado em quatro na
+  0018:** o grupo `x16/lsm` da tabela de gbops tem **14** opcodes
+  (`01 08 11 21 31 C1 C5 D1 D5 E1 E5 F1 F5 F9`) e **cinco** formas de M-cycle
+  distintas — 2, 3, 4 e 5 M-cycles. `LD HL,SP+i8` (`$F8`) **não** é deste grupo:
+  gbops o classifica em `x16/alu`, e ele é o 1.7. A quebra é por **regra de
+  decodificação**, como a do 1.4: cada sub-item é um bloco de codificação com
+  uma forma própria, e sobram dois avulsos. 14 = 4 + 4 + 4 + 2.
+  - [x] 1.5a `LD r16,u16` (`$01 $11 $21 $31`) — o bloco `00 rr 0001`
+    (§ Block 0 do `02-cpu.md`), 3 M-cycles. Primeiro uso do placeholder `r16`
+    (`bc de hl sp`, e não `af` — esse é o `r16stk` do 1.5b/1.5c). A coluna
+    escreve **metade do par por M-cycle** (`read(u16:lower->C)` →
+    `read(u16:upper->B)`): latchar os dois bytes e escrever o par no fim dá o
+    mesmo estado final e os mesmos 12 T-cycles. **É o que eu escrevi de
+    memória**, copiando o `JP u16` do mesmo arquivo — que latcha porque tem um
+    quarto M-cycle `internal`, e este não tem. 7 dos 8 testes passam contra essa
+    versão; ver [doc da 0018](docs/iterations/0018-cpu-ld-r16-u16.md) e
+    `STATUS.md`, nota 34. A seta da coluna faz parte do passo: `read(u16:lower)`
+    sem seta (o `$FA`) é que é latch.
+  - [ ] 1.5b `PUSH r16stk` (`$C5 $D5 $E5 $F5`) — o bloco `11 rr 0101`,
+    4 M-cycles: `fetch → internal → write(upper->(--SP)) → write(lower->(--SP))`.
+    Primeiro `internal` do projeto que não é o último passo, e primeiro operando
+    que é registrador e endereço ao mesmo tempo com o `SP` mudando **entre** os
+    dois acessos. `r16stk` tem `af` no índice 3.
+  - [ ] 1.5c `POP r16stk` (`$C1 $D1 $E1 $F1`) — o bloco `11 rr 0001`,
+    3 M-cycles: `fetch → read((SP++)->lower) → read((SP++)->upper)`. É onde
+    `POP AF` esbarra na decisão do 1.1 de **não** mascarar o nibble baixo de `F`
+    — a previsão registrada (quem cobra é a blargg `cpu_instrs/01-special` no
+    1.13) continua de pé e não deve ser retroajustada aqui.
+  - [ ] 1.5d Os dois avulsos: `LD SP,HL` (`$F9`, 2 M-cycles,
+    `fetch → internal`) e `LD (u16),SP` (`$08`, **5** M-cycles e dois bytes
+    escritos em endereços consecutivos — a instrução mais longa do projeto até
+    aqui). Nenhum dos dois cabe num bloco `rr`.
 - [ ] 1.6 Opcodes: ALU 8-bit (ADD/ADC/SUB/SBC/AND/OR/XOR/CP/INC/DEC) — **atenção ao half-carry**.
 - [ ] 1.7 Opcodes: ALU 16-bit + `ADD SP,e8` / `LD HL,SP+e8` (flags contraintuitivas).
 - [ ] 1.8 Opcodes: rotações e shifts (RLCA/RRCA/RLA/RRA — divergem do prefixo CB no flag Z).

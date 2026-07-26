@@ -80,6 +80,34 @@ impl R16Mem {
     }
 }
 
+const LD_R16_U16_MASK: u8 = 0b1100_1111;
+const LD_R16_U16_PATTERN: u8 = 0b0000_0001;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum R16 {
+    Bc,
+    De,
+    Hl,
+    Sp,
+}
+
+impl R16 {
+    const fn from_opcode(opcode: u8) -> Self {
+        match (opcode >> 4) & 0b11 {
+            0 => Self::Bc,
+            1 => Self::De,
+            2 => Self::Hl,
+            _ => Self::Sp,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ImmediatePair {
+    ReadLowByte,
+    ReadHighByte,
+}
+
 // $E2 — 1 byte: C é o operando (erro #1 da 0017 — ver docs/iterations/0017).
 const LDH_C_A: u8 = 0xE2;
 const LDH_A_C: u8 = 0xF2;
@@ -128,6 +156,7 @@ enum State {
     // O par viaja (não o endereço) para o HL± não acontecer antes do M2 (ver docs/iterations/0016).
     LoadFromR16Mem(R16Mem),
     StoreToR16Mem(R16Mem),
+    LoadImmediatePair(R16, ImmediatePair),
     HighPageC(Direction),
     HighPageImmediate(Direction, HighPageImmediate),
     Absolute(Direction, Absolute),
@@ -169,6 +198,7 @@ impl Cpu {
             State::StoreImmediateToHl(phase) => self.store_immediate_to_hl(bus, phase),
             State::LoadFromR16Mem(source) => self.load_from_r16_mem(bus, source),
             State::StoreToR16Mem(dest) => self.store_to_r16_mem(bus, dest),
+            State::LoadImmediatePair(target, phase) => self.load_immediate_pair(bus, target, phase),
             State::HighPageC(direction) => self.high_page_c(bus, direction),
             State::HighPageImmediate(direction, phase) => {
                 self.high_page_immediate(bus, direction, phase)
@@ -190,6 +220,7 @@ impl Cpu {
             | State::StoreImmediateToHl(_)
             | State::LoadFromR16Mem(_)
             | State::StoreToR16Mem(_)
+            | State::LoadImmediatePair(..)
             | State::HighPageC(_)
             | State::HighPageImmediate(..)
             | State::Absolute(..) => None,
@@ -215,6 +246,9 @@ impl Cpu {
             }
             _ if opcode & LD_R16MEM_MASK == LOAD_R16MEM_PATTERN => {
                 State::LoadFromR16Mem(R16Mem::from_opcode(opcode))
+            }
+            _ if opcode & LD_R16_U16_MASK == LD_R16_U16_PATTERN => {
+                State::LoadImmediatePair(R16::from_opcode(opcode), ImmediatePair::ReadLowByte)
             }
             LDH_C_A => State::HighPageC(Direction::Store),
             LDH_A_C => State::HighPageC(Direction::Load),
@@ -328,6 +362,41 @@ impl Cpu {
                 self.registers.set_hl(address.wrapping_sub(1));
                 address
             }
+        }
+    }
+
+    // Meia metade por M-cycle: `read(u16:lower->C)` → `read(u16:upper->B)`.
+    // Sem latch — latchar os dois e escrever o par no M3 é o erro #1 da 0018.
+    fn load_immediate_pair(&mut self, bus: &Bus, target: R16, phase: ImmediatePair) -> State {
+        let byte = self.read_at_pc(bus);
+
+        match phase {
+            ImmediatePair::ReadLowByte => {
+                self.write_r16_low(target, byte);
+                State::LoadImmediatePair(target, ImmediatePair::ReadHighByte)
+            }
+            ImmediatePair::ReadHighByte => {
+                self.write_r16_high(target, byte);
+                State::Fetch
+            }
+        }
+    }
+
+    const fn write_r16_low(&mut self, which: R16, value: u8) {
+        match which {
+            R16::Bc => self.registers.c = value,
+            R16::De => self.registers.e = value,
+            R16::Hl => self.registers.l = value,
+            R16::Sp => self.registers.sp = (self.registers.sp & 0xFF00) | value as u16,
+        }
+    }
+
+    const fn write_r16_high(&mut self, which: R16, value: u8) {
+        match which {
+            R16::Bc => self.registers.b = value,
+            R16::De => self.registers.d = value,
+            R16::Hl => self.registers.h = value,
+            R16::Sp => self.registers.sp = (self.registers.sp & 0x00FF) | ((value as u16) << 8),
         }
     }
 

@@ -3,10 +3,10 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0029 — `ADD HL,r16`, os 4 opcodes `00 rr 1001` (`$09 $19 $29 $39`) ([doc](docs/iterations/0029-add-hl-r16.md)). Primeira ALU de 16 bits que calcula flags: `H`/`C` sobre o par inteiro (carry do bit 11 e do bit 15), `N=0` literal, `Z` intocada. Mesma forma de M-cycle do 1.7a/1.7b: `fetch` computa o par, seta as flags e escreve a metade baixa; `internal` escreve a alta. **Erro de hardware: nenhum.** Erro de teste: 0xF000+0x1000 não estoura bit 11 (bits 0–11 de ambos são zero); o `ADD HL,HL` pisa no próprio source. Bateria: **6/6 pegos, 1/1 controles verdes**.
-**Iteração anterior:** 0028 — `INC`/`DEC r16`, os 8 opcodes `00 rr 0011`/`00 rr 1011` ([doc](docs/iterations/0028-cpu-inc-dec-r16.md)).
-**Duas iterações atrás:** 0027 — `INC`/`DEC r8`, os 16 opcodes `00 ddd 100`/`00 ddd 101` ([doc](docs/iterations/0027-cpu-inc-dec-r8.md)).
-**Próxima tarefa:** ROADMAP **1.7c** — `ADD SP,e8` (`$E8`), 1 opcode, **4** M-cycles (`fetch → read(i8) → internal → write`). `Z=0`/`N=0` literais; `H`/`C` calculados sobre o **byte baixo** de `SP` + `i8` (regra de 8 bits, não o par inteiro do 1.7b — essa é a armadilha central). `02-cpu.md` não tem seção dedicada; a tabela de opcodes (linha `$E8`) dá as flags. O `i8` é tratado como signed: `0xFF` = `-1`. O `write` do M4 escreve o resultado **de volta em `SP`** pelo barramento — não é um par de registrador como o 1.7a/1.7b, então a forma não é a mesma.
+**Última iteração concluída:** 0030 — `ADD SP,i8` (`$E8`), 4 M-cycles ([doc](docs/iterations/0030-add-sp-e8.md)). `Z`/`N` = `0` literais; `H`/`C` calculados sobre o **byte baixo** de `SP` + `i8` (carry do bit 3 e do bit 7), não sobre o par de 16 bits como o 1.7b — **erro de primeira tentativa: assumi H/C de 16 bits, a spec corrigiu**. Segundo erro: escrevi a metade baixa de SP no M2 (ReadImmediate); a coluna põe no M3 (internal). Bateria: **6/6 pegos, 1/1 controles verdes**.
+**Iteração anterior:** 0029 — `ADD HL,r16` ([doc](docs/iterations/0029-add-hl-r16.md)).
+**Duas iterações atrás:** 0028 — `INC`/`DEC r16` ([doc](docs/iterations/0028-cpu-inc-dec-r16.md)).
+**Próxima tarefa:** ROADMAP **1.7d** — `LD HL,SP+e8` (`$F8`), 1 opcode, **3** M-cycles (`fetch → read(i8) → internal`). Mesma coluna de flags do 1.7c (`Z=0`/`N=0`, `H`/`C` sobre byte baixo), mas um M-cycle a menos porque o destino é `HL` (par de registrador), não `SP` (que exige write pelo barramento). O 1.7c estabeleceu o padrão para os dois: `ReadImmediate` calcula flags e latcha; `Internal` escreve a metade baixa; a diferença é que `$F8` não tem o quarto M-cycle e o destino é `HL`. A armadilha central é a mesma do 1.7c (H/C de 8 bits, não 16), e o teste pode reaproveitar a estrutura. `decoded_elsewhere` já inclui `$F8`? Não — `$F8` ainda não está em `decoded_elsewhere`, então o sweep da iteração vai precisar adicioná-lo.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -37,9 +37,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **314** (eram **304** antes da 0028). Este
-número não é o placar — ele mede o que o projeto afirma sobre si mesmo, não o
-que o hardware cobra.
+Testes do workspace: **321** (eram **314** antes da 0030).
 
 ## Invariantes
 

@@ -218,7 +218,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     bit 15) — ao contrário do `ADD SP,e8`/`LD HL,SP+e8` do 1.7c/1.7d, que
     calculam sobre o byte baixo. `Z` não é afetada. Mesma forma de M-cycle do
     1.7a.
-  - [ ] 1.7c `ADD SP,e8` (`$E8`) — 1 opcode, 4 M-cycles
+   - [x] 1.7c `ADD SP,e8` (`$E8`) — 1 opcode, 4 M-cycles
     (`fetch → read(i8) → internal → write`), o mais longo do grupo. `Z`/`N`
     literais `0`; `H`/`C` calculados sobre o **byte baixo** de `SP` somado ao
     imediato — regra de 8 bits sobre um valor de 16, não o par inteiro do

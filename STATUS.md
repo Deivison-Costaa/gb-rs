@@ -3,10 +3,10 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0036 — BIT (`CB 40`–`CB 7F`) ([doc](docs/iterations/0036-cb-bit.md)). 64 opcodes, primeiro mecanismo novo em `cb_fetch`: o dispatch deixa de ser plano (`(opcode >> 3) & 0b11111`) e passa a ser hierárquico por bits 7-6 (`0b00 → rotações`, `0b01 → BIT`). Novo estado `CbBit(u8)` para a leitura do `(HL)` sem write-back (12 T-cycles, 3 M-cycles). Flags: `Z` = bit testado, `N=0`, `H=1`, `C` intocado — `H=1` é a primeira flag H não-zero numa operação CB. A armadilha do dispatch (bits 7-6 × bits 5-3) estava pré-anunciada no handoff e foi neutralizada de primeira. O comportamento do BIT é idêntico ao Z80 — sem divergência de spec. Bateria: **7/7 pegos, 2/2 controles verdes**.
-**Iteração anterior:** 0035 — CB SLA + SRA + SWAP + SRL (`CB 20`–`CB 3F`) ([doc](docs/iterations/0035-cb-sla-sra-swap-srl.md)).
-**Duas iterações atrás:** 0034 — CB RRC + RL + RR (`CB 08`–`CB 1F`) ([doc](docs/iterations/0034-cb-rrc-rl-rr.md)).
-**Próxima tarefa:** ROADMAP **1.9e** — RES (`CB 80`–`CB BF`, 64 opcodes). Bits 7-6 = 0b10, mesmo layout que BIT (bits 5-3 = índice do bit, bits 2-0 = registrador). Sem flags (`Z N H C` intocadas). `(HL)` é read-modify-write (4 M-cycles, 16 T-cycles) — o `cb_rot_hl` existente **não serve** porque não usa o campo de bit index. Será preciso um novo estado e uma nova função de dispatch `cb_res(opcode)`, análoga a `cb_bit` mas sem setar flags. O `(HL)` precisa de fases Read e Write como `CbRotHl`, mas mascarando com `!(1 << bit_index)` em vez de chamar a ALU. A reestruturação de `cb_fetch` feita na 0036 já tem o bucket `0b10` como `UndecodedOpcode` — é só preencher. **Notas relevantes:** a nota 8 (teste antes da implementação) continua valendo; a nota 14 (bateria de mutação e mtime) para os 8 índices de bit com valores que os distingam (achado da 0036).
+**Última iteração concluída:** 0037 — RES (`CB 80`–`CB BF`) ([doc](docs/iterations/0037-cb-res.md)). 64 opcodes, bucket `0b10` do dispatch hierárquico preenchido. Mesmo layout que BIT mas sem flags e com write-back: registrador em 2 M-cycles, `(HL)` em 4 M-cycles com read-modify-write (novo estado `CbResHl(u8, CbResHlPhase)`). O `cb_res_hl` usa fases Read/Write como `cb_rot_hl`, armazenando o valor modificado no `latch` entre as fases. Bateria: **7/7 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0036 — BIT (`CB 40`–`CB 7F`) ([doc](docs/iterations/0036-cb-bit.md)).
+**Duas iterações atrás:** 0035 — CB SLA + SRA + SWAP + SRL (`CB 20`–`CB 3F`) ([doc](docs/iterations/0035-cb-sla-sra-swap-srl.md)).
+**Próxima tarefa:** ROADMAP **1.9f** — SET (`CB C0`–`CB FF`, 64 opcodes). Último bucket do prefixo CB (`0b11`). O layout é idêntico ao RES (bits 7-6 = bucket, bits 5-3 = bit index, bits 2-0 = registrador), a única diferença semântica é `value | (1 << bit_index)` em vez de `value & !(1 << bit_index)`. Sem flags. `(HL)` é read-modify-write em 4 M-cycles — mesma estrutura do RES, inclusive o estado de fases Read/Write e o `latch`. Pode-se criar `CbSetHl(u8, CbSetHlPhase)` análogo ao `CbResHl`, ou generalizar para um estado único `CbBitModifyHl(u8, CbBitModifyHlPhase)` que receba a operação como parâmetro — a primeira opção é mais segura (menos refatoração, menos risco de quebrar RES). **Notas relevantes:** a nota 8 (teste antes da implementação) com o novo cuidado de verificar `is_between_instructions()` para evitar falsos-positivos por lockup (achado da 0037); a nota 14 (bateria de mutação e mtime) com o cuidado de NÃO usar `git checkout` para reverter mutantes antes do commit (achado da 0037 — usar `cp` de backup); a nota 22 (a previsão de qual armadilha dói erra — e o handoff diz "idêntico ao RES", o que pode ser a armadilha).
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -37,7 +37,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **426** (eram **414** antes da 0036 — +12 do novo arquivo `cpu_cb_bit`).
+Testes do workspace: **439** (eram **426** antes da 0037 — +13 do novo arquivo `cpu_cb_res`).
 
 ## Invariantes
 

@@ -234,7 +234,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
   - [x] 1.9b RRC + RL + RR (`CB 08`–`CB 1F`).
   - [x] 1.9c SLA + SRA + SWAP + SRL (`CB 20`–`CB 3F`).
   - [x] 1.9d BIT (`CB 40`–`CB 7F`) — `Z` = bit testado, `N=0`, `H=1`, `C` intocado. `(HL)` são 12 T-cycles (read sem write).
-  - [ ] 1.9e RES (`CB 80`–`CB BF`) — sem flags, `(HL)` é read-modify-write.
+  - [x] 1.9e RES (`CB 80`–`CB BF`) — sem flags, `(HL)` é read-modify-write.
   - [ ] 1.9f SET (`CB C0`–`CB FF`) — sem flags, `(HL)` é read-modify-write.
 - [ ] 1.10 Opcodes: jumps, calls, rets, RST — com timing condicional correto. `JP u16` (`C3`) já saiu no 1.3; o que sobra aqui é o difícil — os desvios condicionais duram tempos diferentes conforme tomem ou não o desvio (`8 / 12`, `12 / 24`), e essa é a coluna que a tabela dá em dois valores.
 - [ ] 1.11 Opcodes: misc — `DAA`, `CPL`, `SCF`, `CCF`, `DI`, `EI`, `NOP`, `STOP`.

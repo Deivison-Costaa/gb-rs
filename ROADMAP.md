@@ -179,10 +179,18 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     "genericamente" pelas três erra as três. `alu::logic` recebe `H` como
     parâmetro literal por chamada, sem calcular nada — ver
     [doc da 0024](docs/iterations/0024-cpu-and-xor-or-r8.md).
-  - [ ] 1.6d `alu a,imm8` (`$C6 $CE $D6 $DE $E6 $EE $F6 $FE`) — o bloco
+  - [x] 1.6d `alu a,imm8` (`$C6 $CE $D6 $DE $E6 $EE $F6 $FE`) — o bloco
     `11 ooo 110`, 8 opcodes, 2 M-cycles (`fetch → read(u8)`). As mesmas oito
     operações dos três sub-itens acima, com o operando vindo do `PC` em vez de
-    `r8`. Nota 43: o operando é lido num passo que o estado final não distingue.
+    `r8`. Ao contrário do `(HL)` do 1.6a (nota 45, sem testemunha), o `PC`
+    **é** testemunha entre os M-cycles (nota 43) — o teste do instante lê o
+    `PC` depois do M1 em vez de trocar memória no meio. `State::AluImmediate`
+    e `Cpu::alu_immediate` espelham `AluFromHl`/`alu_from_hl`, casando os oito
+    opcodes por literal, não por máscara — não há campo `r8` a isolar aqui.
+    Achado real foi de cobertura de teste, não de spec: a bateria de mutação
+    pegou um operando de teste que não distinguia `XOR` de `OR`, e um par
+    `ADD`/`SUB` sem o controle "ignora o carry de entrada" (nota 46). Ver
+    [doc da 0025](docs/iterations/0025-cpu-alu-a-imm8.md).
   - [ ] 1.6e `INC r8` e `DEC r8` (`00 ddd 100` e `00 ddd 101`) — 16 opcodes.
     **Não tocam `C`**: a coluna é `-`, e é a divergência de flags que mais
     aparece em ROM real. `$34`/`$35` (`INC (HL)`/`DEC (HL)`) são **3 M-cycles**,

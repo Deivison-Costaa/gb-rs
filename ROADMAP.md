@@ -33,10 +33,14 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
   iteração. A quebra é por **regra de decodificação**, não por quantidade: cada
   sub-item é um bloco contíguo da tabela com uma forma de M-cycle própria.
   85 = 63 + 8 + 8 + 6.
-  - [ ] 1.4a O bloco `LD r8,r8` — `$40`–`$7F` **sem** `$76`: 63 opcodes, uma
+  - [x] 1.4a O bloco `LD r8,r8` — `$40`–`$7F` **sem** `$76`: 63 opcodes, uma
     regra só (`01 ddd sss`, § Block 1 do `02-cpu.md`) e três formas de M-cycle:
     `LD r,r'` em 1, `LD r,(HL)` e `LD (HL),r` em 2. `$76` é `HALT` — a spec o
     chama de **exceção** à codificação, e ele é o 2.3, não este item.
+    `LD r,(HL)` faz a leitura no barramento e a escrita no registrador **no
+    mesmo** M2: não há terceiro M-cycle, e supor que houvesse foi a lição do
+    `JP u16` aplicada onde ela não vale — ver
+    [doc da 0014](docs/iterations/0014-cpu-ld-r8-block.md).
   - [ ] 1.4b Imediatos de 8 bits: `LD r8,u8` (`$06 $0E $16 $1E $26 $2E $3E`) e
     `LD (HL),u8` (`$36`) — o bloco `00 ddd 110`, em 2 e 3 M-cycles.
   - [ ] 1.4c Indireto por par de registradores: `LD (BC),A`, `LD A,(BC)`,

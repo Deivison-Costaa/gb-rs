@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0013 — o laço de M-cycles ([doc](docs/iterations/0013-cpu-mcycle-loop.md)). Fecha o **1.3**, a R2. `Cpu::step(&mut Bus)` avança um M-cycle e volta; `NOP` e `JP u16` decodificados, os onze opcodes inexistentes travando a CPU. Os três erros de memória foram os previstos pela regra e nenhum pela intuição: `step()` instruction-stepped (o desenho que sai sozinho), o desvio de `JP` no M3 em vez do M4, e opcode desconhecido tratado como `NOP`. A aspereza (a) que a 0012 previa **não se materializou** — não foi preciso extrair interface de memória do `Bus`.
-**Próxima tarefa:** ROADMAP 1.4 — opcodes de load de 8 bits. Spec: `docs/reference/03-opcodes.md` (a coluna *M-cycles passo a passo*, não só a de T-cycles). **O que já está pronto:** `Cpu::fetch` decodifica e `State` nomeia os M-cycles; acrescentar opcode é acrescentar variante de `State` e braço no `match`. **É aqui que a tabela de micro-operações deve nascer** — a 0013 não a escreveu de propósito (nota 8: abstração sem nada que a exercite passa verde por vacuidade), e o 1.4 é a primeira iteração com casos suficientes para generalizar em vez de chutar: `LD r,r'` (1 M-cycle), `LD r,u8` (2), `LD r,(HL)` (2), `LD (HL),u8` (3). **Duas armadilhas anotadas:** (a) `wrapping_add` no `PC` é comportamento real e **nenhum teste o cobre** — medido pela bateria de mutação da 0013, e o 1.4 é quem primeiro terá operando atravessando `$FFFF`; (b) `02-cpu.md` § CPU Instruction Set **não serve** para ler semântica de opcode — a conversão a achatou em layouts de bits sem prosa. Ver nota 24.
+**Última iteração concluída:** 0014 — o bloco `LD r8,r8` ([doc](docs/iterations/0014-cpu-ld-r8-block.md)). Fecha o **1.4a**. O 1.4 foi **quebrado em quatro** antes de qualquer código (85 opcodes, cinco modos de endereçamento — não cabe num PR); o 1.4a são os 63 do bloco `01 ddd sss`, `$40`–`$7F` sem o `$76`. Dois erros de memória, e o segundo é de um tipo novo: `LD r,(HL)` em 3 M-cycles, por levar adiante como princípio a descoberta da 0013 de que `JP u16` desvia no último M-cycle. **Correção anterior virada em regra geral é um jeito novo de errar** — ver nota 26.
+**Próxima tarefa:** ROADMAP 1.4b — `LD r8,u8` (`$06 $0E $16 $1E $26 $2E $3E`) e `LD (HL),u8` (`$36`): o bloco `00 ddd 110`, em 2 e 3 M-cycles. Spec: `docs/reference/03-opcodes.md` (coluna *M-cycles passo a passo*) e `02-cpu.md` § Block 0. **O que já está pronto:** `R8::from_bits` decodifica o campo de três bits (é o mesmo campo, nos bits 5-3), e `Cpu::read_r8`/`write_r8` traduzem para os campos de `Registers`. Acrescentar opcode é acrescentar variante de `State` e braço no `match`. **Três armadilhas anotadas:** (a) `wrapping_add` no `PC` é comportamento real e **nenhum teste o cobre** — medido pela bateria da 0013, e o 1.4b é o primeiro item com operando lido do fluxo de instruções desde então; (b) `02-cpu.md` § CPU Instruction Set não serve para ler semântica, e a tabela de placeholders está emendada — triangule com o `03-opcodes.md`, como a 0014 fez (nota 24); (c) o `$36` (`LD (HL),u8`, 3 M-cycles) é a primeira instrução do projeto que lê um imediato **e** escreve na memória, e a ordem dos dois é o que a tabela decide.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -35,7 +35,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **142** (eram 131 antes da 0013). Este número não é o placar
+Testes do workspace: **156** (eram 142 antes da 0014). Este número não é o placar
 — ele mede o que o projeto afirma sobre si mesmo, não o que o hardware cobra.
 
 ## Invariantes já estabelecidas
@@ -340,6 +340,37 @@ Testes do workspace: **142** (eram 131 antes da 0013). Este número não é o pl
   passa por ele antes de haver o que decodificar — e nada observável depende
   disso, porque a CPU não volta a andar.
 
+- **`$76` é `HALT`, e é o único buraco de um bloco perfeitamente regular.** A
+  § Block 1 do `02-cpu.md` chama isso de **exceção**, com todas as letras:
+  *"trying to encode `ld [hl], [hl]` instead yields the `halt` instruction"*.
+  Um decodificador escrito direto dos bits acerta 63 e transforma o 64º numa
+  leitura e numa escrita no mesmo endereço — sem efeito visível, sem travar, e
+  qualquer ROM que use `HALT` para esperar interrupção gira para sempre. Até o
+  2.3 ele para a CPU com `UndecodedOpcode`, que é o rótulo certo: o opcode
+  existe, falta implementar. **Está garantido por dois caminhos** (o `const
+  HALT` antes da faixa, e o braço `(MemoryAtHl, MemoryAtHl)` que só existe para
+  o `match` ser total) — e a bateria da 0014 mediu que **nenhum teste os
+  distingue**: remover qualquer um deixa a suíte verde. Redundância conhecida,
+  não descuido.
+- **`LD r,(HL)` faz a leitura e a escrita no registrador no mesmo M2.** Dois
+  M-cycles, 8 T-cycles, coluna `fetch → read((HL)->r)`. Não há terceiro M-cycle
+  `internal` onde a escrita "aconteça de verdade" — e supor que houvesse é a
+  descoberta da 0013 (`JP u16` desvia no M4, não no M3) aplicada onde ela não
+  vale. **A coluna é por instrução; não há regra geral sobre quando o efeito
+  acontece.** Ver nota 26.
+- **`R8` e `ByteRegister` são dois tipos.** O operando `r8` tem oito valores e
+  o oitavo — o índice 6 — é memória, não registrador. Separar é o que deixa
+  `State::LoadFromHl(ByteRegister)` carregar um destino que **é** registrador
+  sem `unreachable!` (a R6 não quer pânico no `gb-core`), e o que faz as três
+  formas de M-cycle do bloco caírem sozinhas do `match` sobre os dois campos.
+  O mapeamento `ByteRegister` → campo de `Registers` mora no **decodificador**,
+  coerente com a decisão do 1.1 de não pôr acessor por registrador no banco.
+- **Ainda não há tabela de micro-operações, e a data mudou.** A 0013 previu que
+  ela nasceria no 1.4. Com o 1.4 quebrado em quatro, o 1.4a tem três formas e
+  todas da mesma família (`fetch` + no máximo um acesso), e generalizar dali
+  seria a nota 8 com um terço dos dados. A decisão está escrita **no ROADMAP**,
+  no 1.4d, onde as quatro formas de endereçamento do `x8/lsm` já existirão.
+
 ## Bloqueios
 
 _(nenhum)_
@@ -503,6 +534,12 @@ contorno previsto no prompt de bootstrap.
     contexto const — e nada disso é mais novo que a MSRV. Quatro acertos
     seguidos por lembrança continuam não sendo uma guarda, e o 1.4 multiplica
     esse tipo de código por 245 opcodes. Continua **aberta**.
+
+    **Quinto ponto de dado na 0014:** **156/156** em `1.85`, com `const fn`
+    sobre enum novo e padrão de faixa com extremos `const`. Cinco acertos
+    seguidos, todos por alguém ter lembrado de rodar o comando. Continua
+    **aberta** — e a essa altura o custo de fechar (um job de CI em `1.85`) já é
+    menor que o de escrever esta nota mais uma vez.
 
 14. **Bateria de mutação: o cargo decide rebuild por mtime.** Reverter o fonte
     com `mv arquivo.bak arquivo` — ou aplicar uma mutação que falha em silêncio
@@ -754,3 +791,80 @@ contorno previsto no prompt de bootstrap.
     equivalência. A volta do `PC` em `$FFFF` é comportamento real e **não está
     coberto**. Não é bug; é cobertura ausente, medida e datada. Quem fecha é o
     1.4, o primeiro item com operando que pode atravessar `$FFFF`.
+
+    **O 1.4a não fechou** — os 63 opcodes do bloco `01 ddd sss` têm 1 byte e
+    não leem operando nenhum do fluxo de instruções. Passa para o **1.4b**, que
+    é o primeiro desde a 0013 a ler imediato.
+
+26. **Correção anterior virada em regra geral é um jeito novo de errar.** Os
+    modos de falha da R1 catalogados até aqui são sobre a spec: não lida
+    (original), omissa (nota 19), ambígua (nota 21), corrompida na conversão
+    (nota 24). A 0014 achou um que não é sobre a spec — é sobre o **histórico do
+    próprio projeto**.
+
+    A 0013 descobriu que `JP u16` desvia no M4 e não no M3, e escreveu isso como
+    invariante. Na 0014 eu implementei `LD r,(HL)` em três M-cycles — `fetch →
+    read((HL)) → internal(escreve o registrador)` — generalizando aquilo para
+    "o efeito acontece depois do que a intuição diz". Não existe essa regra. O
+    `JP` tem quatro passos na coluna e o quarto é `internal`; o `LD r,(HL)` tem
+    dois, e os 8 T-cycles não deixam onde pôr um terceiro. A coluna é **por
+    instrução**.
+
+    Isto engana melhor que o erro original por dois motivos. Primeiro, vem com a
+    sensação de estar aplicando uma lição, que é o oposto do alarme que a R1
+    tenta disparar. Segundo, o `STATUS.md` **ajuda a errar**: a invariante da
+    0013 está escrita ali em prosa forte ("escrever o `PC` junto com o byte alto
+    desloca o desvio em um — invisível em teste de instrução isolada"), e prosa
+    forte sobre um caso lê-se como princípio.
+
+    O que funcionou é o de sempre, e por isso vale insistir: o esqueleto. Quatro
+    testes reprovaram, todos nomeando M-cycle. Nenhuma quantidade de releitura
+    do `STATUS.md` teria pego — o erro **vinha** do `STATUS.md`.
+
+    **Corolário para escrever invariante:** quando a invariante for sobre uma
+    instrução, diga de qual instrução ela é e o que a produz (o número de passos
+    da coluna), não só o que ela afirma. A invariante do `LD r,(HL)` acima está
+    escrita assim de propósito.
+
+27. **Rode a suíte nova contra o código velho antes de implementar.** Custa
+    0,00s e devolve três coisas que nenhum outro momento devolve: o RED com o
+    motivo certo, a lista de guardas que passam por vacuidade, e — na 0014 — um
+    teste de verdade quebrado.
+
+    O teste era `storing_l_to_hl_writes_the_low_byte_of_the_address_it_wrote_to`
+    com `SCRATCH = $C000`. Byte baixo `$00`, WRAM começa zerada: ele afirmava
+    `$00 == $00` sem nada ter sido escrito, e teria fechado verde contra a
+    implementação certa, contra o esqueleto errado e contra a bateria de
+    mutação inteira. **Em teste de memória, endereço e valor não podem
+    compartilhar o zero com o estado inicial** — `$C000` é justamente o
+    endereço que se escreve sem pensar.
+
+    Isto é anterior ao esqueleto da nota 20 e não o substitui: o esqueleto mede
+    o que eu erraria, este passo mede se o **teste** mede alguma coisa.
+
+28. **O esqueleto e a bateria de mutação não exercitam os mesmos testes.**
+    `no_load_in_the_block_touches_the_flags` passou contra a implementação
+    anterior *e* contra o esqueleto A — nunca tinha tido nada para reprovar.
+    Quem o exercitou foi o mutante que zera `F` de lambuja num `LD r,r'`.
+
+    A razão é estrutural: o esqueleto contém os erros que **eu** cometeria, e
+    eu não ia escrever um `LD` que mexe em flag. A bateria contém os erros que
+    qualquer um pode introduzir depois. Guarda de *ausência* de comportamento
+    tende a cair no segundo grupo e não no primeiro — então rodar só o
+    esqueleto deixa exatamente essa classe sem medição.
+
+    **Um teste que sobrevive aos dois foi exercitado; um que só passa nos dois
+    pode não ter sido exercitado por nenhum.** Rode os dois.
+
+29. **Controle negativo que sobrevive por redundância não é controle — é
+    achado.** Na 0014 um dos dois controles foi "remover o braço `HALT` do
+    decodificador", escrito na expectativa de que derrubasse a suíte. Ficou
+    verde: `load_r8_r8` tem um braço `(MemoryAtHl, MemoryAtHl)` que devolve o
+    mesmo veredito, posto ali só para o `match` ser total sem `_ =>`.
+
+    Os dois caminhos garantem o mesmo comportamento e **nenhum teste os
+    distingue**. Não é bug e nenhum dos dois saiu (um carrega a citação da spec,
+    o outro é a invariante de `match` do projeto), mas a diferença entre
+    "redundante de propósito" e "redundante sem ninguém ter notado" é toda a
+    diferença no dia em que alguém simplificar um deles. Ficou escrito na
+    invariante do `$76`.

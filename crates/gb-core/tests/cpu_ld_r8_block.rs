@@ -467,6 +467,21 @@ fn opcode_76_is_halt_and_not_a_load_from_hl_into_hl() {
 // Controle negativo: exatamente $40–$7F, menos $76
 // ---------------------------------------------------------------------------
 
+/// Opcodes que **outros** itens do ROADMAP já decodificam, e que portanto não
+/// são "falta implementar" para o controle negativo abaixo.
+///
+/// Esta lista cresce a cada sub-item, e é de propósito que ela mora aqui e não
+/// numa constante compartilhada: quem acrescentar opcode fora do `01 ddd sss`
+/// derruba este teste e tem de vir declarar o que acrescentou. Um único ponto
+/// de verdade compartilhado deixaria a atualização acontecer sozinha, e o
+/// controle negativo perderia exatamente a propriedade que o justifica.
+///
+/// - `$00` (`NOP`) e `$C3` (`JP u16`) — 1.3.
+/// - `00 ddd 110` (`$06 $0E $16 $1E $26 $2E $36 $3E`) — 1.4b.
+fn decoded_elsewhere(opcode: u8) -> bool {
+    opcode == 0x00 || opcode == 0xC3 || opcode & 0b1100_0111 == 0b0000_0110
+}
+
 #[test]
 fn the_block_this_item_decodes_is_exactly_40_to_7f_without_76() {
     // Nota 25 do `STATUS.md`: teste que afirma *pertinência* ("estes N são
@@ -501,8 +516,7 @@ fn the_block_this_item_decodes_is_exactly_40_to_7f_without_76() {
                 Some(Lockup::IllegalOpcode(opcode)),
                 "${opcode:02X} continua sendo um dos onze que não existem"
             );
-        } else if opcode != 0x00 && opcode != 0xC3 {
-            // `$00` (`NOP`) e `$C3` (`JP u16`) saíram no 1.3.
+        } else if !decoded_elsewhere(opcode) {
             assert_eq!(
                 cpu.lockup(),
                 Some(Lockup::UndecodedOpcode(opcode)),

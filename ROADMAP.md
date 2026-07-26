@@ -41,8 +41,14 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     mesmo** M2: não há terceiro M-cycle, e supor que houvesse foi a lição do
     `JP u16` aplicada onde ela não vale — ver
     [doc da 0014](docs/iterations/0014-cpu-ld-r8-block.md).
-  - [ ] 1.4b Imediatos de 8 bits: `LD r8,u8` (`$06 $0E $16 $1E $26 $2E $3E`) e
-    `LD (HL),u8` (`$36`) — o bloco `00 ddd 110`, em 2 e 3 M-cycles.
+  - [x] 1.4b Imediatos de 8 bits: `LD r8,u8` (`$06 $0E $16 $1E $26 $2E $3E`) e
+    `LD (HL),u8` (`$36`) — o bloco `00 ddd 110`, em 2 e 3 M-cycles. Ao
+    contrário da § Block 1, **não há exceção**: o índice 6 do campo de destino
+    dá o `$36`, que é load como os outros sete. O `$36` é a primeira instrução
+    do projeto com **dois** acessos ao barramento, e a coluna os põe em
+    M-cycles diferentes (`fetch → read(u8) → write((HL))`); juntá-los no M2 com
+    um `internal` no M3 dá o mesmo total e adianta a escrita em um — ver
+    [doc da 0015](docs/iterations/0015-cpu-ld-r8-u8.md).
   - [ ] 1.4c Indireto por par de registradores: `LD (BC),A`, `LD A,(BC)`,
     `LD (DE),A`, `LD A,(DE)` (`$02 $0A $12 $1A`) e as quatro formas com `HL+`/
     `HL-` (`$22 $2A $32 $3A`) — 8 opcodes, e o efeito colateral sobre `HL`.

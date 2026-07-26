@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0011 — estado da CPU no hand-off da boot ROM ([doc](docs/iterations/0011-cpu-boot-state.md)). O 1.2b era grande demais e foi quebrado em dois; esta fez o **1.2b-i**. Das três armadilhas que a 0010 deixou anotadas, uma se materializou (o `F` constante) e as outras duas não. O achado é a nota 21: a R1 tem um terceiro modo de falha, a **spec ambígua**.
-**Próxima tarefa:** ROADMAP 1.2b-ii — registradores de hardware no hand-off: `$FF00`–`$FF7F` e `IE`, coluna **DMG / MGB** da tabela § Hardware registers em `docs/reference/01-memory-map.md` (R1 + nota 15). **O que a tabela já avisa:** (a) `OBP0`/`OBP1` são marcados como **não inicializados** — inventar `$00` ali é inventar, e a nota de rodapé é explícita; (b) `DIV=$AB`, `STAT=$85` e `LY=$00` são estado de componentes que só chegam no M2/M3, então guardá-los como byte solto é diferente de emulá-los, e o doc tem de dizer qual dos dois é; (c) `KEY0`, `KEY1`, `VBK`, `HDMA*`, `RP`, `BGPI/D`, `OGPI/D`, `SVBK` são `---` na coluna DMG (só CGB) — não são zero, não existem; (d) o `BANK` (`$FF50`) é `---` em **todas** as colunas. E a seção inteira vem com o aviso de que os valores são "highly volatile […] may contain errors". Ligar essa região ao `Bus` vai derrubar `the_regions_without_an_owner_are_open_bus_and_swallow_writes` — é o teste avisando que chegou a hora, não atrapalhando.
+**Última iteração concluída:** 0012 — registradores de hardware no hand-off da boot ROM ([doc](docs/iterations/0012-bus-io-boot-state.md)). Fecha o **1.2b** e com ele o **1.2 inteiro**. As quatro armadilhas que a 0011 deixou anotadas se materializaram todas as quatro, e nenhuma delas era a que se esperava: a coluna DMG saiu certa de memória (`DIV`/`STAT`/`LY`), e o que errou foi folclore de emulador (`DMA=$00`, `OBP*=$FF`, `BANK=$01`) mais a suposição estrutural de que a faixa de I/O é um array plano.
+**Próxima tarefa:** ROADMAP 1.3 — laço de M-cycle: `Cpu::step()` avança **um** M-cycle e volta; fetch/decode/execute como máquina de estados. Spec: `docs/reference/02-cpu.md` e a tabela de timing do `03-opcodes.md` (gbops `90b9bf296aed`). **É a R2, e é a regra mais cara de violar do projeto** — "executa a instrução inteira e depois soma N ciclos" passa nos testes unitários, quebra a suíte Mooneye e é refatoração de tudo. **O que já está pronto para ser ligado:** `Registers::after_boot_rom(checksum)` (1.2b-i) e `Bus::new(cart)` (1.2a + 1.2b-ii) dão o estado inicial completo, e nada no código ainda junta os dois — quem cria o dono dos dois é esta iteração. **Duas asperezas conhecidas:** (a) `Bus::new` exige um `Box<dyn Cartridge>`, então testar opcode sem cartucho pede ou um cartucho de teste (é o que `bus_boot_state.rs` faz, em 6 linhas) ou extrair a interface de memória — o 1.2a registrou que extrair **então** é mudança local, e este é o "então"; (b) `Bus::read`/`write` não avançam o tempo de propósito, e é o laço quem tem de chamá-los uma vez por M-cycle, **no ponto certo dentro da instrução** — é isso que a Mooneye mede.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -35,7 +35,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **122** (eram 111 antes da 0011). Este número não é o placar
+Testes do workspace: **131** (eram 122 antes da 0012). Este número não é o placar
 — ele mede o que o projeto afirma sobre si mesmo, não o que o hardware cobra.
 
 ## Invariantes já estabelecidas
@@ -252,18 +252,51 @@ Testes do workspace: **122** (eram 111 antes da 0011). Este número não é o pl
   espelhada" é que é falso, e um teste escrito a partir dele afirmaria espelho
   onde não há.
 - **Região sem dono lê `OPEN_BUS` e engole escrita — e há teste fixando isso.**
-  VRAM, OAM, `$FF00`–`$FF7F` e `IE` estão no mapa e não têm componente. Isso não
-  é afirmação sobre o hardware, é ausência de quem responda; o teste existe para
-  que seja decisão visível em vez de lacuna a descobrir depurando a PPU. Pânico
-  seria pior — `read` de emulador é o último lugar onde se quer achar erro de
-  roteamento (mesma escolha do `NoMbc`, 0.4). Quem ligar um desses componentes
-  vai derrubar `the_regions_without_an_owner_are_open_bus_and_swallow_writes`:
-  é o teste avisando que chegou a hora, não atrapalhando.
+  VRAM e OAM estão no mapa e não têm componente. Isso não é afirmação sobre o
+  hardware, é ausência de quem responda; o teste existe para que seja decisão
+  visível em vez de lacuna a descobrir depurando a PPU. Pânico seria pior —
+  `read` de emulador é o último lugar onde se quer achar erro de roteamento
+  (mesma escolha do `NoMbc`, 0.4). Quem ligar um desses componentes vai derrubar
+  `the_regions_without_an_owner_are_open_bus_and_swallow_writes`: é o teste
+  avisando que chegou a hora, não atrapalhando. **`$FF00`–`$FF7F` e `IE` saíram
+  dessa lista na 0012**, e só em parte — ver a invariante da faixa de I/O.
 - **A RAM interna começa zerada, e isso é escolha, não hardware.** A § Console
   state after boot ROM hand-off diz que WRAM e HRAM são **aleatórias** ao ligar e
   que os emuladores divergem (constante `$00`/`$FF`, ou sorteio). Constante é o
   que dá teste reprodutível; jogo que dependa disso tem bug, e a própria spec
   desaconselha. O teste nomeia a escolha para que ela quebre se mudar.
+
+- **A faixa de I/O tem dono por endereço, não por região — 41 / 15 / 72.** Dos
+  128 endereços de `$FF00`–`$FF7F`, a tabela § Hardware registers nomeia **41**
+  (que ganharam célula e valor inicial), marca **15** como `---` (`KEY0`, `KEY1`,
+  `VBK`, `BANK`, `HDMA1`–`HDMA5`, `RP`, `BGPI/D`, `OGPI/D`, `SVBK`: registradores
+  de CGB, que este console não tem) e **não menciona 72** — entre eles a wave RAM
+  inteira, `$FF30`–`$FF3F`, que chega com a APU (6.4). Os 87 últimos leem
+  `OPEN_BUS` e engolem escrita, e os dois motivos são diferentes ainda que o
+  código não os distinga: `---` é a spec **afirmando** ausência, os 72 são a spec
+  se **calando**. Quem decide é `bus/boot.rs::IO_HAS_OWNER`, construído em tempo
+  de compilação a partir da mesma tabela que dá os valores — uma lista só.
+- **`Bus::new` é o estado de hand-off; não existe `Bus::after_boot_rom`.** A
+  assimetria com `Registers::after_boot_rom` é deliberada: lá o estado depende do
+  checksum da ROM, e havia o que um construtor parametrizado carregar. Aqui a
+  coluna DMG / MGB é literal e este emulador não tem outro estado em que estar —
+  ele nunca roda a boot ROM. O que sai de `Bus::new` mistura **spec** (os 41
+  registradores) com **escolha** (RAM interna e `OBP0`/`OBP1` zerados), e cada
+  escolha tem um teste que a nomeia.
+- **`OBP0`/`OBP1` são `??` na spec, e `$00` aqui por escolha.** A nota de rodapé
+  diz *"left entirely uninitialized […] tends to be most often $00 or $FF, but
+  the value is especially not reliable"*: tendência observada, não fiação. `$FF`
+  — o reflexo, "paleta branca" — seria inventar. Mas **não** são `---`: são as
+  paletas de objeto da PPU, a célula existe e a escrita pega.
+- **Valor inicial não é semântica, e a fronteira está fixada por teste.** Os 41
+  registradores são byte cru: sem máscara de bits não usados, sem read-only, sem
+  efeito colateral. `DIV` vale `$AB` e vai valer para sempre até o 2.1; `LY`
+  aceita escrita; escrever em `DIV` devia zerá-lo e não zera. Divergência
+  conhecida e delimitada — `the_named_registers_have_storage_and_no_read_
+  semantics_yet` diz "se o componente dono chegou, este teste é que está velho".
+- **`DMA` é `$FF` no DMG, não `$00`.** `$00` é a coluna CGB / AGB. É o erro de
+  memória mais escorregadio da tabela porque o número é plausível e vem de uma
+  coluna vizinha de verdade; ver erro #1 da [0012](docs/iterations/0012-bus-io-boot-state.md).
 
 ## Bloqueios
 
@@ -417,6 +450,12 @@ contorno previsto no prompt de bootstrap.
     de CI em `1.85`) segue menor que o de descobrir o contrário num PR
     vermelho. Continua **aberta**.
 
+    **Terceiro ponto de dado na 0012:** **131/131** em `1.85`, e desta vez com
+    algo novo em jogo — `if let` e `while` dentro de bloco `const`, para montar
+    as duas tabelas de `bus/boot.rs` em tempo de compilação. Passou. Continua
+    **aberta**, e o 1.3 vai encostar nisso outra vez: máquina de estados de
+    M-cycle é onde `const fn` e `match` exaustivo aparecem em quantidade.
+
 14. **Bateria de mutação: o cargo decide rebuild por mtime.** Reverter o fonte
     com `mv arquivo.bak arquivo` — ou aplicar uma mutação que falha em silêncio
     — devolve o arquivo com mtime **anterior** ao do artefato, e o `cargo test`
@@ -531,6 +570,21 @@ contorno previsto no prompt de bootstrap.
     só o corpo errado. Com assinatura diferente o vermelho é `error[E0432]`/
     `E0061` e não mede asserção nenhuma — é a armadilha (a) da 0007 outra vez.
 
+    **Quinta repetição na 0012, e a mais produtiva até agora: 5 dos 9 testes
+    reprovaram o esqueleto, apontando 4 erros de memória distintos.** Aqui o
+    procedimento foi barato porque a API não mudou (`Bus::new`/`read`/`write` já
+    existiam), então não houve corolário de assinatura a pagar — quando a
+    iteração só muda comportamento de coisa já construída, o esqueleto custa
+    dois `Edit` e devolve a lista inteira.
+
+    **A leitura nova é sobre o RED "de verdade":** contra a implementação
+    *anterior* (tudo `OPEN_BUS`), 5 dos 9 testes já passavam — todos os que
+    afirmam ausência (`---`, endereços sem dono, controle negativo de coluna).
+    Com tudo respondendo `$FF`, "não é `$00`" é verdade de graça. **O esqueleto
+    foi o único momento em que esses cinco tiveram algo real para reprovar**, e
+    quatro reprovaram. Sem ele o PR fecharia 9/9 verde com cinco testes que
+    nunca tinham sido exercitados contra nada.
+
 21. **O terceiro modo de falha da R1: spec ambígua.** A regra supôs "o agente
     não leu" (original); a nota 19 achou "a spec é omissa"; a 0011 achou
     **"a spec é ambígua, e as duas leituras coincidem em todo caso real"**.
@@ -556,3 +610,29 @@ contorno previsto no prompt de bootstrap.
     (`08-cartridges-mbc.md` § 014D, primeira frase), alcançada pelo link da
     própria nota de rodapé. Reforça a nota 15: seguir os links da seção, não só
     ler a seção.
+
+22. **A previsão de qual armadilha vai doer erra — e o registro é o que mostra
+    isso.** A 0011 deixou quatro avisos para a 0012, todos corretos e todos
+    materializados. Mas o aviso implícito mais forte — *cuidado para não copiar
+    a coluna DMG0* — não era o risco: `DIV=$AB`, `STAT=$85` e `LY=$00`, as três
+    únicas células que separam DMG0 de DMG / MGB, saíram **certas** de memória
+    nas duas iterações seguidas em que foram medidas.
+
+    O que errou foi outra classe: **folclore de emulador**. `DMA=$00`,
+    `OBP0/OBP1=$FF`, `BANK=$01` — três valores que circulam em tutoriais e
+    tabelas de terceiros, não em nenhuma coluna do Pan Docs. `$00` para `DMA`
+    até é uma coluna real (CGB / AGB), o que faz o erro parecer "coluna errada"
+    sem ter sido.
+
+    **Consequência prática:** o controle negativo por coluna continua valendo,
+    mas não é o que pega mais. O que pega é a lista de valores conferida linha a
+    linha contra a tabela transcrita **no teste** — e as notas de rodapé, que na
+    0012 foram onde morava a informação que desqualificava dois dos três erros.
+
+23. **A nota 15, terceira reincidência, agora a 30 linhas de distância.** O que
+    desqualifica `OBP0`/`OBP1` não está na linha da tabela: está numa nota de
+    rodapé abaixo dela, referenciada por um marcador que na renderização é só um
+    `??`. A 0007 tinha o alvo a 360 linhas e em outra seção; a 0011, em outro
+    arquivo; a 0012, logo abaixo — e ainda assim é fácil ler a tabela sem seguir
+    os marcadores. **`??` e `---` numa tabela de spec são ponteiros, não
+    valores.** Nunca traduza um deles para número sem ler a nota que o define.

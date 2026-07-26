@@ -428,14 +428,21 @@ fn only_the_two_cartridge_windows_reach_the_cartridge_on_writes() {
 // O que ainda não tem dono
 // ---------------------------------------------------------------------------
 
-/// VRAM, OAM, registradores de I/O e `IE` existem no mapa e **não** existem no
-/// código: os componentes que respondem por eles são de itens posteriores.
+/// VRAM e OAM existem no mapa e **não** existem no código: os componentes que
+/// respondem por elas são de itens posteriores.
 ///
 /// Barramento aberto aqui não é uma afirmação sobre o hardware — é a ausência
 /// de componente ligado. O teste fixa essa ausência para que ela seja uma
 /// decisão visível, e não uma lacuna que alguém descubra depurando a PPU.
 /// Entrar em pânico seria pior: `read` de emulador é o último lugar onde se
 /// quer descobrir erro de roteamento (mesma decisão do `NoMbc`, 0.4).
+///
+/// **`$FF00`–`$FF7F` e `$FFFF` saíram desta lista no 1.2b-ii**, e é o que este
+/// teste previa que aconteceria. Não saíram inteiros: os 41 endereços que a
+/// tabela § Hardware registers nomeia ganharam célula e valor inicial, e os
+/// outros 72 continuam sem dono. Quem mede isso agora é `bus_boot_state.rs`,
+/// onde a lista tem o recorte certo — repeti-la aqui daria duas listas para
+/// manter em sincronia e uma delas ficaria velha.
 #[test]
 fn the_regions_without_an_owner_are_open_bus_and_swallow_writes() {
     let mut bus = bus();
@@ -445,9 +452,6 @@ fn the_regions_without_an_owner_are_open_bus_and_swallow_writes() {
         (0x9FFF, "VRAM", "ROADMAP 3.1"),
         (0xFE00, "OAM", "ROADMAP 3.1"),
         (0xFE9F, "OAM", "ROADMAP 3.1"),
-        (0xFF00, "registradores de I/O", "ROADMAP 1.2b em diante"),
-        (0xFF7F, "registradores de I/O", "ROADMAP 1.2b em diante"),
-        (0xFFFF, "IE", "ROADMAP 2.2"),
     ];
 
     for (addr, name, item) in pending {

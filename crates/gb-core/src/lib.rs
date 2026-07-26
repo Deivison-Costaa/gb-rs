@@ -7,10 +7,10 @@
 //!
 //! Hoje o crate lê o cabeçalho do cartucho (ROADMAP 0.3a), monta o cartucho
 //! sem mapeador (0.4), tem o banco de registradores da CPU (1.1), o barramento
-//! que decide quem responde a cada endereço (1.2a) e o estado da CPU no
-//! hand-off da boot ROM (1.2b-i). Faltam os valores iniciais dos registradores
-//! de hardware (1.2b-ii) e o laço de M-cycles (1.3), que é quem vai ligar a
-//! CPU ao `Bus`.
+//! que decide quem responde a cada endereço (1.2a) e o estado com que a máquina
+//! começa a rodar quando se pula a boot ROM: os registradores da CPU (1.2b-i) e
+//! os de hardware (1.2b-ii). Falta o laço de M-cycles (1.3), que é quem vai
+//! ligar a CPU ao `Bus`.
 
 #![forbid(unsafe_code)]
 

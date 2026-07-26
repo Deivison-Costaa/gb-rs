@@ -16,6 +16,8 @@
 //! escondê-la aqui dentro faria cada acesso tiquetaquear por conta própria e
 //! tornaria impossível posicionar o acesso *dentro* da instrução.
 
+mod boot;
+
 use crate::cart::{Cartridge, OPEN_BUS};
 
 /// Os 8 KiB de Work RAM. No DMG são contíguos: o banco chaveado de
@@ -86,10 +88,15 @@ pub enum Region {
     /// `$FEA0`–`$FEFF` — a região que a Nintendo proíbe. Ver [`NOT_USABLE_READ`].
     NotUsable,
     /// `$FF00`–`$FF7F` — registradores de I/O: joypad, serial, timer, som, LCD.
+    ///
+    /// Faixa de dono repartido: cada endereço pertence a um componente
+    /// diferente, e 72 dos 128 não aparecem sequer na tabela do hand-off. Ver
+    /// [`boot`].
     IoRegisters,
     /// `$FF80`–`$FFFE` — High RAM, 127 bytes dentro da própria CPU.
     HighRam,
-    /// `$FFFF` — o registrador `IE`. Um endereço, faixa própria (ROADMAP 2.2).
+    /// `$FFFF` — o registrador `IE`. Um endereço, faixa própria. O valor
+    /// inicial é do 1.2b-ii; o despacho de interrupções é o 2.2.
     InterruptEnable,
 }
 
@@ -118,11 +125,12 @@ impl Region {
 
 /// O barramento de memória do Game Boy.
 ///
-/// Hoje ele liga três coisas: o cartucho, a WRAM e a HRAM. VRAM, OAM,
-/// registradores de I/O e `IE` estão no mapa e ainda não têm componente — nesses
-/// endereços a leitura é [`OPEN_BUS`] e a escrita se perde. Isso **não** é uma
-/// afirmação sobre o hardware; é a ausência de quem responda, fixada por teste
-/// para ser uma decisão visível em vez de uma lacuna a descobrir depurando.
+/// Hoje ele liga o cartucho, a WRAM, a HRAM, os registradores de hardware que a
+/// tabela do hand-off nomeia (1.2b-ii) e o `IE`. VRAM, OAM e os 72 endereços de
+/// I/O sobre os quais a spec se cala continuam sem componente — neles a leitura
+/// é [`OPEN_BUS`] e a escrita se perde. Isso **não** é uma afirmação sobre o
+/// hardware; é a ausência de quem responda, fixada por teste para ser uma
+/// decisão visível em vez de uma lacuna a descobrir depurando.
 ///
 /// Entrar em pânico ali seria pior: `read` de emulador é o último lugar onde se
 /// quer descobrir erro de roteamento — a mesma escolha que o `NoMbc` fez no 0.4.
@@ -130,25 +138,39 @@ pub struct Bus {
     cartridge: Box<dyn Cartridge>,
     wram: [u8; WRAM_LEN],
     hram: [u8; HRAM_LEN],
+    /// `$FF00`–`$FF7F`. Byte cru: só os endereços de [`boot::IO_HAS_OWNER`]
+    /// são alcançáveis, e nenhum tem máscara ou efeito colateral ainda.
+    io: [u8; boot::IO_LEN],
+    /// `$FFFF`. Campo próprio porque é região própria.
+    ie: u8,
 }
 
 impl Bus {
-    /// Liga um cartucho ao barramento, com a RAM interna zerada.
+    /// Liga um cartucho ao barramento, no estado em que a boot ROM do **DMG**
+    /// entrega o controle ao cartucho.
     ///
-    /// Zero é uma **escolha**, não o estado do hardware. A § Console state
-    /// after boot ROM hand-off diz que "the console's WRAM and HRAM are random
-    /// on power-up" e que os emuladores divergem — uns preenchem com uma
-    /// constante (`$00` ou `$FF`), outros sorteiam. Constante é o que dá teste
-    /// reprodutível, e a própria spec desaconselha que um jogo dependa disso.
+    /// Não há um `Bus::after_boot_rom` separado, e a assimetria com
+    /// [`crate::cpu::Registers::after_boot_rom`] é deliberada: lá o estado
+    /// depende do checksum da ROM, então havia o que um construtor carregar;
+    /// aqui a coluna DMG / MGB é literal, e este emulador não tem outro estado
+    /// em que estar — ele nunca roda a boot ROM.
     ///
-    /// Os valores iniciais que **são** especificados — `A=$01`, `SP=$FFFE`,
-    /// `PC=$0100`, os registradores de hardware — são o 1.2b.
+    /// O que sai daqui mistura duas coisas, e vale saber qual é qual:
+    ///
+    /// - **Spec:** os registradores de hardware, do módulo [`boot`].
+    /// - **Escolha deste emulador:** a RAM interna zerada. A § Console state
+    ///   after boot ROM hand-off diz que "the console's WRAM and HRAM are random
+    ///   on power-up" e que os emuladores divergem — uns preenchem com uma
+    ///   constante (`$00` ou `$FF`), outros sorteiam. Constante é o que dá teste
+    ///   reprodutível, e a própria spec desaconselha que um jogo dependa disso.
     #[must_use]
     pub fn new(cartridge: Box<dyn Cartridge>) -> Self {
         Self {
             cartridge,
             wram: [0x00; WRAM_LEN],
             hram: [0x00; HRAM_LEN],
+            io: boot::IO,
+            ie: boot::INTERRUPT_ENABLE,
         }
     }
 
@@ -160,10 +182,16 @@ impl Bus {
             Region::WorkRam | Region::EchoRam => self.wram[wram_index(addr)],
             Region::HighRam => self.hram[hram_index(addr)],
             Region::NotUsable => NOT_USABLE_READ,
-            Region::VideoRam
-            | Region::ObjectAttributeMemory
-            | Region::IoRegisters
-            | Region::InterruptEnable => OPEN_BUS,
+            Region::IoRegisters => {
+                let index = io_index(addr);
+                if boot::IO_HAS_OWNER[index] {
+                    self.io[index]
+                } else {
+                    OPEN_BUS
+                }
+            }
+            Region::InterruptEnable => self.ie,
+            Region::VideoRam | Region::ObjectAttributeMemory => OPEN_BUS,
         }
     }
 
@@ -176,16 +204,26 @@ impl Bus {
     /// Em `$FEA0`–`$FEFF` a escrita se perde. A spec descreve a leitura daquela
     /// faixa como constante, o que já implica que não há célula a escrever —
     /// guardar o byte ali contradiria [`NOT_USABLE_READ`].
+    ///
+    /// Nos registradores de I/O a escrita é **crua**: o byte entra inteiro, sem
+    /// máscara, sem bit read-only e sem efeito colateral. Escrever em `DIV`
+    /// devia zerá-lo, escrever em `LY` não devia fazer nada, e os dois aqui
+    /// guardam o byte. Isso é divergência conhecida e delimitada: o 1.2b-ii
+    /// entrega valor inicial, e a semântica vem com o componente dono
+    /// (timer 2.1, interrupções 2.2, PPU 3.1, APU M6).
     pub fn write(&mut self, addr: u16, value: u8) {
         match Region::of(addr) {
             Region::CartridgeRom | Region::ExternalRam => self.cartridge.write(addr, value),
             Region::WorkRam | Region::EchoRam => self.wram[wram_index(addr)] = value,
             Region::HighRam => self.hram[hram_index(addr)] = value,
-            Region::NotUsable
-            | Region::VideoRam
-            | Region::ObjectAttributeMemory
-            | Region::IoRegisters
-            | Region::InterruptEnable => {}
+            Region::IoRegisters => {
+                let index = io_index(addr);
+                if boot::IO_HAS_OWNER[index] {
+                    self.io[index] = value;
+                }
+            }
+            Region::InterruptEnable => self.ie = value,
+            Region::NotUsable | Region::VideoRam | Region::ObjectAttributeMemory => {}
         }
     }
 }
@@ -204,6 +242,13 @@ const fn wram_index(addr: u16) -> usize {
 /// Índice na HRAM, para um endereço que já se sabe ser [`Region::HighRam`].
 const fn hram_index(addr: u16) -> usize {
     (addr as usize) - HRAM_BASE
+}
+
+/// Índice na faixa de I/O, para um endereço que já se sabe ser
+/// [`Region::IoRegisters`]. Ter índice não é ter dono: quem decide isso é
+/// [`boot::IO_HAS_OWNER`].
+const fn io_index(addr: u16) -> usize {
+    (addr as usize) - boot::IO_BASE
 }
 
 /// `derive(Debug)` despejaria 8 KiB de WRAM no terminal, e o `Box<dyn

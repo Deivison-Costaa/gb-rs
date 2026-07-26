@@ -161,13 +161,17 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     quem o pega é trocar a memória **entre** os dois `step`. Ver
     [doc da 0022](docs/iterations/0022-cpu-add-adc-r8.md) e `STATUS.md`,
     notas 44 e 45.
-  - [ ] 1.6b `SUB a,r8`, `SBC a,r8` e `CP a,r8` (`$90`–`$9F` e `$B8`–`$BF`) —
+  - [x] 1.6b `SUB a,r8`, `SBC a,r8` e `CP a,r8` (`$90`–`$9F` e `$B8`–`$BF`) —
     os blocos `10 010 rrr`, `10 011 rrr` e `10 111 rrr`, 24 opcodes. `N` é `1`
     **literal**, e o `H` é **empréstimo** do bit 4 e não carry: três colunas com
     a mesma letra do 1.6a e o significado invertido. `CP` é a única das oito que
     **não escreve em `A`** — só produz flags. `CP` fica aqui e não com o `AND`
     porque a coluna de flags dele é a do `SUB`, letra por letra; o que o separa
-    do bloco `10 010` é só a ausência da escrita.
+    do bloco `10 010` é só a ausência da escrita. As cinco armadilhas vieram
+    pré-anunciadas pelo handoff da 0022 e nenhuma virou código; o achado real
+    foi processual — o controle negativo `decoded_elsewhere` precisou de
+    atualização em **nove** arquivos, um deles com nome de variável diferente
+    do padrão. Ver [doc da 0023](docs/iterations/0023-cpu-sub-sbc-cp-r8.md).
   - [ ] 1.6c `AND a,r8`, `XOR a,r8` e `OR a,r8` (`$A0`–`$B7`) — os blocos
     `10 100 rrr`, `10 101 rrr` e `10 110 rrr`, 24 opcodes. Aqui `H` e `C` são
     **constantes na coluna**, não resultado de conta: `AND` tem `H` = `1` e

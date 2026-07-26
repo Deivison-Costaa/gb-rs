@@ -28,4 +28,5 @@ pub fn decoded_elsewhere(opcode: u8) -> bool {
         || opcode & 0b1100_1111 == 0b0000_1001
         || matches!(opcode, 0x07 | 0x0F | 0x17 | 0x1F)
         || opcode == 0xCB
+        || matches!(opcode, 0x18 | 0x20 | 0x28 | 0x30 | 0x38)
 }

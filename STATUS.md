@@ -3,11 +3,11 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0043 — RST (`$C7` `$CF` `$D7` `$DF` `$E7` `$EF` `$F7` `$FF`) ([doc](docs/iterations/0043-rst.md)). 8 opcodes, 4 M-cycles (16 T), `fetch → internal → write(PC:upper→(--SP)) → write(PC:lower→(--SP))`. Reusa `call_immediate` a partir do `Internal` (M4 do CALL): o destino é latchado no fetch (`u16::from((opcode >> 3) & 7) * 8`) e o `PushLowByte` o consome como `self.registers.pc = self.latch`. `$F7`/`$FF` não colidem com `PUSH` — verificado. Menor iteração do M1: 5 linhas de código. Bateria: **4/4 pegos, 2/2 controles verdes**.
+**Última iteração concluída:** 0044 — misc: `CPL`, `SCF`, `CCF`, `DAA`, `DI`, `EI`, `STOP` ([doc](docs/iterations/0044-misc-opcodes.md)). 7 opcodes (8 com `NOP`, já existente), 1 M-cycle cada (4 T). `CPL` complementa A com N=1/H=1 (como Z80); `SCF`/`CCF` mexem em C com N=0/H=0; `DAA` em `alu.rs` ajusta BCD tanto após adição quanto subtração; `DI`/`EI` ligam/desligam `IME` sem delay (adiado para 2.2); `STOP` para a CPU via `State::Stopped` (stub sem despertar). `State::Stopped` é distinto de `Lockup`: `lockup()` retorna `None`. O teste `an_opcode_this_emulator_has_not_reached_is_not_an_illegal_one` migrou de `$10` (STOP) para `$76` (HALT). Bateria: **6/6 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0043 — RST.
 **Iteração anterior:** 0042 — RET cc + RET + RETI.
-**Iteração anterior:** 0041 — CALL cc,u16.
-**Duas iterações atrás:** 0040 — JP cc,u16 + JP HL.
-**Próxima tarefa:** ROADMAP **1.11** — misc: `DAA`, `CPL`, `SCF`, `CCF`, `DI`, `EI`, `STOP` (e `NOP`, já feito). `DAA` é a instrução mais complexa do SM83 e **não é igual à do Z80**: o algoritmo de ajuste decimal depende das flags `N` (subtração) e `H`/`C` — não impor a intuição do Z80 aqui (R1). `DI`/`EI` mexem com `IME` (o campo já existe em `Cpu`, inicializado como `false`), e `EI` tem o delay de 1 instrução — esse delay só vira relevante com interrupções (2.2), então para o 1.11 basta ligar/desligar o bit. `STOP` para a CPU e espera um botão; o comportamento exato depende do `P1` (1.12/4.1), então o stub que para a CPU até `reset` basta. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação), a nota 15 (R1: a seção correspondente não é a única — o `DAA` aparece em `02-cpu.md` § BCD Flags e na tabela de opcodes, e há edge cases discutidos no Pan Docs que podem não estar em nenhum dos dois).
+**Duas iterações atrás:** 0041 — CALL cc,u16.
+**Próxima tarefa:** ROADMAP **1.12** — stub da porta serial (`$FF01`/`$FF02`). A região `$FF00`–`$FF02` (P1/JOYP + SB + SC) já está mapeada no `Bus` desde a 0012, mas nenhum componente é dono dela — a leitura retorna `OPEN_BUS` e a escrita é engolida. É preciso: (1) criar um módulo `serial.rs` dono de `SB` e `SC`; (2) rotear `Bus::read`/`write` no `Region::Io` pelos endereços `$FF01`/`$FF02`; (3) escrever em `SB` aciona a saída no `gb-cli` (stdout). `SC` (`$FF02`) tem o bit 7 como trigger de transferência — escrever `$81` em `SC` dispara e o byte em `SB` sai. `SC` com bit 1 (clock source = internal) não tem efeito sem o clock externo. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação).
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -38,7 +38,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **543** (eram **535** antes da 0043 — +8 do novo arquivo `cpu_rst`).
+Testes do workspace: **568** (eram **543** antes da 0044 — +25 do novo arquivo `cpu_misc`).
 
 ## Invariantes
 

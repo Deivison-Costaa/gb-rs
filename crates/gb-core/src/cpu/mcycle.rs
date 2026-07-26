@@ -6,6 +6,14 @@ use crate::cpu::alu::{self, AluOp};
 use crate::cpu::{Flag, Registers};
 
 const NOP: u8 = 0x00;
+const CPL: u8 = 0x2F;
+const SCF: u8 = 0x37;
+const CCF: u8 = 0x3F;
+const DAA: u8 = 0x27;
+const DI: u8 = 0xF3;
+const EI: u8 = 0xFB;
+const STOP: u8 = 0x10;
+
 const JP_U16: u8 = 0xC3;
 
 const LD_R8_R8_FIRST: u8 = 0x40;
@@ -386,6 +394,7 @@ enum State {
     Locked(Lockup),
     ReturnConditional(Condition),
     ReturnImpl(ReturnPop, bool),
+    Stopped,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -462,6 +471,7 @@ impl Cpu {
             State::Locked(lockup) => State::Locked(lockup),
             State::ReturnConditional(cond) => self.return_conditional(cond),
             State::ReturnImpl(phase, ime) => self.return_impl(bus, phase, ime),
+            State::Stopped => State::Stopped,
         };
     }
 
@@ -501,7 +511,8 @@ impl Cpu {
             | State::JumpRelativeReadOffset(_)
             | State::JumpRelativeModifyPc
             | State::ReturnConditional(_)
-            | State::ReturnImpl(..) => None,
+            | State::ReturnImpl(..)
+            | State::Stopped => None,
         }
     }
 
@@ -531,6 +542,38 @@ impl Cpu {
                 alu::rra(&mut self.registers);
                 State::Fetch
             }
+            CPL => {
+                self.registers.a = !self.registers.a;
+                self.registers.set_flag(Flag::N, true);
+                self.registers.set_flag(Flag::H, true);
+                State::Fetch
+            }
+            SCF => {
+                self.registers.set_flag(Flag::N, false);
+                self.registers.set_flag(Flag::H, false);
+                self.registers.set_flag(Flag::C, true);
+                State::Fetch
+            }
+            CCF => {
+                let c = self.registers.flag(Flag::C);
+                self.registers.set_flag(Flag::N, false);
+                self.registers.set_flag(Flag::H, false);
+                self.registers.set_flag(Flag::C, !c);
+                State::Fetch
+            }
+            DAA => {
+                alu::daa(&mut self.registers);
+                State::Fetch
+            }
+            DI => {
+                self.ime = false;
+                State::Fetch
+            }
+            EI => {
+                self.ime = true;
+                State::Fetch
+            }
+            STOP => State::Stopped,
             JP_U16 => State::JumpImmediate(Condition::Always, JumpImmediate::ReadLowByte),
             JP_HL => {
                 self.registers.pc = self.registers.hl();

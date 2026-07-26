@@ -187,6 +187,34 @@ pub(super) fn rla(registers: &mut Registers) {
     registers.set_flag(Flag::C, carry_out);
 }
 
+pub(super) fn daa(registers: &mut Registers) {
+    let mut a = registers.a;
+    let n = registers.flag(Flag::N);
+    let h = registers.flag(Flag::H);
+    let c = registers.flag(Flag::C);
+
+    if !n {
+        if (a & 0x0F) > 9 || h {
+            a = a.wrapping_add(0x06);
+        }
+        if a > 0x99 || c {
+            a = a.wrapping_add(0x60);
+            registers.set_flag(Flag::C, true);
+        }
+    } else {
+        if h {
+            a = a.wrapping_sub(0x06);
+        }
+        if c {
+            a = a.wrapping_sub(0x60);
+        }
+    }
+
+    registers.a = a;
+    registers.set_flag(Flag::Z, a == 0);
+    registers.set_flag(Flag::H, false);
+}
+
 pub(super) fn rra(registers: &mut Registers) {
     let a = registers.a;
     let carry_out = (a & 0x01) != 0;

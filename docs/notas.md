@@ -931,3 +931,41 @@
     positivo. Escolher o operando (ou o par de operandos) que separa os casos
     é parte de escrever o teste — verificado, nas duas vezes, só depois que um
     mutante sobreviveu à bateria.
+
+
+47. **Redundância acidental (12 cópias do mesmo controle) escondia um buraco
+    que a bateria de mutação só achou depois de consolidar num lugar só.**
+    Antes da 0026, `decoded_elsewhere` existia 12 vezes, uma cópia por
+    arquivo de sub-item. Nenhum `sweep` verificava a alegação positiva da
+    função (`decoded_elsewhere(opcode) == true` ⇒ o opcode está de fato
+    decodificado) — só a negativa (`== false` ⇒ tem de estar `Undecoded`).
+    Se uma cópia mentisse dizendo `true` para um opcode que ninguém decodifica
+    ainda, as outras onze cópias — intocadas, cada uma com seu próprio
+    `sweep` — continuariam corretas, e o erro passaria batido só naquele
+    arquivo. Doze testemunhas independentes, mesmo sem ninguém desenhar isso
+    como controle cruzado.
+
+    A 0026 consolidou as 12 cópias num único `tests/support/mod.rs`. A
+    bateria de mutação obrigatória (passo 6) mutou o helper acrescentando um
+    opcode que nenhum item decodifica (`0x04`, ainda não implementado — é o
+    1.6e) e **nenhum dos 289 testes falhou**. As 12 testemunhas viraram uma
+    só, e a lacuna que a redundância escondia ficou visível: todas as 12
+    verificações passaram a confiar na mesma alegação não verificada, ao
+    mesmo tempo.
+
+    A correção não foi no helper — foi nos 12 consumidores. Trocar
+    `else if !decoded_elsewhere(opcode) { assert Undecoded }` (que pula em
+    silêncio quando a função diz `true`) por três ramos —
+    `if in_block {…} else if ILLEGAL {…} else if decoded_elsewhere(opcode)
+    { assert None } else { assert Undecoded }` — fecha o buraco: agora toda
+    alegação de `decoded_elsewhere`, positiva ou negativa, tem uma asserção
+    em cima.
+
+    A nota 29 já batizou "controle negativo que sobrevive por redundância"
+    de não-controle, num contexto diferente (esqueleto vs. bateria de
+    mutação). Esta é a mesma doutrina aplicada ao próprio ato de eliminar a
+    redundância: consolidar duplicatas é certo — o ROADMAP 0.6 pedia
+    exatamente isso — mas a redundância que se está eliminando pode estar
+    escondendo, sem querer, uma proteção que ninguém desenhou de propósito.
+    Rodar a bateria de mutação **depois** de consolidar é o que torna essa
+    perda visível antes do merge, não depois.

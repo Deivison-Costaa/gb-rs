@@ -3,10 +3,10 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0025 — `alu a,imm8`, os 8 opcodes `$C6 $CE $D6 $DE $E6 $EE $F6 $FE` ([doc](docs/iterations/0025-cpu-alu-a-imm8.md)). As mesmas oito operações do 1.6a/b/c, operando vindo do `PC` em vez de `r8`. **Erro de hardware: nenhum** — `AluOp`/`alu::apply` não mudaram, e o risco de instante (`PC` como testemunha, nota 43) já vinha antecipado no handoff da 0024. **O achado foi de cobertura de teste, pego pela própria bateria de mutação:** um operando de teste (`0x0C`) que não compartilhava bit nenhum com `SEED_A` deixava `XOR`/`OR` indistinguíveis (mesmo resultado por coincidência), e faltava o controle "`ADD`/`SUB` ignoram o carry de entrada" ao lado do que já testava `ADC`/`SBC` consumindo-o — nenhum dos dois apareceu lendo o teste, só depois de mutantes sobreviverem. Nota 46. Bateria: **10/10 pegos, 2/2 controles verdes**. `State::AluImmediate`/`Cpu::alu_immediate` espelham `AluFromHl`/`alu_from_hl`; os oito opcodes são casados por literal, não por máscara — não há campo `r8` a isolar em `11 ooo 110`. `decoded_elsewhere`/`previously_decoded` ganhou os oito opcodes deste item nos dez arquivos que já tinham a função.
-**Iteração anterior:** 0024 — `AND a,r8`, `XOR a,r8` e `OR a,r8`, os 24 opcodes `$A0`–`$B7` ([doc](docs/iterations/0024-cpu-and-xor-or-r8.md)). A armadilha muda de natureza em relação ao 1.6a/1.6b: `H`/`C` são **constantes na coluna**, não carry nem empréstimo — `AND` tem `H=1`/`C=0`, `XOR`/`OR` têm `H=0`/`C=0`. **Erro de conta: nenhum** — a tabela de flags veio pronta do handoff da 0023 e `alu::logic` recebe `H` como parâmetro literal por chamada em vez de calculá-lo, que era exatamente a forma que a nota da 0023 pedia para evitar. **O atrito foi de ferramenta, não de spec:** `clippy::type_complexity` (tipo de função inline sem `type` nomeado) e `clippy::identity_op` (`0xFF & AFTER` no teste do M2, `0xFF` sendo o neutro do `&`) reprovaram antes do `cargo test --all`. O controle negativo `decoded_elsewhere`/`previously_decoded` ganhou `(0xA0..=0xB7)` em **dez** arquivos — os nove da 0023 mais o próprio `cpu_sub_sbc_cp_r8.rs`, que passou a precisar dele por não ser mais o sub-item mais recente.
-**Duas iterações atrás:** 0023 — `SUB a,r8`, `SBC a,r8` e `CP a,r8`, os 24 opcodes `$90`–`$9F` e `$B8`–`$BF` ([doc](docs/iterations/0023-cpu-sub-sbc-cp-r8.md)). Mesma letra do 1.6a, grandeza invertida: `N` é `1` literal, `H`/`C` são empréstimo em vez de carry, e `CP` é a primeira das oito operações da ALU que **não escreve** em `A`. **Erro de conta: nenhum** — as cinco armadilhas vieram pré-anunciadas letra por letra pelo handoff da 0022. **O achado foi processual:** o controle negativo `decoded_elsewhere`/`previously_decoded` teve de ganhar `(0x90..=0x9F)`/`(0xB8..=0xBF)` em **nove** arquivos, um deles com nome de variável diferente do padrão.
-**Próxima tarefa:** ROADMAP **0.6** — consolidar o controle negativo de decodificação, hoje duplicado em 12 arquivos de teste. É a primeira caixa não marcada em ordem e **passa na frente do 1.6e de propósito**: o imposto cresce ~1 arquivo por iteração (eram 9 na 0023, são 12 agora), então cada iteração de opcode que passa antes dele custa mais um. Não há comportamento de hardware novo aqui — é refatoração de teste, e a varredura dos 256 opcodes é o que prova que nada se perdeu: ela tem de continuar reprovando opcode decodificado duas vezes ou nenhuma. Depois dele vem o 1.6e (`INC`/`DEC r8`, 16 opcodes, **não tocam `C`** — primeira vez que uma operação da ALU deixa uma flag intocada em vez de calculada), que fecha o 1.6.
+**Última iteração concluída:** 0026 — consolidar `decoded_elsewhere`/`previously_decoded` num helper único, `tests/support/mod.rs` ([doc](docs/iterations/0026-decoded-elsewhere-single-source.md)). Refatoração de teste, sem comportamento de hardware novo. **Sessão interrompida e retomada por outra sessão** — a primeira metade não deixou relato. **Dois achados de teste, os dois pegos só depois de rodar as coisas, não de ler o código:** o teste RED herdado se auto-contava (buscava `"fn decoded_elsewhere("` e continha esse texto na própria fonte — sempre ficaria com 1 a mais do que devia); e `cpu_ld_r8_u8.rs` guardava a mesma lógica como `let previously_decoded = ...` local, fora do padrão `fn` que a busca original testava, e quase ficou de fora da consolidação. **A bateria de mutação obrigatória achou um terceiro, mais sério:** marcar um opcode ainda não decodificado (`0x04`) como `decoded_elsewhere` não derrubava teste nenhum — os 12 `sweep`s só puluavam a checagem quando a função dizia `true`, nunca verificando a alegação. Antes da consolidação, 12 cópias independentes escondiam esse buraco por redundância acidental (nota 29); consolidar tirou essa sorte sem repor nada, até os 12 arquivos ganharem um terceiro ramo (`else if decoded_elsewhere(opcode) { assert None }`) que checa a alegação em vez de confiar nela. Nota 47. Bateria: **5/5 mutações pegas, 2/2 controles verdes**.
+**Iteração anterior:** 0025 — `alu a,imm8`, os 8 opcodes `$C6 $CE $D6 $DE $E6 $EE $F6 $FE` ([doc](docs/iterations/0025-cpu-alu-a-imm8.md)). As mesmas oito operações do 1.6a/b/c, operando vindo do `PC` em vez de `r8`. **Erro de hardware: nenhum** — `AluOp`/`alu::apply` não mudaram, e o risco de instante (`PC` como testemunha, nota 43) já vinha antecipado no handoff da 0024. **O achado foi de cobertura de teste, pego pela própria bateria de mutação:** um operando de teste (`0x0C`) que não compartilhava bit nenhum com `SEED_A` deixava `XOR`/`OR` indistinguíveis (mesmo resultado por coincidência), e faltava o controle "`ADD`/`SUB` ignoram o carry de entrada" ao lado do que já testava `ADC`/`SBC` consumindo-o — nenhum dos dois apareceu lendo o teste, só depois de mutantes sobreviverem. Nota 46. Bateria: **10/10 pegos, 2/2 controles verdes**.
+**Duas iterações atrás:** 0024 — `AND a,r8`, `XOR a,r8` e `OR a,r8`, os 24 opcodes `$A0`–`$B7` ([doc](docs/iterations/0024-cpu-and-xor-or-r8.md)). A armadilha muda de natureza em relação ao 1.6a/1.6b: `H`/`C` são **constantes na coluna**, não carry nem empréstimo. **Erro de conta: nenhum** — a tabela de flags veio pronta do handoff da 0023. **O atrito foi de ferramenta, não de spec:** `clippy::type_complexity` e `clippy::identity_op` reprovaram antes do `cargo test --all`.
+**Próxima tarefa:** ROADMAP **1.6e** — `INC`/`DEC r8`, 16 opcodes, **não tocam `C`**: primeira vez que uma operação da ALU deixa uma flag intocada em vez de calculada. Fecha o 1.6. `decoded_elsewhere` mora só em `tests/support/mod.rs` agora — opcode novo se declara lá, e cada consumidor precisa de `mod support; use support::decoded_elsewhere;`.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -37,7 +37,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **288** (eram **279** antes da 0025). Este
+Testes do workspace: **289** (eram **288** antes da 0026). Este
 número não é o placar — ele mede o que o projeto afirma sobre si mesmo, não o
 que o hardware cobra.
 
@@ -100,7 +100,7 @@ importar para o item da vez.
 - `LD r,u8` faz a leitura e a escrita no registrador no mesmo M2.
 - O bloco `00 ddd 110` não tem exceção.
 - Opcode reconhecido por máscara pede controle negativo dos 256.
-- `decoded_elsewhere` é duplicada de propósito em cada arquivo de sub-item.
+- `decoded_elsewhere` mora só em `tests/support/mod.rs` desde a 0026.
 - Ainda não há tabela de micro-operações, e a data mudou.
 - Os oito opcodes `r16mem` são 2 M-cycles, e o `HL±` é do M2.
 - `LD r16,u16` escreve meia metade por M-cycle, e não o par no fim.
@@ -140,6 +140,7 @@ importar para o item da vez.
 - `decoded_elsewhere`/`previously_decoded` precisou de atualização em nove
 - `H`/`C` do `AND`/`XOR`/`OR` são constantes na coluna, e `alu::logic`
 - `decoded_elsewhere`/`previously_decoded` chegou a dez arquivos.
+- Os 12 `sweep`s verificam a alegação positiva de `decoded_elsewhere`, não só
 
 ## Bloqueios
 
@@ -200,3 +201,4 @@ Numeração é estável e citada no código: **nunca renumere**.
 44. **O erro de instante tem dois regimes, e só um deles é a classe que este
 45. **A nota 43 tem uma terceira forma: quando o valor não para em lugar nenhum,
 46. **O operando de teste tem de distinguir os casos que o teste alega cobrir —
+47. **Redundância acidental (12 cópias do mesmo controle) escondia um buraco

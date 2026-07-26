@@ -3,13 +3,13 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0048 — correção do DAA ($27) ([doc](docs/iterations/0048-daa-fix.md)). `alu::daa` agora usa intermediário `u16` e threshold `a > 0x9F` (não `a > 0x99`). ROM 11 (`op a,(hl)`) e ROM 01 (`special`) passaram. O erro "27" impresso pela ROM era o **opcode** de DAA ($27), não um índice de teste — a nota 51 registra a armadilha. Bateria: **2/2 pegos, 1/1 controle verde**.
+**Última iteração concluída:** 0049 — registrador DIV ($FF04) ([doc](docs/iterations/0049-div-register.md)). `sys_counter: u16` incrementa 4 por M-cycle; `DIV = counter >> 8` (16384 Hz); escrita em $FF04 zera o contador. Bateria: **4/4 pegos, 2/2 controles verdes**. O agregado `cpu_instrs.gb` **continua sem passar**: os sub-testes de interrupção usam loops em `IF`, não em `DIV`, e queimam ~200M+ ciclos até bater no `max_cycles`. Para destravar o agregado o próximo passo é TIMA/TMA/TAC (timer completo) — o `DIV` sozinho não basta.
+**Iteração anterior:** 0048 — correção do DAA ($27).
 **Iteração anterior:** 0047 — máscara do nibble baixo de F no POP AF.
 **Iteração anterior:** 0046 — `gb-cli run` + MBC1 mínimo.
 **Iteração anterior:** 0045 — stub da porta serial.
-**Iteração anterior:** 0044 — misc: `CPL`, `SCF`, `CCF`, `DAA`, `DI`, `EI`, `STOP`.
-**Próxima tarefa:** ROADMAP **1.14** (continua) — blargg `cpu_instrs.gb` (agregado). ROMs individuais 01 e 03-11 passam (10/11); só 02-interrupts falha (esperado, sem timer/interrupções). O agregado `cpu_instrs.gb` ainda falha em sub-testes que dependem de timer/interrupções. **Notas relevantes:** a nota 51 (blargg imprime opcode em hex, não índice de teste — o "27" era DAA $27, não BIT 1,(HL)), a nota 14 (cache de build na bateria), a nota 50 (MBC1 sem teste de banking).
-**Marco atual:** M1 — CPU (sem gráficos)
+**Próxima tarefa:** ROADMAP **2.1** (início) — TIMA, TMA, TAC (timer completo). O DIV ($FF04) já foi implementado na 0049; faltam os três registradores de controle, o clock select, o enable e o comportamento de overflow. Com TIMA/TMA/TAC funcionando, o `IF` passa a receber o bit de timer — e os sub-testes de interrupção do `cpu_instrs.gb` passam a completar (embora continuem falhando até o controlador de interrupções 2.2). **Notas relevantes:** a nota 51 (blargg imprime opcode em hex), a nota 14 (cache de build), a nota 50 (MBC1 sem teste de banking). O `sys_counter` de 16 bits já está no `Bus` e já é chamado de `Cpu::step` — a infra está pronta.
+**Marco atual:** M1 → transição para M2 (timer iniciado)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -39,7 +39,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **643** (eram **591** antes da 0047 — +52 entre 0045, 0046 e 0047).
+Testes do workspace: **650** (eram **643** antes da 0049 — +7 entre timer_div.rs e a renomeação do teste de boot_state).
 
 ## Invariantes
 
@@ -144,6 +144,9 @@ importar para o item da vez.
 - `INC`/`DEC r8` são a primeira ALU que deixa `C` intocado — nem calculado nem
 - `$34`/`$35` espelham `StoreImmediateToHl` (1.4b), não `AluFromHl` (1.6a).
 - `INC`/`DEC r16` não tocam flag nenhuma, e `fetch` escreve a metade baixa.
+- O `sys_counter` de 16 bits avança 4 por M-cycle e o `DIV` lê `>> 8`.
+- Escrever qualquer valor em `$FF04` zera `sys_counter`; o byte escrito é ignorado.
+- O timer avança via `Bus::tick_timer()`, chamado de `Cpu::step`, e não de `read`/`write`.
 
 ## Bloqueios
 

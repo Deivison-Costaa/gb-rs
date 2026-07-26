@@ -255,10 +255,10 @@ fn ie_starts_at_zero_and_is_a_register_of_its_own() {
 }
 
 #[test]
-fn the_named_registers_have_storage_and_no_read_semantics_yet() {
+fn ly_and_tac_have_storage_and_no_read_semantics_yet() {
     let mut bus = bus();
 
-    for (addr, name) in [(0xFF04u16, "DIV"), (0xFF44, "LY"), (0xFF07, "TAC")] {
+    for (addr, name) in [(0xFF44u16, "LY"), (0xFF07, "TAC")] {
         bus.write(addr, PROBE);
         assert_eq!(
             bus.read(addr),

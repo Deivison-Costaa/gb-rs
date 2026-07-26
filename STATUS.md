@@ -3,11 +3,11 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0044 — misc: `CPL`, `SCF`, `CCF`, `DAA`, `DI`, `EI`, `STOP` ([doc](docs/iterations/0044-misc-opcodes.md)). 7 opcodes (8 com `NOP`, já existente), 1 M-cycle cada (4 T). `CPL` complementa A com N=1/H=1 (como Z80); `SCF`/`CCF` mexem em C com N=0/H=0; `DAA` em `alu.rs` ajusta BCD tanto após adição quanto subtração; `DI`/`EI` ligam/desligam `IME` sem delay (adiado para 2.2); `STOP` para a CPU via `State::Stopped` (stub sem despertar). `State::Stopped` é distinto de `Lockup`: `lockup()` retorna `None`. O teste `an_opcode_this_emulator_has_not_reached_is_not_an_illegal_one` migrou de `$10` (STOP) para `$76` (HALT). Bateria: **6/6 pegos, 2/2 controles verdes**.
+**Última iteração concluída:** 0045 — stub da porta serial (`$FF01`/`$FF02`) ([doc](docs/iterations/0045-serial-stub.md)). Módulo `serial.rs` no crate root com `Serial { sb, sc, output }`. Roteamento em `Bus::read`/`write`: `$FF01`/`$FF02` vão para `self.serial`, os demais registradores de I/O continuam no array `io`. Escrever `$81` em SC (bit 7=1, bit 0=1, borda de subida do bit 7) dispara a transferência: o byte em SB é empurrado para `output` e SC.7 é limpo imediatamente. SC mascara bits 6–2 (`value & 0x83`). `Bus::take_serial_output()` drena a fila para o `gb-cli`. Sem temporização e sem interrupção serial (M2). `gb-cli run` continua saindo `2` (NOT_IMPLEMENTED). Bateria: **6/6 pegos, 2/2 controles verdes** — dois buracos de cobertura (rising edge e máscara de SC) foram encontrados e fechados durante a bateria.
+**Iteração anterior:** 0044 — misc: `CPL`, `SCF`, `CCF`, `DAA`, `DI`, `EI`, `STOP`.
 **Iteração anterior:** 0043 — RST.
 **Iteração anterior:** 0042 — RET cc + RET + RETI.
-**Duas iterações atrás:** 0041 — CALL cc,u16.
-**Próxima tarefa:** ROADMAP **1.12** — stub da porta serial (`$FF01`/`$FF02`). A região `$FF00`–`$FF02` (P1/JOYP + SB + SC) já está mapeada no `Bus` desde a 0012, mas nenhum componente é dono dela — a leitura retorna `OPEN_BUS` e a escrita é engolida. É preciso: (1) criar um módulo `serial.rs` dono de `SB` e `SC`; (2) rotear `Bus::read`/`write` no `Region::Io` pelos endereços `$FF01`/`$FF02`; (3) escrever em `SB` aciona a saída no `gb-cli` (stdout). `SC` (`$FF02`) tem o bit 7 como trigger de transferência — escrever `$81` em `SC` dispara e o byte em `SB` sai. `SC` com bit 1 (clock source = internal) não tem efeito sem o clock externo. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação).
+**Próxima tarefa:** ROADMAP **1.13** — blargg `cpu_instrs/individual/01` a `05`. Com a serial funcionando, é a primeira vez que ROMs de teste podem produzir saída legível pelo `scoreboard.sh`. É preciso: (1) implementar `gb-cli run <rom> --headless --max-cycles <n>`: carregar a ROM, instanciar `Bus` + `Cpu`, rodar `step()` até `max_cycles` ou `Lockup`, drenar `take_serial_output()` para stdout; (2) o `scoreboard.sh` já está preparado para capturar essa saída e comparar com os gabaritos — se o primeiro caractere bater `pass`, os demais `fail`. As ROMs 01 a 05 exercitam opcodes já implementados (loads, ALU, shifts, rotates, jumps condicionais) — o desafio não são os opcodes, é o laço de execução e o contrato de saída. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação).
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -38,7 +38,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **568** (eram **543** antes da 0044 — +25 do novo arquivo `cpu_misc`).
+Testes do workspace: **577** (eram **568** antes da 0045 — +9 do novo arquivo `serial_stub`).
 
 ## Invariantes
 

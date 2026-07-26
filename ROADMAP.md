@@ -91,11 +91,18 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     versão; ver [doc da 0018](docs/iterations/0018-cpu-ld-r16-u16.md) e
     `STATUS.md`, nota 34. A seta da coluna faz parte do passo: `read(u16:lower)`
     sem seta (o `$FA`) é que é latch.
-  - [ ] 1.5b `PUSH r16stk` (`$C5 $D5 $E5 $F5`) — o bloco `11 rr 0101`,
+  - [x] 1.5b `PUSH r16stk` (`$C5 $D5 $E5 $F5`) — o bloco `11 rr 0101`,
     4 M-cycles: `fetch → internal → write(upper->(--SP)) → write(lower->(--SP))`.
     Primeiro `internal` do projeto que não é o último passo, e primeiro operando
     que é registrador e endereço ao mesmo tempo com o `SP` mudando **entre** os
-    dois acessos. `r16stk` tem `af` no índice 3.
+    dois acessos. `r16stk` tem `af` no índice 3. O `--SP` é **pré**-decremento
+    escrito **dentro** do passo da escrita, como o `HL++` do 1.4c: decrementar no
+    `internal` do M2 dá o mesmo estado final e os mesmos 16 T-cycles, e **8 dos
+    10 testes passam** contra essa versão. **É o que eu escrevi de memória**,
+    copiando o Z80 — onde o decremento mora no T-cycle extra do M1; ver
+    [doc da 0019](docs/iterations/0019-cpu-push-r16stk.md) e `STATUS.md`,
+    nota 36. O layout de bits está sob o cabeçalho **`pop r16stk`** do
+    `02-cpu.md`: a string `push` não existe no arquivo (nota 38).
   - [ ] 1.5c `POP r16stk` (`$C1 $D1 $E1 $F1`) — o bloco `11 rr 0001`,
     3 M-cycles: `fetch → read((SP++)->lower) → read((SP++)->upper)`. É onde
     `POP AF` esbarra na decisão do 1.1 de **não** mascarar o nibble baixo de `F`

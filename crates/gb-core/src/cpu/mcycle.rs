@@ -233,6 +233,17 @@ const LD_HL_SP_I8: u8 = 0xF8;
 
 const HIGH_PAGE: u16 = 0xFF00;
 
+const INTERRUPT_VBLANK_BIT: u8 = 0;
+const INTERRUPT_LCD_BIT: u8 = 1;
+const INTERRUPT_TIMER_BIT: u8 = 2;
+const INTERRUPT_SERIAL_BIT: u8 = 3;
+const INTERRUPT_JOYPAD_BIT: u8 = 4;
+
+const IE_ADDR: u16 = 0xFFFF;
+const IF_ADDR: u16 = 0xFF0F;
+
+const INTERRUPT_MASK: u8 = 0x1F;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Direction {
     Store,
@@ -335,6 +346,16 @@ enum ReturnPop {
     SetProgramCounter,
 }
 
+// spec: docs/reference/05-interrupts.md § Interrupt handling — 5 M-cycles.
+// Wait1 é consumido implicitamente na detecção; o dispatch começa em Wait2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InterruptDispatch {
+    Wait2,
+    PushHigh,
+    PushLow,
+    JumpToVector,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Condition {
     Always,
@@ -394,6 +415,7 @@ enum State {
     Locked(Lockup),
     ReturnConditional(Condition),
     ReturnImpl(ReturnPop, bool),
+    InterruptDispatch(InterruptDispatch, u16),
     Stopped,
 }
 
@@ -419,6 +441,8 @@ pub struct Cpu {
     state: State,
     latch: u16,
     pub ime: bool,
+    ei_pending: bool,
+    ei_wait: bool,
 }
 
 impl Cpu {
@@ -429,14 +453,28 @@ impl Cpu {
             state: State::Fetch,
             latch: 0,
             ime: false,
+            ei_pending: false,
+            ei_wait: false,
         }
     }
 
     // Avança um M-cycle (R2). No máximo um acesso ao barramento.
     pub fn step(&mut self, bus: &mut Bus) {
         bus.tick_timer();
+
+        if matches!(self.state, State::Fetch) {
+            let just_delayed = self.apply_ei_delay();
+            if !just_delayed {
+                if let Some(vector) = self.check_interrupt(bus) {
+                    self.state = State::InterruptDispatch(InterruptDispatch::Wait2, vector);
+                    return;
+                }
+            }
+        }
+
         self.state = match self.state {
             State::Fetch => self.fetch(bus),
+            State::InterruptDispatch(phase, vector) => self.interrupt_dispatch(bus, phase, vector),
             State::JumpImmediate(condition, phase) => self.jump_immediate(bus, condition, phase),
             State::CallImmediate(condition, phase) => self.call_immediate(bus, condition, phase),
             State::LoadFromHl(dest) => self.load_from_hl(bus, dest),
@@ -513,6 +551,7 @@ impl Cpu {
             | State::JumpRelativeModifyPc
             | State::ReturnConditional(_)
             | State::ReturnImpl(..)
+            | State::InterruptDispatch(..)
             | State::Stopped => None,
         }
     }
@@ -525,6 +564,76 @@ impl Cpu {
     #[must_use]
     pub const fn is_stopped(&self) -> bool {
         matches!(self.state, State::Stopped)
+    }
+
+    // spec: docs/reference/05-interrupts.md § IME — delay de 1 instrução.
+    // Devolve true se acabou de consumir ei_wait (suprime verificação de interrupção).
+    fn apply_ei_delay(&mut self) -> bool {
+        if !self.ei_pending {
+            return false;
+        }
+        if self.ei_wait {
+            self.ei_wait = false;
+            return true;
+        }
+        self.ime = true;
+        self.ei_pending = false;
+        false
+    }
+
+    // spec: docs/reference/05-interrupts.md § Interrupt handling.
+    // Verifica IME && (IE & IF) != 0, escolhe a prioridade mais alta, limpa o bit
+    // de IF e o IME, e devolve o vetor.
+    fn check_interrupt(&mut self, bus: &mut Bus) -> Option<u16> {
+        if !self.ime {
+            return None;
+        }
+        let fired = bus.read(IE_ADDR) & bus.read(IF_ADDR) & INTERRUPT_MASK;
+        if fired == 0 {
+            return None;
+        }
+        let bit = fired.trailing_zeros() as u8;
+        self.ime = false;
+        let if_reg = bus.read(IF_ADDR);
+        bus.write(IF_ADDR, if_reg & !(1 << bit));
+        let vector = match bit {
+            INTERRUPT_VBLANK_BIT => 0x0040,
+            INTERRUPT_LCD_BIT => 0x0048,
+            INTERRUPT_TIMER_BIT => 0x0050,
+            INTERRUPT_SERIAL_BIT => 0x0058,
+            INTERRUPT_JOYPAD_BIT => 0x0060,
+            _ => unreachable!("bit < 5 porque a máscara é INTERRUPT_MASK (0x1F)"),
+        };
+        Some(vector)
+    }
+
+    // spec: docs/reference/05-interrupts.md § Interrupt handling — 5 M-cycles.
+    // Wait1 já foi consumido; os dois wait states restantes produzem Wait2 → PushHigh.
+    fn interrupt_dispatch(
+        &mut self,
+        bus: &mut Bus,
+        phase: InterruptDispatch,
+        vector: u16,
+    ) -> State {
+        match phase {
+            InterruptDispatch::Wait2 => {
+                State::InterruptDispatch(InterruptDispatch::PushHigh, vector)
+            }
+            InterruptDispatch::PushHigh => {
+                let [high, _] = self.registers.pc.to_be_bytes();
+                self.push_byte(bus, high);
+                State::InterruptDispatch(InterruptDispatch::PushLow, vector)
+            }
+            InterruptDispatch::PushLow => {
+                let [_, low] = self.registers.pc.to_be_bytes();
+                self.push_byte(bus, low);
+                State::InterruptDispatch(InterruptDispatch::JumpToVector, vector)
+            }
+            InterruptDispatch::JumpToVector => {
+                self.registers.pc = vector;
+                State::Fetch
+            }
+        }
     }
 
     fn fetch(&mut self, bus: &Bus) -> State {
@@ -573,10 +682,13 @@ impl Cpu {
             }
             DI => {
                 self.ime = false;
+                self.ei_pending = false;
+                self.ei_wait = false;
                 State::Fetch
             }
             EI => {
-                self.ime = true;
+                self.ei_pending = true;
+                self.ei_wait = true;
                 State::Fetch
             }
             STOP => State::Stopped,
@@ -797,7 +909,8 @@ impl Cpu {
             ReturnPop::SetProgramCounter => {
                 self.registers.pc = self.latch;
                 if ime {
-                    self.ime = true;
+                    self.ei_pending = true;
+                    self.ei_wait = true;
                 }
                 State::Fetch
             }

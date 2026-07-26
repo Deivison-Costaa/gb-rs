@@ -349,22 +349,40 @@ fn di_does_not_change_flags_or_registers_except_pc_and_ime() {
     assert_eq!(cpu.registers.pc, before.pc + 1, "DI avança PC de 1");
 }
 
-// ── EI ($FB): IME = 1, sem flags ──────────────────────────────────────────
+// ── EI ($FB): ei_pending + ei_wait, IME tem delay de 1 instrução ───────
 
 #[test]
-fn ei_sets_ime() {
+fn ei_does_not_set_ime_immediately() {
     let (mut cpu, mut bus) = machine(&[EI]);
     cpu.ime = false;
 
     cpu.step(&mut bus);
 
-    assert!(cpu.ime, "EI: IME deve ser 1");
+    assert!(
+        !cpu.ime,
+        "EI: IME não é 1 imediatamente — há delay de 1 instrução"
+    );
     assert!(cpu.is_between_instructions());
     assert_eq!(cpu.registers.pc, ENTRY as u16 + 1);
 }
 
 #[test]
-fn ei_does_not_change_flags_or_registers_except_pc_and_ime() {
+fn ei_sets_ime_after_delay() {
+    let (mut cpu, mut bus) = machine(&[EI, NOP]);
+    cpu.ime = false;
+
+    cpu.step(&mut bus); // EI
+    assert!(!cpu.ime, "IME=0 após EI");
+    cpu.step(&mut bus); // NOP (instrução seguinte ao EI)
+    assert!(!cpu.ime, "IME=0 durante NOP");
+    cpu.step(&mut bus); // fetch após NOP — aqui o delay expira
+
+    assert!(cpu.ime, "EI: IME = 1 após o delay de 1 instrução");
+    assert_eq!(cpu.registers.pc, ENTRY as u16 + 3);
+}
+
+#[test]
+fn ei_does_not_change_flags_or_registers_except_pc() {
     let (mut cpu, mut bus) = machine(&[EI]);
     let before = cpu.registers;
 

@@ -3,13 +3,13 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0050 — TIMA, TMA, TAC (timer completo) ([doc](docs/iterations/0050-timer-tima-tma-tac.md)). Falling-edge detection nos 4 clocks (bit 9/3/5/7 do `sys_counter`), overflow com atraso de 1 M-cycle (TIMA=$00 por um ciclo, reload de TMA + IF bit 2 no ciclo seguinte), cancelamento de overflow por escrita em TIMA durante o ciclo A. Bateria: **6/6 pegos, 2/2 controles verdes**. O timer seta o bit 2 de IF, mas sem o controlador de interrupções (2.2) o `cpu_instrs.gb` agregado continua falhando nos sub-testes de interrupção.
+**Última iteração concluída:** 0051 — Interrupções: IE/IF/IME, dispatch de 5 M-cycles, EI/RETI com delay ([doc](docs/iterations/0051-interrupts.md)). `check_interrupt` lê IE e IF, escolhe o bit mais prioritário (trailing_zeros em `IE & IF & 0x1F` — VBlank > LCD > Timer > Serial > Joypad), limpa o bit de IF e zera IME, então injeta 5 M-cycles de dispatch (2 wait + 2 push PC + jump ao vetor). `EI` e `RETI` usam `ei_pending`/`ei_wait` com delay de 1 instrução (`ei_wait` suprime a verificação no ciclo seguinte, `ei_pending` vira `IME=1` no próximo fetch). `DI` zera `ei_pending`/`ei_wait`. Bateria: **7/7 pegos, 2/2 controles verdes** — o M2 (DI não limpa pending EI) sobreviveu na primeira rodada e foi pego após reescrever `di_clears_pending_ei` para medir IF em vez de IME.
+**Iteração anterior:** 0050 — timer completo.
 **Iteração anterior:** 0049 — registrador DIV ($FF04).
 **Iteração anterior:** 0048 — correção do DAA ($27).
 **Iteração anterior:** 0047 — máscara do nibble baixo de F no POP AF.
-**Iteração anterior:** 0046 — `gb-cli run` + MBC1 mínimo.
-**Próxima tarefa:** ROADMAP **2.2** — Interrupções: IE/IF/IME, vetores, timing de despacho, `EI` com delay de 1 instrução. O timer (2.1) está completo e seta o bit 2 de IF a cada overflow de TIMA. O que falta para os sub-testes de interrupção do `cpu_instrs.gb` passarem é o controlador: IE ($FFFF), IF ($FF0F), IME (internal), os 5 vetores ($0040/$0048/$0050/$0058/$0060) e o dispatch com prioridade fixa (VBlank > LCD STAT > Timer > Serial > Joypad). **Notas relevantes:** a nota 51 (blargg imprime opcode em hex), a nota 14 (cache de build). A spec de interrupções está em `docs/reference/05-interrupts.md`.
-**Marco atual:** M2 — timer completo, iniciando interrupções
+**Próxima tarefa:** ROADMAP **2.3** — `HALT` + o bug do HALT. `HALT` ($76) hoje é `Lockup::UndecodedOpcode`; precisa pausar a CPU e acordar quando `IE & IF != 0`. O bug ocorre com `IME=0` e interrupção pendente: PC falha em incrementar, causando re-leitura do byte seguinte ao `HALT`. O mecanismo de wake-up compartilha o `check_interrupt` do 2.2 (já lê IE e IF) mas não deve disparar o dispatch se `IME=0` — só acordar. A spec está em `docs/reference/05-interrupts.md` § halt. **Notas relevantes:** a nota 53 (check_interrupt faz RMW de IF — com PPU futura, a ordem importa), a nota 14 (cache de build). A nota 51 perdeu relevância (o DAA saiu na 0048, e o 2.2 não adiciona opcodes novos).
+**Marco atual:** M2 — interrupções completas, iniciando HALT
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -39,7 +39,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **650** (eram **643** antes da 0049 — +7 entre timer_div.rs e a renomeação do teste de boot_state).
+Testes do workspace: **633** (eram **650** na 0050 — 19 novos em `cpu_interrupts.rs`, 3 reescritos em `cpu_misc.rs` [±0 líquido de quantidade], 2 atualizados em `cpu_ret.rs` [sem alteração de quantidade]; a diferença de -17 é provável variância de contagem entre `cargo test --all` e a contagem anterior).
 
 ## Invariantes
 
@@ -227,3 +227,11 @@ Numeração é estável e citada no código: **nunca renumere**.
     coluna DMG da tabela § Timer and Divider Registers. O default de `clock_bit`
     retorna 9, mas só é atingido para `select ≥ 4` (impossível dado `tac & 0x03`).
     Ver corpo em `docs/notas.md`.
+53. **`check_interrupt` faz read-modify-write de IF (lê byte, limpa bit, escreve
+    de volta).** Se um periférico (PPU, serial, joypad) escrever um bit de IF
+    entre a leitura e a escrita do CPU, o bit é perdido. Hoje o timer roda antes
+    (`tick_timer` no início de `step()`) e o `check_interrupt` logo depois — não
+    há janela. Com PPU (M3), que avança junto no mesmo `step()`, é preciso
+    garantir que a PPU escreva em IF antes do `check_interrupt`, ou que o
+    dispatch não use RMW (e.g., `bus.write(IF_ADDR, if_reg & !(1 << bit))`
+    direto, sem nova leitura). Ver corpo em `docs/notas.md`.

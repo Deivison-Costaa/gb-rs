@@ -1035,3 +1035,21 @@
     `Increment every` da spec. O default de `const fn clock_bit` retorna 9, mas
     o braço `_` só é atingido para `select ≥ 4` — impossível dado que
     `clock_bit` é chamada com `tac & 0x03`.
+
+53. **`check_interrupt` faz read-modify-write de IF e isso é perigoso com
+    periféricos.** A 0051 implementou o dispatch de interrupções com
+    `check_interrupt` lendo IF via `bus.read(IF_ADDR)`, limpando o bit do
+    vetor escolhido (`if_reg & !(1 << bit)`), e escrevendo de volta via
+    `bus.write(IF_ADDR, ...)`. Entre a leitura e a escrita, nenhum
+    periférico roda (o timer, único existente, roda em `bus.tick_timer()`
+    ANTES de `check_interrupt`). Com PPU (M3) rodando no mesmo `step()`, o
+    RMW se torna uma janela de perda: se a PPU setar um bit de IF entre a
+    leitura do CPU e a escrita de volta, o bit é sobrescrito com 0. A solução
+    é garantir que a PPU escreva em IF antes do `check_interrupt` (como o
+    timer faz), ou que o dispatch use uma máscara que não releia IF (e.g.,
+    escrever `bus.write(IF_ADDR, if_reg & !(1 << bit))` com `if_reg` lido
+    uma única vez — que é o que já está feito, mas a invariante correta é:
+    "toda escrita de periférico em IF acontece antes de check_interrupt no
+    mesmo M-cycle"). Ver [doc da 0051](docs/iterations/0051-interrupts.md)
+    § Decisões de arquitetura, item 3.
+

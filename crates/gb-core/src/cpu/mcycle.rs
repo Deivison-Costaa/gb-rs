@@ -195,6 +195,8 @@ const DEC_R16_PATTERN: u8 = 0b0000_1011;
 const ADD_HL_R16_MASK: u8 = 0b1100_1111;
 const ADD_HL_R16_PATTERN: u8 = 0b0000_1001;
 
+const ADD_SP_I8: u8 = 0xE8;
+
 const HIGH_PAGE: u16 = 0xFF00;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -245,6 +247,15 @@ enum IncDecHl {
     Write,
 }
 
+// `ADD SP,i8` ($E8): `Z`/`N` = 0 literais; `H`/`C` sobre o byte baixo
+// (carry do bit 3 e do bit 7), não o par inteiro como o 1.7b — ver docs/iterations/0030.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AddSpI8 {
+    ReadImmediate,
+    Internal,
+    WriteHigh,
+}
+
 // match de Cpu::step é total sem _ =>: estado novo quebra a compilação.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -276,6 +287,7 @@ enum State {
     // Source r16 carregado para o M2; destino é sempre HL. O H alto foi escrito
     // no fetch (como o 1.7a); falta escrever a metade alta no internal.
     AddHlR16(R16),
+    AddSpI8(AddSpI8),
     Locked(Lockup),
 }
 
@@ -329,6 +341,7 @@ impl Cpu {
             State::IncDecHl(op, phase) => self.inc_dec_hl(bus, op, phase),
             State::IncDecR16(target) => self.finish_inc_dec_r16(target),
             State::AddHlR16(source) => self.finish_add_hl_r16(source),
+            State::AddSpI8(phase) => self.add_sp_i8(bus, phase),
             State::Locked(lockup) => State::Locked(lockup),
         };
     }
@@ -357,7 +370,8 @@ impl Cpu {
             | State::AluImmediate(_)
             | State::IncDecHl(..)
             | State::IncDecR16(_)
-            | State::AddHlR16(_) => None,
+            | State::AddHlR16(_)
+            | State::AddSpI8(_) => None,
         }
     }
 
@@ -433,6 +447,7 @@ impl Cpu {
                 self.inc_dec_r16(IncDecOp::Decrement, opcode)
             }
             _ if opcode & ADD_HL_R16_MASK == ADD_HL_R16_PATTERN => self.add_hl_r16(opcode),
+            ADD_SP_I8 => State::AddSpI8(AddSpI8::ReadImmediate),
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
             }
@@ -819,6 +834,45 @@ impl Cpu {
         let [high, _] = self.latch.to_be_bytes();
         self.write_r16_high(R16::Hl, high);
         State::Fetch
+    }
+
+    // 4 M-cycles: fetch → read(i8) → internal → write.
+    // `Z`/`N` = 0 literais; `H`/`C` calculados sobre o byte baixo de SP + i8
+    // (carry do bit 3 e do bit 7), não sobre o par inteiro como o 1.7b faria
+    // — ver docs/iterations/0030.
+    fn add_sp_i8(&mut self, bus: &mut Bus, phase: AddSpI8) -> State {
+        match phase {
+            AddSpI8::ReadImmediate => {
+                let i8 = self.read_at_pc(bus);
+                let sp = self.registers.sp;
+                let offset = (i8 as i8) as u16;
+                let result = sp.wrapping_add(offset);
+
+                let sp_low = (sp & 0xFF) as u8;
+                self.registers.set_flag(Flag::Z, false);
+                self.registers.set_flag(Flag::N, false);
+                self.registers
+                    .set_flag(Flag::H, (sp_low & 0x0F) + (i8 & 0x0F) > 0x0F);
+                self.registers
+                    .set_flag(Flag::C, u16::from(sp_low) + u16::from(i8) > 0xFF);
+
+                self.latch = result;
+                State::AddSpI8(AddSpI8::Internal)
+            }
+            AddSpI8::Internal => {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "grava só a metade baixa de SP"
+                )]
+                self.write_r16_low(R16::Sp, self.latch as u8);
+                State::AddSpI8(AddSpI8::WriteHigh)
+            }
+            AddSpI8::WriteHigh => {
+                let [high, _] = self.latch.to_be_bytes();
+                self.write_r16_high(R16::Sp, high);
+                State::Fetch
+            }
+        }
     }
 
     const fn copy_hl_to_stack_pointer(&mut self) -> State {

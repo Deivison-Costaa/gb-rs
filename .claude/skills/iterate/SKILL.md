@@ -115,7 +115,14 @@ número livre, e **nunca se renumera**.
 
 ## Passo 9 — Marcar o ROADMAP
 
-`[x]` no item concluído.
+`[x]` no item concluído. **Se ele era o último sub-item aberto de um grupo,
+marque também a caixa do pai.** Sem isso o grupo fica aberto para sempre e a
+regra do passo 1 — "a próxima caixa não marcada, em ordem" — passa a apontar
+para trabalho já feito. Aconteceu duas vezes: o 1.4 ficou dez iterações assim, e
+o 1.7 repetiu no mesmo dia em que o 1.4 foi consertado.
+
+Sub-item usa **dois espaços** de indentação. Três também renderiza, e foi
+justamente o que escondeu dois sub-itens do 1.7 de uma varredura.
 
 ## Passo 10 — PR e merge
 

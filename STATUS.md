@@ -3,11 +3,11 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0041 — CALL cc,u16 (`$C4` `$CC` `$CD` `$D4` `$DC`) ([doc](docs/iterations/0041-call-cond.md)). 5 opcodes, 3/6 M-cycles (12/24 T). `State::CallImmediate` é variante própria, independente do `JumpImmediate` — a decisão condicional no M3 leva a `Internal` em vez de `SetProgramCounter`. O `PC` (endereço de retorno) é usado direto nos `push_byte`, sem latch adicional. Bateria: **6/6 pegos, 2/2 controles verdes**.
-**Iteração anterior:** 0040 — JP cc,u16 + JP HL ([doc](docs/iterations/0040-jp-cond-hl.md)).
-**Iteração anterior:** 0039 — Quebra do 1.10 + JR cc,i8 (`$18` `$20` `$28` `$30` `$38`) ([doc](docs/iterations/0039-jr-breakdown.md)).
-**Duas iterações atrás:** 0038 — SET (`CB C0`–`CB FF`) ([doc](docs/iterations/0038-cb-set.md)).
-**Próxima tarefa:** ROADMAP **1.10d** — `RET cc` (`$C0` `$C8` `$D0` `$D8`) + `RET` (`$C9`) + `RETI` (`$D9`). `RET` condicional é o inverso do `CALL`: lê da pilha (`POP` implícito) para `PC`. Sem desvio: `fetch → internal` (8 T); com desvio: `fetch → internal → read((SP++)→lower) → read((SP++)→upper) → internal(set PC)` (20 T). O `internal` do M2 decide a condição — mesmo ponto que o `Internal` desta iteração. `RET` incondicional (`$C9`): 4 M-cycles (16 T), `fetch → read((SP++)→lower) → read((SP++)→upper) → internal(set PC)`. `RETI` é `RET` + `EI` em hardware; a ativação do IME pode entrar aqui (como stub para o 1.11/2.2) ou ficar delegada. O `pop_byte` (1.5c) é reaproveitado para as leituras. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação). O `Condition` e `evaluate_condition` continuam os mesmos. A máscara de condição de `RET` é `0xE7` / `0xC0` (bits 5-4, mesma posição dos demais). Os opcodes são: `C0`=NZ, `C8`=Z, `C9`=incondicional, `D0`=NC, `D8`=C, `D9`=RETI (decodificado individualmente).
+**Última iteração concluída:** 0042 — RET cc + RET + RETI (`$C0` `$C8` `$C9` `$D0` `$D8` `$D9`) ([doc](docs/iterations/0042-ret-cond.md)). 6 opcodes, 2/5 M-cycles (8/20 T condicional, 16 T incondicional). `ReturnConditional(Condition)` é o M2 de decisão — sem leitura de barramento no caminho curto, ao contrário do CALL que sempre lê os operandos. `ReturnImpl(ReturnPop, bool)` compartilha as 3 fases de pop para os 6 opcodes; o `bool` carrega a flag de IME para `RETI`. `pop_byte` e `decode_jp_condition` reusados sem alteração. Bateria: **6/6 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0041 — CALL cc,u16.
+**Iteração anterior:** 0040 — JP cc,u16 + JP HL.
+**Duas iterações atrás:** 0039 — Quebra do 1.10 + JR cc,i8.
+**Próxima tarefa:** ROADMAP **1.10e** — `RST` (`$C7` `$CF` `$D7` `$DF` `$E7` `$EF` `$F7` `$FF`). 8 opcodes, 4 M-cycles (16 T), `fetch → internal → write(PC:upper→(--SP)) → write(PC:lower→(--SP))`. Essencialmente `CALL` para endereço fixo (`$00 $08 $10 $18 $20 $28 $30 $38`), sem condição e sem leitura de operando do fluxo. O endereço de destino é codificado nos bits 5-3 do opcode (`(opcode >> 3) & 7 * 8`). Reaproveita `push_byte` (1.5b) para as duas escritas na pilha. Apenas 6 dos 8 (`$C7 $CF $D7 $DF $E7 $EF`) estão no espaço `C0`–`FF`; os dois restantes (`$F7 $FF`) colidem com `PUSH AF`/`RST 38h` — verificar que o `RST` entra antes do `PUSH` no `fetch`. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação). O `push_byte` e o `PC` como endereço de retorno seguem o mesmo padrão do 1.10c (CALL).
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -38,7 +38,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **511** (eram **491** antes da 0041 — +20 do novo arquivo `cpu_call`).
+Testes do workspace: **535** (eram **511** antes da 0041 — +20 do novo arquivo `cpu_call`, +24 do `cpu_ret`).
 
 ## Invariantes
 

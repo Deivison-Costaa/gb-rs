@@ -207,6 +207,9 @@ const CALL_U16: u8 = 0xCD;
 const CALL_COND_MASK: u8 = 0xE7;
 const CALL_COND_PATTERN: u8 = 0xC4;
 
+const RET_COND_MASK: u8 = 0xE7;
+const RET_COND_PATTERN: u8 = 0xC0;
+
 const CB_PREFIX: u8 = 0xCB;
 
 const RLCA: u8 = 0x07;
@@ -315,6 +318,13 @@ enum CbSetHlPhase {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReturnPop {
+    ReadLowByte,
+    ReadHighByte,
+    SetProgramCounter,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Condition {
     Always,
     NotZero,
@@ -371,6 +381,8 @@ enum State {
     JumpRelativeReadOffset(Condition),
     JumpRelativeModifyPc,
     Locked(Lockup),
+    ReturnConditional(Condition),
+    ReturnImpl(ReturnPop, bool),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -394,6 +406,7 @@ pub struct Cpu {
     pub registers: Registers,
     state: State,
     latch: u16,
+    pub ime: bool,
 }
 
 impl Cpu {
@@ -403,6 +416,7 @@ impl Cpu {
             registers: Registers::after_boot_rom(checksum),
             state: State::Fetch,
             latch: 0,
+            ime: false,
         }
     }
 
@@ -443,6 +457,8 @@ impl Cpu {
             State::JumpRelativeReadOffset(cond) => self.jump_relative_read_offset(bus, cond),
             State::JumpRelativeModifyPc => self.jump_relative_modify_pc(),
             State::Locked(lockup) => State::Locked(lockup),
+            State::ReturnConditional(cond) => self.return_conditional(cond),
+            State::ReturnImpl(phase, ime) => self.return_impl(bus, phase, ime),
         };
     }
 
@@ -480,7 +496,9 @@ impl Cpu {
             | State::CbResHl(..)
             | State::CbSetHl(..)
             | State::JumpRelativeReadOffset(_)
-            | State::JumpRelativeModifyPc => None,
+            | State::JumpRelativeModifyPc
+            | State::ReturnConditional(_)
+            | State::ReturnImpl(..) => None,
         }
     }
 
@@ -527,6 +545,11 @@ impl Cpu {
             JR_U8 => State::JumpRelativeReadOffset(Condition::Always),
             _ if opcode & JR_COND_MASK == JR_COND_PATTERN => {
                 State::JumpRelativeReadOffset(Self::decode_jr_condition(opcode))
+            }
+            0xC9 => State::ReturnImpl(ReturnPop::ReadLowByte, false),
+            0xD9 => State::ReturnImpl(ReturnPop::ReadLowByte, true),
+            _ if opcode & RET_COND_MASK == RET_COND_PATTERN => {
+                State::ReturnConditional(Self::decode_jp_condition(opcode))
             }
             HALT => State::Locked(Lockup::UndecodedOpcode(opcode)),
             LD_R8_R8_FIRST..=LD_R8_R8_LAST => self.load_r8_r8(opcode),
@@ -694,6 +717,34 @@ impl Cpu {
             Condition::Zero => self.registers.flag(Flag::Z),
             Condition::NotCarry => !self.registers.flag(Flag::C),
             Condition::Carry => self.registers.flag(Flag::C),
+        }
+    }
+
+    fn return_conditional(&mut self, condition: Condition) -> State {
+        if Self::evaluate_condition(self, condition) {
+            State::ReturnImpl(ReturnPop::ReadLowByte, false)
+        } else {
+            State::Fetch
+        }
+    }
+
+    fn return_impl(&mut self, bus: &Bus, phase: ReturnPop, ime: bool) -> State {
+        match phase {
+            ReturnPop::ReadLowByte => {
+                self.latch = u16::from(self.pop_byte(bus));
+                State::ReturnImpl(ReturnPop::ReadHighByte, ime)
+            }
+            ReturnPop::ReadHighByte => {
+                self.latch |= u16::from(self.pop_byte(bus)) << 8;
+                State::ReturnImpl(ReturnPop::SetProgramCounter, ime)
+            }
+            ReturnPop::SetProgramCounter => {
+                self.registers.pc = self.latch;
+                if ime {
+                    self.ime = true;
+                }
+                State::Fetch
+            }
         }
     }
 

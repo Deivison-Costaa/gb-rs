@@ -207,11 +207,12 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
   duas formas de M-cycle (`fetch → internal` para os doze primeiros, `fetch →
   read(i8) → internal [→ write]` para os dois últimos) mas **quatro** semânticas
   de flag distintas. O corte é por coluna de flags. 14 = 8 + 4 + 1 + 1.
-  - [ ] 1.7a `INC r16` e `DEC r16` (`$03 $13 $23 $33 $0B $1B $2B $3B`) — 8
+  - [x] 1.7a `INC r16` e `DEC r16` (`$03 $13 $23 $33 $0B $1B $2B $3B`) — 8
     opcodes, as quatro colunas de flag em `-`: nenhuma é tocada, nem calculada
     nem literal — a primeira vez que isso vale para um par de 16 bits inteiro
     e não só para `C` (o 1.6e fez isso para `r8`). `fetch(escreve a metade
-    baixa) → internal(escreve a metade alta)`, 2 M-cycles.
+    baixa) → internal(escreve a metade alta)`, 2 M-cycles. Ver
+    [doc da 0028](docs/iterations/0028-cpu-inc-dec-r16.md).
   - [ ] 1.7b `ADD HL,r16` (`$09 $19 $29 $39`) — 4 opcodes, `N` = `0` literal,
     `H`/`C` calculados sobre o par de 16 bits inteiro (carry do bit 11 e do
     bit 15) — ao contrário do `ADD SP,e8`/`LD HL,SP+e8` do 1.7c/1.7d, que

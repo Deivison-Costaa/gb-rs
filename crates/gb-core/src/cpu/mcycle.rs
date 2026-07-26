@@ -195,6 +195,8 @@ const DEC_R16_PATTERN: u8 = 0b0000_1011;
 const ADD_HL_R16_MASK: u8 = 0b1100_1111;
 const ADD_HL_R16_PATTERN: u8 = 0b0000_1001;
 
+const CB_PREFIX: u8 = 0xCB;
+
 const RLCA: u8 = 0x07;
 const RRCA: u8 = 0x0F;
 const RLA: u8 = 0x17;
@@ -269,6 +271,18 @@ enum LdHlSpI8 {
     Internal,
 }
 
+// Operações CB que calculam Z do resultado (rotações e shifts).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CbRotOp {
+    Rlc,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CbRotHlPhase {
+    Read,
+    Write,
+}
+
 // match de Cpu::step é total sem _ =>: estado novo quebra a compilação.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -302,6 +316,11 @@ enum State {
     AddHlR16(R16),
     AddSpI8(AddSpI8),
     LdHlSpI8(LdHlSpI8),
+    // CB prefix: o $CB no fetch transita para um segundo fetch que lê e decodifica
+    // o opcode real (ver docs/iterations/0033).
+    CbFetch,
+    // CB operação em (HL): read-modify-write em M-cycles separados.
+    CbRotHl(CbRotOp, CbRotHlPhase),
     Locked(Lockup),
 }
 
@@ -357,6 +376,8 @@ impl Cpu {
             State::AddHlR16(source) => self.finish_add_hl_r16(source),
             State::AddSpI8(phase) => self.add_sp_i8(bus, phase),
             State::LdHlSpI8(phase) => self.ld_hl_sp_i8(bus, phase),
+            State::CbFetch => self.cb_fetch(bus),
+            State::CbRotHl(op, phase) => self.cb_rot_hl(bus, op, phase),
             State::Locked(lockup) => State::Locked(lockup),
         };
     }
@@ -387,7 +408,9 @@ impl Cpu {
             | State::IncDecR16(_)
             | State::AddHlR16(_)
             | State::AddSpI8(_)
-            | State::LdHlSpI8(_) => None,
+            | State::LdHlSpI8(_)
+            | State::CbFetch
+            | State::CbRotHl(..) => None,
         }
     }
 
@@ -481,6 +504,7 @@ impl Cpu {
             _ if opcode & ADD_HL_R16_MASK == ADD_HL_R16_PATTERN => self.add_hl_r16(opcode),
             ADD_SP_I8 => State::AddSpI8(AddSpI8::ReadImmediate),
             LD_HL_SP_I8 => State::LdHlSpI8(LdHlSpI8::ReadImmediate),
+            CB_PREFIX => State::CbFetch,
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
             }
@@ -940,6 +964,58 @@ impl Cpu {
     const fn copy_hl_to_stack_pointer(&mut self) -> State {
         self.registers.sp = self.registers.hl();
         State::Fetch
+    }
+
+    // Segundo byte da instrução CB: lê o opcode e decodifica.
+    // spec: docs/reference/03-opcodes.md § Opcodes com prefixo CB
+    fn cb_fetch(&mut self, bus: &Bus) -> State {
+        let opcode = self.read_at_pc(bus);
+
+        match (opcode >> 3) & 0b11111 {
+            0b00000 => self.cb_rlc(opcode),
+            _ => State::Locked(Lockup::UndecodedOpcode(opcode)),
+        }
+    }
+
+    fn cb_rlc(&mut self, opcode: u8) -> State {
+        match R8::from_bits(opcode) {
+            R8::Register(register) => {
+                let value = self.read_r8(register);
+                let (result, carry) = alu::rlc(value);
+                self.registers.set_flag(Flag::Z, result == 0);
+                self.registers.set_flag(Flag::N, false);
+                self.registers.set_flag(Flag::H, false);
+                self.registers.set_flag(Flag::C, carry);
+                self.write_r8(register, result);
+                State::Fetch
+            }
+            R8::MemoryAtHl => State::CbRotHl(CbRotOp::Rlc, CbRotHlPhase::Read),
+        }
+    }
+
+    fn cb_rot_hl(&mut self, bus: &mut Bus, op: CbRotOp, phase: CbRotHlPhase) -> State {
+        match phase {
+            CbRotHlPhase::Read => {
+                let value = bus.read(self.registers.hl());
+                let (result, carry) = match op {
+                    CbRotOp::Rlc => alu::rlc(value),
+                };
+                self.registers.set_flag(Flag::Z, result == 0);
+                self.registers.set_flag(Flag::N, false);
+                self.registers.set_flag(Flag::H, false);
+                self.registers.set_flag(Flag::C, carry);
+                self.latch = u16::from(result);
+                State::CbRotHl(op, CbRotHlPhase::Write)
+            }
+            CbRotHlPhase::Write => {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "o latch recebeu um byte no M3"
+                )]
+                bus.write(self.registers.hl(), self.latch as u8);
+                State::Fetch
+            }
+        }
     }
 
     // `read(u16:lower)` sem seta: o endereço é latch, como no $FA. As duas

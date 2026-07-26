@@ -627,3 +627,14 @@
   `if/else if` tem um ramo a mais: `decoded_elsewhere(opcode) → assert None`.
   A bateria de mutação da 0026 é o que provou que o ramo que faltava importava
   — ver nota 47.
+
+- **`INC`/`DEC r8` são a primeira ALU que deixa `C` intocado — nem calculado
+  (1.6a/1.6b) nem literal (1.6c).** `alu::increment`/`decrement` não têm
+  `set_flag(Flag::C, ...)` linha nenhuma; devolvem o resultado em vez de
+  escrever em `registers.a`, porque o operando é qualquer `r8` ou `(HL)`, não
+  só o acumulador. `H` aqui é carry (`INC`) ou empréstimo (`DEC`) do nibble
+  baixo, mesma letra do 1.6a/1.6b — ver nota 48.
+- **`$34`/`$35` (`INC`/`DEC (HL)`) espelham `StoreImmediateToHl` (1.4b), não
+  `AluFromHl` (1.6a).** Leitura no M2, escrita no M3, com o resultado num
+  latch entre os dois — dois acessos ao mesmo endereço em M-cycles distintos,
+  ao contrário do `(HL)` do 1.6a, que só lê.

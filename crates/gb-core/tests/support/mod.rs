@@ -21,4 +21,6 @@ pub fn decoded_elsewhere(opcode: u8) -> bool {
             opcode,
             0xC6 | 0xCE | 0xD6 | 0xDE | 0xE6 | 0xEE | 0xF6 | 0xFE
         )
+        || opcode & 0b1100_0111 == 0b0000_0100
+        || opcode & 0b1100_0111 == 0b0000_0101
 }

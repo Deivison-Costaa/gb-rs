@@ -213,14 +213,16 @@ fn the_unused_opcodes_are_exactly_the_eleven_the_spec_names() {
 
 #[test]
 fn an_opcode_this_emulator_has_not_reached_is_not_an_illegal_one() {
-    let (mut cpu, mut bus) = machine(&[0x04, 0x42]);
+    // $04 (`INC B`) era o exemplo aqui até o 1.6e o decodificar — trocado por
+    // $07 (`RLCA`, 1.8, ainda não implementado).
+    let (mut cpu, mut bus) = machine(&[0x07, 0x42]);
 
     cpu.step(&mut bus);
 
     assert_eq!(
         cpu.lockup(),
-        Some(Lockup::UndecodedOpcode(0x04)),
-        "`INC B` não é opcode inexistente: é opcode que ainda não foi feito"
+        Some(Lockup::UndecodedOpcode(0x07)),
+        "`RLCA` não é opcode inexistente: é opcode que ainda não foi feito"
     );
 }
 

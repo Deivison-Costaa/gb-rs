@@ -1,4 +1,4 @@
-//! ALU de 8 bits (ROADMAP 1.6a/1.6b/1.6c). spec: `02-cpu.md` § The Carry Flag, § The BCD Flags.
+//! ALU de 8 bits (ROADMAP 1.6a-1.6e). spec: `02-cpu.md` § The Carry Flag, § The BCD Flags.
 
 use crate::cpu::{Flag, Registers};
 
@@ -75,4 +75,25 @@ fn logic(registers: &mut Registers, result: u8, half: bool) {
     registers.set_flag(Flag::N, false);
     registers.set_flag(Flag::H, half);
     registers.set_flag(Flag::C, false);
+}
+
+// 1.6e: primeira coluna de flag que fica como estava — `C` não entra aqui.
+// O operando é `r8` ou `(HL)`, não só `A`; por isso devolve o resultado em vez
+// de escrever em `registers.a` como `add`/`subtract`/`logic` fazem.
+#[must_use]
+pub(super) fn increment(registers: &mut Registers, value: u8) -> u8 {
+    let result = value.wrapping_add(1);
+    registers.set_flag(Flag::Z, result == 0);
+    registers.set_flag(Flag::N, false);
+    registers.set_flag(Flag::H, value & 0x0F == 0x0F);
+    result
+}
+
+#[must_use]
+pub(super) fn decrement(registers: &mut Registers, value: u8) -> u8 {
+    let result = value.wrapping_sub(1);
+    registers.set_flag(Flag::Z, result == 0);
+    registers.set_flag(Flag::N, true);
+    registers.set_flag(Flag::H, value & 0x0F == 0);
+    result
 }

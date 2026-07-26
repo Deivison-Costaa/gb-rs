@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0015 — os imediatos de 8 bits ([doc](docs/iterations/0015-cpu-ld-r8-u8.md)). Fecha o **1.4b**: o bloco `00 ddd 110`, sete `LD r8,u8` em 2 M-cycles e o `LD (HL),u8` em 3. Um erro de memória, e é a **nota 26 ao contrário**: a lição da 0014 (`LD r,(HL)` não tem terceiro M-cycle) generalizada adianta a escrita do `$36` para o M2. Duas iterações seguidas em que a correção anterior é a fonte do erro seguinte. O buraco da nota 25 (volta do `PC` em `$FFFF`) **fechou**.
-**Próxima tarefa:** ROADMAP 1.4c — indireto por par de registradores: `LD (BC),A`, `LD A,(BC)`, `LD (DE),A`, `LD A,(DE)` (`$02 $0A $12 $1A`) e as quatro formas com `HL+`/`HL-` (`$22 $2A $32 $3A`). 8 opcodes, 2 M-cycles cada, e **o efeito colateral sobre `HL` é o conceito novo do sub-item**. Spec: `docs/reference/03-opcodes.md` (linhas `02 0A 12 1A 22 2A 32 3A`) e `02-cpu.md` § Block 0, layout de `ld [r16mem], a` / `ld a, [r16mem]`. **O que já está pronto:** o `fetch` já tem braço com guarda de máscara (o do 1.4b), `latch` guarda operando entre M-cycles, e `State` cresce por variante. **Três armadilhas anotadas:** (a) o placeholder aqui é `r16mem`, **não** `r16` nem `r8` — e é justamente um dos blocos que a tabela emendada de `02-cpu.md` embaralhou (nota 24); os quatro valores são `bc de hl+ hl-`, e quem confirma é a linha a linha do `03-opcodes.md`; (b) `HL+`/`HL-` incrementam **depois** do acesso, e em que M-cycle o `HL` muda é decisão da coluna, não da intuição — foi exatamente esse tipo de pergunta que errou nas 0014 e 0015, nas duas direções; (c) `LD (HL+),A` com `HL` apontando para o próprio destino é o caso em que ordem de operações vira valor observável.
+**Última iteração concluída:** 0016 — o indireto por par de registradores ([doc](docs/iterations/0016-cpu-ld-r16mem.md)). Fecha o **1.4c**: os oito opcodes `r16mem` (`$02 $0A $12 $1A $22 $2A $32 $3A`), 2 M-cycles cada, e o primeiro operando do projeto que **modifica** o registrador que usou como endereço. Um erro de memória, e é a **terceira iteração seguida a errar em qual M-cycle o efeito cai** — desta vez adiantando o `HL±` para o fetch. A nota 30 previu o caso com todas as letras e a suíte escrita a partir dela quase não o honrou: **10 dos 11 testes passam contra a versão errada**. Das três armadilhas que a 0015 anotou, doeu a (b); a (a) estava certa de memória e a **(c) não existe** — `HL` não é memória mapeada, então as duas ordens são indistinguíveis.
+**Próxima tarefa:** ROADMAP 1.4d — endereço absoluto e a página `$FF00`: `LD (u16),A` / `LD A,(u16)` (`$EA $FA`), `LD (FF00+u8),A` / `LD A,(FF00+u8)` (`$E0 $F0`) e `LD (FF00+C),A` / `LD A,(FF00+C)` (`$E2 $F2`) — 6 opcodes, e **é aqui que a tabela de micro-operações se decide** (ver a invariante correspondente: o 1.4c não trouxe forma nova, então a decisão continua adiada até haver as formas do 1.4d). Spec: `docs/reference/03-opcodes.md` (linhas `E0 E2 EA F0 F2 FA`) e `02-cpu.md` § Block 3. **O que já está pronto:** o `fetch` tem três braços com guarda de máscara, `latch` guarda operando de 16 bits entre M-cycles (o `JP u16` monta os dois bytes lá), e `State` cresce por variante. **As três formas, lidas da tabela e não da intuição** (linhas 272–298 do `03-opcodes.md`): `$E2`/`$F2` são 1 byte e **2** M-cycles (`fetch → write(A->(FF00+C))`); `$E0`/`$F0` são 2 bytes e **3** (`fetch → read(u8) → write(A->(FF00+u8))`); `$EA`/`$FA` são 3 bytes e **4** (`fetch → read(u16:lower) → read(u16:upper) → write(A->(u16))`). **Três armadilhas a antecipar:** (a) que `$E2` custe um M-cycle a mais por o endereço ser calculado — não custa, cálculo não aparece na coluna, e as três formas diferem só em quantos bytes de operando leem; (b) `$EA`/`$FA` são o primeiro operando de dois bytes desde o `JP u16` — little-endian, e o `latch` já tem o idioma, mas ali o quarto M-cycle é `internal` e aqui é o **acesso**, o que é exatamente o tipo de diferença que as 0014–0016 erraram três vezes; (c) os seis **não** são um bloco de bits regular como os três sub-itens anteriores — são três pares, e o que separa cada par é o bit 4 (`$Ex` escreve, `$Fx` lê); não há uma máscara só, então o controle negativo muda de desenho.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -35,7 +35,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **166** (eram 156 antes da 0015). Este número não é o placar
+Testes do workspace: **177** (eram 166 antes da 0016). Este número não é o placar
 — ele mede o que o projeto afirma sobre si mesmo, não o que o hardware cobra.
 
 ## Invariantes já estabelecidas
@@ -398,6 +398,44 @@ Testes do workspace: **166** (eram 156 antes da 0015). Este número não é o pl
   todas da mesma família (`fetch` + no máximo um acesso), e generalizar dali
   seria a nota 8 com um terço dos dados. A decisão está escrita **no ROADMAP**,
   no 1.4d, onde as quatro formas de endereçamento do `x8/lsm` já existirão.
+  **O 1.4c não mexeu nisso, e por um motivo que vale registrar:** ele
+  acrescentou oito opcodes e **nenhuma forma nova** — as oito linhas são `fetch`
+  mais um acesso, a família do 1.4a. O que ele trouxe foi um efeito colateral
+  *dentro* do passo do acesso, que é dimensão diferente de forma. Três sub-itens
+  e o que se repete é a mesma família; quem tem forma nova é o 1.4d (4 M-cycles,
+  operando de dois bytes, e o último passo sendo o acesso e não um `internal`).
+
+- **Os oito opcodes `r16mem` são 2 M-cycles, e o `HL±` é do M2.** A coluna
+  escreve o efeito **dentro** do passo do acesso — `write(A->(HL++))`, não
+  `write(A->(HL))` seguido de nada —, então depois do fetch o par ainda vale o
+  que valia. Resolver o endereço no decodificador e guardá-lo no `latch` é o
+  caminho que o código pede (o fetch já tem `&mut self`, o `latch` existe para
+  isso) e adianta o `HL±` em um M-cycle, com o **mesmo** estado final e os mesmos
+  8 T-cycles. **10 dos 11 testes do 1.4c passam contra essa versão**; quem a
+  reprova é a única asserção que lê `HL` *entre* os dois `step`. É por isso que
+  `State::LoadFromR16Mem` carrega o **par** e não o endereço: com o par, o efeito
+  não tem onde acontecer antes do M2. Ver nota 32.
+- **O endereço é o valor de antes do `HL±`, e quem confirma isso não é a § Block
+  0.** O `++`/`--` postfixo de gbops afirma; a confirmação independente está na
+  § OAM Corruption Bug do `06-ppu.md`, que fala do conteúdo de 16 bits
+  *"(before the operation)"* — arquivo que o `README.md` do `docs/reference/`
+  mapeia para o **M3**, três marcos adiante. A mesma seção descreve o `HL±` como
+  evento de **barramento** (a IDU põe o valor nas linhas de endereço mesmo sem
+  acesso assertado, e é por isso que essas quatro instruções corrompem a OAM
+  *duas* vezes). Isso **não** está implementado — é o 7.2 —, mas desmente a
+  leitura natural de que o incremento seja aritmética silenciosa de registrador.
+- **`LD (HL+),A` com `HL` apontando para o destino não é caso especial.** A 0015
+  anotou isso como a armadilha em que a ordem de operações viraria valor
+  observável. Foi conferido: `HL` não é memória mapeada, então "escreve em
+  `(HL)` e incrementa" e "incrementa e escreve em `(HL)-1`" são indistinguíveis
+  em qualquer endereço, `$FFFF` incluído. Armadilha prevista que **não existe** —
+  registrada para não ser procurada de novo (nota 22).
+- **A máscara dos oito `r16mem` tem duas formas, e as duas estão em uso de
+  propósito.** `opcode & 0b1100_0111 == 0b0000_0010` reconhece o conjunto (é a
+  **mesma** máscara do 1.4b, com outro padrão) e é o que os controles negativos
+  usam; o decodificador usa `0b1100_1111` com dois padrões, porque ele precisa
+  da **direção**, que mora no bit 3 e que a máscara de 7 bits apaga. Unificar as
+  duas colapsaria `LD (BC),A` e `LD A,(BC)` na mesma instrução.
 
 ## Bloqueios
 
@@ -576,6 +614,19 @@ contorno previsto no prompt de bootstrap.
     é que o item não existe no ROADMAP, e o protocolo de iteração só executa o
     que está no ROADMAP. **Dívida que ninguém agenda não é priorizada baixo; é
     invisível.**
+
+    **Sétimo ponto de dado na 0016:** **177/177** em `1.85` (`cargo 1.85.1`),
+    com `const fn` sobre enum de dois bits e `wrapping_add`/`wrapping_sub` em
+    `u16` — nada mais novo que a MSRV.
+
+    **E o diagnóstico da 0015 foi acatado: agora existe o item — ROADMAP 7.4.**
+    A dívida deixou de ser invisível sem deixar de ser baixa: está em M7 e não em
+    M0, de propósito, para não preemptar o M1 na regra de "próxima caixa não
+    marcada, em ordem", e é puxável a qualquer momento. Criar o item não é
+    fechá-lo, e a nota continua **aberta** — mas a partir daqui ela é uma
+    prioridade escolhida, e não uma lacuna do processo. O que a 0016 mediu é que
+    o conserto do processo custou duas linhas de ROADMAP, contra sete iterações
+    de "passou porque alguém lembrou".
 
 14. **Bateria de mutação: o cargo decide rebuild por mtime.** Reverter o fonte
     com `mv arquivo.bak arquivo` — ou aplicar uma mutação que falha em silêncio
@@ -959,3 +1010,36 @@ contorno previsto no prompt de bootstrap.
     vizinho de bit do bloco do 1.4b, então ele também reprova uma máscara
     frouxa. Cada iteração do 1.4 vai movê-lo de novo; o dia em que não houver
     opcode não implementado é o dia em que ele sai.
+
+    **Reincidiu na 0016, e o `$04` aguentou:** os dois controles negativos dos
+    256 quebraram (o do 1.4a e o do 1.4b, ambos porque `$02` deixou de ser "não
+    implementado"), dois `Edit`, e o teste que usa `$04` como exemplo continuou
+    verde — `INC B` não é deste sub-item. A tentação de extrair a lista para um
+    lugar só apareceu de novo e foi recusada de novo.
+
+32. **A previsão certa não gera, sozinha, a suíte que a honra.** A nota 30 deixou
+    uma regra prática explícita para o 1.4c e o 1.4d: *"toda instrução com mais
+    de um acesso ao barramento precisa de um teste que observe o estado entre os
+    acessos, e não só no fim"*. A 0016 leu a regra, escreveu **onze** testes com
+    ela em mente, cometeu exatamente o erro previsto — adiantar o `HL±` para o
+    fetch — e **dez dos onze passaram**.
+
+    Isto é diferente das notas 8, 26 e 30, que são sobre erro de leitura da spec
+    ou de generalização. Aqui a lição anterior estava correta, disponível, citada
+    no cabeçalho do arquivo de teste, e ainda assim a suíte quase não a
+    implementou. Escrever "vou testar o meio da instrução" e escrever a asserção
+    que lê o estado no meio da instrução são atos diferentes, e o primeiro dá a
+    sensação do segundo.
+
+    **Duas medições agora, e concordam:** 9 de 10 na 0015 (`LD (HL),u8` com a
+    escrita adiantada), 10 de 11 aqui (`HL±` adiantado). A proporção não mede
+    fraqueza da suíte — mede que o erro **não tem efeito observável fora do
+    instante do acesso**: estado final igual, T-cycles iguais, flags iguais,
+    varredura dos 256 igual. É a classe inteira que a Mooneye mede e que uma
+    suíte de antes/depois é cega para.
+
+    **Procedimento, não intenção:** para cada instrução de N > 1 M-cycles, antes
+    de implementar, escreva primeiro o teste que faz `step` N vezes com asserção
+    **depois de cada uma**. Se a suíte tem uma asserção por M-cycle, ela mede
+    timing; se tem asserções antes e depois, ela mede resultado — e a diferença
+    não aparece na contagem de testes nem na cobertura.

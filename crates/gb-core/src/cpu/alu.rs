@@ -188,7 +188,7 @@ pub(super) fn rla(registers: &mut Registers) {
 }
 
 pub(super) fn daa(registers: &mut Registers) {
-    let mut a = registers.a;
+    let mut a = u16::from(registers.a);
     let n = registers.flag(Flag::N);
     let h = registers.flag(Flag::H);
     let c = registers.flag(Flag::C);
@@ -197,7 +197,7 @@ pub(super) fn daa(registers: &mut Registers) {
         if (a & 0x0F) > 9 || h {
             a = a.wrapping_add(0x06);
         }
-        if a > 0x99 || c {
+        if a > 0x9F || c {
             a = a.wrapping_add(0x60);
             registers.set_flag(Flag::C, true);
         }
@@ -210,8 +210,8 @@ pub(super) fn daa(registers: &mut Registers) {
         }
     }
 
-    registers.a = a;
-    registers.set_flag(Flag::Z, a == 0);
+    registers.a = a as u8;
+    registers.set_flag(Flag::Z, (a & 0xFF) == 0);
     registers.set_flag(Flag::H, false);
 }
 

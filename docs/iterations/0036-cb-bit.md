@@ -2,7 +2,7 @@
 
 - **Data:** 2026-07-26
 - **Item do roadmap:** 1.9d
-- **PR:** (a preencher)
+- **PR:** #45
 - **Duração:** — min
 - **Custo reportado:** —
 - **Turnos:** 1

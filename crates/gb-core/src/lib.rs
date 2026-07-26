@@ -5,8 +5,8 @@
 //! dados, e quem os leva ao mundo é `gb-cli` ou `gb-desktop`. É isso que
 //! permite rodar as ROMs de teste headless na CI.
 //!
-//! Hoje o crate tem só o leitor do cabeçalho do cartucho (ROADMAP 0.3a).
-//! A CPU chega em 1.1.
+//! Hoje o crate lê o cabeçalho do cartucho (ROADMAP 0.3a) e monta o cartucho
+//! sem mapeador (0.4). A CPU chega em 1.1 e o `Bus` que ligará os dois, em 1.2.
 
 #![forbid(unsafe_code)]
 

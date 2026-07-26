@@ -3,9 +3,9 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0019 — `PUSH r16stk`, o bloco `11 rr 0101` ([doc](docs/iterations/0019-cpu-push-r16stk.md)). Os quatro `$C5 $D5 $E5 $F5` em 4 M-cycles, com `Cpu::push_byte` — a segunda função de M-cycle compartilhada do projeto, depois do `Cpu::access` do 1.4d. **O erro foi a nota 26/30/34 pela quarta vez, e pela primeira com a fonte fora do projeto:** o Z80, cujo `PUSH` decrementa o `SP` no T-cycle extra do M1. A coluna diz `write(B->(--SP))` — pré-decremento **dentro** do passo da escrita, e o `internal` do M2 não faz nada. **8 dos 10 testes passam contra a versão errada** (bateria: 10/10 pegos, 2/2 controles verdes; o mutante do timing tem exatamente **dois** algozes). Novidade: a **guarda de ausência foi um deles** — quando o erro é "algo inerte fez algo", ela é o teste em que ele mora, e não o extra que a nota 35 descreveu. Ver notas 36 e 37.
-**Iteração anterior:** 0018 — `LD r16,u16`, o bloco `00 rr 0001` ([doc](docs/iterations/0018-cpu-ld-r16-u16.md)). Quebra o **1.5** em quatro sub-itens (14 opcodes, cinco formas de M-cycle; 14 = 4 + 4 + 4 + 2) e entrega o **1.5a**: `$01 $11 $21 $31`, 3 M-cycles. **O erro foi o da nota 26/30 pela terceira vez, agora na terceira direção possível** — depois de acrescentar um M-cycle (0014) e de adiantar um acesso (0015), aqui foi *atrasar* dois efeitos: latchar os dois bytes e escrever o par no fim do M3, como o `JumpImmediate` faz 40 linhas acima no mesmo arquivo. A coluna diz `read(u16:lower->**C**)`: meia metade por M-cycle. **7 dos 8 testes passam contra a versão errada**, e o único que a reprova é também o único que pega dois dos nove mutantes da bateria. `LD HL,SP+i8` (`$F8`) não é deste grupo — gbops o põe em `x16/alu` e ele é o 1.7. Ver nota 34.
-**Próxima tarefa:** ROADMAP 1.5c — `POP r16stk` (`$C1 $D1 $E1 $F1`), o bloco `11 rr 0001`. Spec: `docs/reference/03-opcodes.md` (linhas `C1 D1 E1 F1`) e `02-cpu.md` § Block 3 — o layout de bits está sob o cabeçalho **`pop r16stk`**, e é o **primeiro** dos dois que moram ali (o segundo é o `PUSH` da 0019; ver nota 36). 3 M-cycles: `fetch → read((SP++)->lower) → read((SP++)->upper)`. **Três coisas para conferir, e nenhuma é o `SP` em si:** (a) o `++` é **pós**-incremento e o `PUSH` da 0019 é **pré**-decremento, o que não é simetria de notação e sim a assimetria que faz a pilha fechar — `Cpu::push_byte` decrementa **antes** de escrever, e a simétrica tem de ler **antes** de incrementar; (b) a metade **baixa** vem primeiro (invertido em relação ao `PUSH`, que escreve a alta primeiro), e a seta `->lower` diz que ela já está no registrador ao fim do M2 — é a nota 34 outra vez, e o vizinho a **não** copiar é o `LoadImmediatePair`, que tem a mesma forma e escreve meia metade por M-cycle; (c) `POP AF` é onde a decisão do 1.1 de **não** mascarar o nibble baixo de `F` esbarra na primeira escrita — a previsão registrada (quem cobra é a blargg `cpu_instrs/01-special` no 1.13) **não deve ser retroajustada aqui**, e `push_af_writes_the_whole_f_byte_including_the_low_nibble` já fixa o lado que escreve na memória. Nota 32 e nota 37: asserção depois de **cada** um dos 3 M-cycles, lendo `SP` **e** o par entre os dois acessos, e um mutante próprio para cada guarda de ausência.
+**Última iteração concluída:** 0020 — `POP r16stk`, o bloco `11 rr 0001` ([doc](docs/iterations/0020-cpu-pop-r16stk.md)). Os quatro `$C1 $D1 $E1 $F1` em 3 M-cycles, com `Cpu::pop_byte` — a simétrica do `push_byte` da 0019, e a simetria é de **papel**: lá é decrementa-e-escreve, aqui é lê-e-incrementa, e trocar as duas linhas de lugar não produz a outra. **Erro de hardware: nenhum, pela primeira vez em seis iterações — e o motivo é registrável.** O campo `Próxima tarefa` do `STATUS.md` nomeou as três armadilhas *antes* da spec (pós-incremento, meia metade por M-cycle, `F` sem máscara), e nenhuma virou código; a bateria teve de construir as três à mão. Um `nenhum` obtido assim vale menos como evidência do que um sem aviso. **O achado está na comparação com a 0019:** o *mesmo erro de forma* — deslocar o `±SP` em um passo — deixa **8 de 10 testes passando** no `PUSH` e só **3 de 10** no `POP`, porque o `PUSH` decide o endereço antes do acesso e o `POP` decide *no* acesso. Bateria: 11/11 pegos, 2/2 controles verdes; o latch segue com **um** algoz. Ver nota 40.
+**Iteração anterior:** 0019 — `PUSH r16stk`, o bloco `11 rr 0101` ([doc](docs/iterations/0019-cpu-push-r16stk.md)). Os quatro `$C5 $D5 $E5 $F5` em 4 M-cycles, com `Cpu::push_byte` — a segunda função de M-cycle compartilhada do projeto, depois do `Cpu::access` do 1.4d. **O erro foi a nota 26/30/34 pela quarta vez, e pela primeira com a fonte fora do projeto:** o Z80, cujo `PUSH` decrementa o `SP` no T-cycle extra do M1. A coluna diz `write(B->(--SP))` — pré-decremento **dentro** do passo da escrita, e o `internal` do M2 não faz nada. **8 dos 10 testes passam contra a versão errada** (bateria: 10/10 pegos, 2/2 controles verdes; o mutante do timing tem exatamente **dois** algozes). Novidade: a **guarda de ausência foi um deles** — quando o erro é "algo inerte fez algo", ela é o teste em que ele mora, e não o extra que a nota 35 descreveu. Ver notas 36 e 37.
+**Próxima tarefa:** ROADMAP 1.5d — os dois avulsos do `x16/lsm`, que fecham o 1.5: `LD SP,HL` (`$F9`) e `LD (u16),SP` (`$08`). Nenhum dos dois cabe num bloco `rr`; são reconhecidos um a um, como os seis do 1.4d. Spec: `docs/reference/03-opcodes.md`, linhas 297 e 56 — transcritas, `fetch → internal` (1 byte, 8 T-cycles) e `fetch → read(u16:lower) → read(u16:upper) → write(SP:lower->(u16)) → write(SP:upper->(u16+1))` (3 bytes, 20 T-cycles, a instrução mais longa do projeto até aqui). **Quatro coisas para conferir:** (a) o `$F9` é o `internal` **no fim**, e a nota 36 avisa que `internal` é o M-cycle mais fácil de estragar porque estragá-lo parece consertá-lo — a escrita em `SP` acontece em *algum* dos dois passos e a coluna não põe seta em nenhum, então este é o primeiro caso do projeto em que a spec local **não decide** o instante (nota 21: spec ambígua é o terceiro modo de falha da R1); (b) o `$08` tem os dois bytes do endereço em `read(u16:lower)` **sem seta** — latch de verdade, como o `$FA` do 1.4d, e não meia metade por M-cycle como o 1.5a/1.5c (a nota 34 corre nas duas direções: aqui copiar o `LoadImmediatePair` é que seria o erro); (c) as duas escritas do `$08` são `(u16)` e `(u16+1)`, endereços **consecutivos crescentes** com a metade **baixa** no mais baixo — pilha e memória absoluta guardam little-endian pelo mesmo motivo, mas o `PUSH` escreve o alto primeiro e este escreve o baixo primeiro; (d) `LD HL,SP+i8` (`$F8`, linha 296) **não** é deste item — gbops o põe em `x16/alu` e ele é o 1.7, com flags `0 0 H C` sobre o byte baixo. Nota 32: asserção depois de **cada** um dos 5 M-cycles do `$08`, lendo a memória **entre** as duas escritas; e um mutante próprio para cada guarda de ausência (notas 35 e 37). Ver também a nota 40 sobre o que a bateria do `$08` deve esperar: ele é o lado que **escreve**, e ali o erro de instante é silencioso.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -36,7 +36,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **215** (eram **205** antes da 0019). Este
+Testes do workspace: **225** (eram **215** antes da 0020). Este
 número não é o placar — ele mede o que o projeto afirma sobre si mesmo, não o
 que o hardware cobra.
 
@@ -518,6 +518,37 @@ que o hardware cobra.
   `$FFFF` (o `IE`) e `$FFFE` (o último byte da HRAM). `wrapping_sub`, e o teste
   que o fixa é o **único** algoz do mutante `saturating_sub`.
 
+- **O `(SP++)` do `POP` é pós-incremento, e a metade baixa vem primeiro.** Três
+  M-cycles, 12 T-cycles, coluna `fetch → read((SP++)->C) → read((SP++)->B)`: lê
+  **em** `SP` e só então anda. É a construção do `write(A->(HL++))` do 1.4c outra
+  vez, com o sinal e o lado trocados. A metade baixa sai do endereço mais baixo,
+  o que é o que faz a pilha do `PUSH` (metade alta primeiro, para o endereço mais
+  alto) fechar.
+- **`Cpu::pop_byte` é a simétrica de `push_byte`, e a simetria é de papel.**
+  `push_byte` decrementa e escreve; `pop_byte` lê e incrementa. **Trocar as duas
+  linhas de lugar não produz a outra** — `(--SP)` é pré, `(SP++)` é pós. Terceira
+  função de M-cycle compartilhada do projeto, depois do `Cpu::access` (1.4d) e do
+  `push_byte` (1.5b); o `RET`/`RETI` (1.10) reusa esta.
+- **O mesmo erro de instante é barulhento no `POP` e silencioso no `PUSH`, e a
+  causa é a instrução, não a suíte.** Deslocar o `±SP` em um passo: no `PUSH`
+  escreve nos mesmos dois endereços, na mesma ordem, com o mesmo `SP` final —
+  **8 dos 10 testes passam**. No `POP` lê em `SP+1` e `SP+2` em vez de `SP` e
+  `SP+1` — **7 dos 10 reprovam**. O `PUSH` decide o endereço *antes* do acesso; o
+  `POP` decide *no* acesso. **Corolário para o 1.10:** `RET` verde não autoriza
+  concluir nada sobre o instante do `CALL`. Ver nota 40.
+- **`write_r16_stk_low`/`_high` não reusam as do `R16`.** A quarta variante é
+  `af` × `sp`, e `SP` é o único par cuja metade não é campo de 8 bits (1.5a).
+  Converter entre as duas tabelas seria fazê-lo exatamente onde elas divergem.
+- **`POP AF` lê os 8 bits de `F`.** É a metade da decisão do 1.1 que *lê* o
+  nibble baixo não mascarado; `PUSH AF` (1.5b) é a que escreve. A previsão do
+  1.13 continua de pé e **não** foi retroajustada. `pop_af_loads_the_whole_f_byte_
+  including_the_low_nibble` fixa a ausência da máscara.
+- **`$F1` é a única linha do bloco com flags, e o teste do `PUSH` não se
+  espelha.** `no_push_touches_the_flags` vale para os quatro `PUSH` — inclusive o
+  `PUSH AF`, que *lê* `F`. O espelho literal (`no_pop_touches_the_flags`) estaria
+  errado num quarto dos casos, e quem denuncia é a coluna de flags: `$C1 $D1 $E1`
+  têm `-`, `$F1` tem `Z N H C`. O teste que ficou no lugar afirma a assimetria.
+
 ## Bloqueios
 
 _(nenhum)_
@@ -687,6 +718,13 @@ contorno previsto no prompt de bootstrap.
     seguidos, todos por alguém ter lembrado de rodar o comando. Continua
     **aberta** — e a essa altura o custo de fechar (um job de CI em `1.85`) já é
     menor que o de escrever esta nota mais uma vez.
+
+    **Oitavo ponto de dado na 0020:** **225/225** em `rustc 1.85.1`, com mais dois
+    `const fn` sobre enum (`write_r16_stk_low`/`_high`). O item **existe** desde a
+    0016 — é o 7.4 — e a dívida segue aberta pelo motivo que o próprio 7.4 nomeia:
+    ele está em M7, e o protocolo de iteração executa em ordem. Diagnóstico da
+    0015 confirmado por mais quatro pontos: o que fecha uma dívida não é o custo
+    baixo, é a posição na fila.
 
     **Sexto ponto de dado na 0015:** **166/166** em `1.85`, com `const fn` que
     devolve `State` e braço de `match` com guarda. Seis acertos seguidos. A
@@ -1292,3 +1330,46 @@ contorno previsto no prompt de bootstrap.
     reincidente — a partir daqui, `cargo test --all --no-fail-fast` desde a
     primeira medição, e o passo 6 do protocolo continua com o comando simples só
     porque na CI o veredito é binário.
+
+40. **O erro de instante é assimétrico: o lado que escreve o tolera em silêncio,
+    o lado que lê grita.** A 0019 e a 0020 são o mesmo erro de forma — deslocar o
+    `±SP` em um passo — nos dois lados da mesma pilha, e as duas medições não se
+    parecem:
+
+    - **`PUSH`** (0019): decrementar no `internal` do M2 escreve nos **mesmos dois
+      endereços, na mesma ordem**, e deixa o mesmo `SP` final. Só o instante muda.
+      **8 dos 10 testes passam.**
+    - **`POP`** (0020): pré-incrementar lê em `SP+1` e `SP+2` em vez de `SP` e
+      `SP+1`. Par errado, `SP` final errado, topo da pilha ignorado. **7 dos 10
+      reprovam.**
+
+    A causa não é a suíte: é onde o endereço é decidido. O `PUSH` o decide
+    **antes** do acesso (o `SP` já andou; o valor a escrever é o mesmo), então
+    adiantar o decremento não muda *qual* endereço recebe o quê. O `POP` o decide
+    **no** acesso, então adiantar o incremento muda o endereço lido — e o dado
+    lido vira o estado final.
+
+    **Corolário prático para o 1.10, que é onde isso vai doer:** `CALL`, `RET`,
+    `RETI` e `RST` fazem as duas coisas. Uma suíte de `RET` verde **não** autoriza
+    concluir que o instante do `CALL` está certo — são regimes de detecção
+    diferentes, e o `CALL` está do lado silencioso. Mesma leitura para o 1.5d: o
+    `$08` (`LD (u16),SP`) é escrita pura, então a bateria dele deve esperar
+    proporções de `PUSH`, não de `POP`, e a asserção que vale é a que lê a memória
+    **entre** as duas escritas.
+
+41. **O handoff que descreve o erro *seguinte* funciona — e enfraquece a própria
+    medição.** Da 0014 à 0019 o campo `Próxima tarefa` do `STATUS.md` descrevia o
+    erro **anterior**; a 0020 foi a primeira em que ele nomeou os três do item que
+    vinha, com o mecanismo de cada um. Nenhum dos três virou código, e a bateria
+    de mutação teve de **construí-los à mão** para medir se doíam.
+
+    Os dois lados disso são reais e vale escrever os dois. O campo pagou: a classe
+    de erro mais cara do projeto (notas 26/30/34/36, seis reincidências) não
+    reincidiu. E o dado ficou pior: um `nenhum` obtido com o aviso na tela mede o
+    aviso, não o código nem o agente. **O log continua útil porque a bateria
+    substitui a medição perdida** — M1, M2 e M5 são exatamente os três avisos,
+    escritos como mutantes, e é deles que sai o achado da nota 40. Sem a bateria,
+    a 0020 teria produzido uma linha vazia num campo que é a tese do projeto.
+
+    **Procedimento:** quando o handoff pré-anunciar armadilhas, a bateria deixa de
+    ser opcional — ela é o que resta de medição.

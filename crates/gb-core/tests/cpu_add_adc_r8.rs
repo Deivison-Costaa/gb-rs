@@ -442,6 +442,7 @@ fn decoded_elsewhere(opcode: u8) -> bool {
         || opcode & 0b1100_1111 == 0b1100_0101
         || opcode & 0b1100_1111 == 0b1100_0001
         || (0x90..=0x9F).contains(&opcode)
+        || (0xA0..=0xB7).contains(&opcode)
         || (0xB8..=0xBF).contains(&opcode)
         || matches!(
             opcode,

@@ -172,11 +172,13 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     foi processual — o controle negativo `decoded_elsewhere` precisou de
     atualização em **nove** arquivos, um deles com nome de variável diferente
     do padrão. Ver [doc da 0023](docs/iterations/0023-cpu-sub-sbc-cp-r8.md).
-  - [ ] 1.6c `AND a,r8`, `XOR a,r8` e `OR a,r8` (`$A0`–`$B7`) — os blocos
+  - [x] 1.6c `AND a,r8`, `XOR a,r8` e `OR a,r8` (`$A0`–`$B7`) — os blocos
     `10 100 rrr`, `10 101 rrr` e `10 110 rrr`, 24 opcodes. Aqui `H` e `C` são
     **constantes na coluna**, não resultado de conta: `AND` tem `H` = `1` e
     `C` = `0`; `XOR` e `OR` têm `H` = `0` e `C` = `0`. Um half-carry calculado
-    "genericamente" pelas três erra as três.
+    "genericamente" pelas três erra as três. `alu::logic` recebe `H` como
+    parâmetro literal por chamada, sem calcular nada — ver
+    [doc da 0024](docs/iterations/0024-cpu-and-xor-or-r8.md).
   - [ ] 1.6d `alu a,imm8` (`$C6 $CE $D6 $DE $E6 $EE $F6 $FE`) — o bloco
     `11 ooo 110`, 8 opcodes, 2 M-cycles (`fetch → read(u8)`). As mesmas oito
     operações dos três sub-itens acima, com o operando vindo do `PC` em vez de

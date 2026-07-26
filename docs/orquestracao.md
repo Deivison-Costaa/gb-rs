@@ -256,3 +256,62 @@ Nos dois casos a fonte formal de verdade estava errada e uma redundância inform
 segurou o processo. Redundância que ninguém projetou não é robustez: é uma dívida
 que cobra no dia em que alguém a remove por ser redundante — e no caso 1 esse dia
 quase foi o mesmo em que foi descoberta.
+
+## 2026-07-26 — O cabeçalho do doc pedia quatro números que o autor não podia ver
+
+O `TEMPLATE.md` abria com `PR`, `Duração`, `Custo reportado` e `Turnos`. O passo 7
+escreve o doc; o PR nasce no passo 10, e custo, turnos e duração são medidos pelo
+processo que hospeda o agente. **Nenhum dos quatro existe no instante em que o
+campo é preenchido.**
+
+O resultado, em 36 iterações:
+
+| campo | o que ficou escrito | o que era |
+|---|---|---|
+| `Turnos` | `1` em praticamente todos | 52 a 118 |
+| `Custo reportado` | `não medido`, `n/d`, `N/D`, `—` | US$ 0,07 a 8,95 |
+| `Duração` | `~30min` na 0033, `~40min` na 0034 | 14 min e 12 min |
+| `PR` | correto por 30 iterações, depois `#`, `#N` e um push direto em `main` | — |
+
+O `PR` é o caso instrutivo. Funcionou enquanto um agente teve o hábito de abrir o
+PR e só então commitar o doc na mesma branch — **acerto por hábito, não por
+protocolo**, e por isso não sobreviveu à troca de agente. Das quatro seguintes,
+duas (0033 e 0034) deixaram `#` vazio, a 0035 copiou o placeholder `#N` literal, e
+a 0036 percebeu o problema e o resolveu com `docs(iter): preenche número do PR
+#45` empurrado direto para `main`, fora de PR e fora de CI. Deu certo, e é por dar
+certo que preocupa: "cada iteração é um PR" é convenção, não é imposta pelo
+GitHub, e na primeira vez que um agente esbarrou nela passou por cima sem atrito.
+
+**A regra que sai daí:** campo que seu autor não pode observar não fica em branco
+— fica preenchido com ficção, e ficção formatada é indistinguível de dado. Três
+dos quatro campos vinham mentindo desde a primeira iteração, em documento que é
+insumo do relatório final.
+
+**Correção:** os quatro saem do cabeçalho. O `git log` já carrega `(#45)` no
+título do squash, e a medição passa a morar em `docs/metricas.csv`, casada com a
+iteração por `head_antes`/`head_depois`. Os docs 0033 a 0036 foram limpos por
+carregarem valores demonstravelmente falsos; de 0001 a 0032 ficam como estão —
+são registro histórico, e o projeto não reescreve registro (mesma razão de nunca
+renumerar nota).
+
+### Sobre `docs/metricas.csv`
+
+O `.gitignore` já dizia, desde o começo, "métricas consolidadas vão em `docs/`".
+Ninguém tinha feito: as 31 execuções medidas viviam só em `logs/`, ignorado pelo
+git, numa máquina só. O arquivo consolida as duas fontes e **preserva as falhas** —
+`morta-pelo-usuario`, `abortada:aborted_streaming`, `ok-retomada`.
+
+Três ressalvas, para quem for citar o arquivo:
+
+1. `turnos` não é comparável entre linhas: é `num_turns` no `claude -p` e contagem
+   de `step_finish` no `opencode`. Mesma coluna, duas definições.
+2. As 9 linhas com `fonte=loop.sh` não têm `head_antes`/`head_depois` — o
+   `loop.sh` não os registrava — e portanto não se atribuem a uma iteração
+   específica, só à janela de tempo.
+3. Só as linhas com `fonte=orquestrador` incluem falha. O `loop.sh` grava a
+   métrica **depois** do teste de código de saída, então iteração que morre não
+   deixa linha. Foi por isso que os nove abortos quase ficaram invisíveis.
+
+A diferença de custo entre os modelos está no arquivo e dispensa comentário aqui:
+duas ordens de grandeza entre as linhas `claude-*` e as `opencode-*`, com o mesmo
+protocolo e o mesmo repositório.

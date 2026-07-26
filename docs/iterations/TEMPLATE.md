@@ -2,10 +2,12 @@
 
 - **Data:** YYYY-MM-DD
 - **Item do roadmap:** X.Y
-- **PR:** #N
-- **Duração:** Xmin
-- **Custo reportado:** US$ X.XX  <!-- de --output-format json → total_cost_usd -->
-- **Turnos:** N
+
+<!-- PR, custo, turnos e duração NÃO entram aqui: no passo 7 nenhum deles existe
+     ainda. Ficam medidos em docs/metricas.csv, casados por head_antes/head_depois. -->
+
+> Preencha só o que você sabe de dentro da iteração. Se um campo exige um número
+> que só o orquestrador enxerga, ele não pertence a este documento.
 
 ## Objetivo
 

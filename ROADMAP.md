@@ -20,7 +20,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 
 ## M1 — CPU (sem gráficos)
 
-- [ ] 1.1 Registradores AF/BC/DE/HL/SP/PC, flags Z/N/H/C, pares de 8/16 bits.
+- [x] 1.1 Registradores AF/BC/DE/HL/SP/PC, flags Z/N/H/C, pares de 8/16 bits. **Sem máscara no nibble baixo de `F`**: o Pan Docs no commit fixado não descreve os bits 3–0 nem menciona `POP AF` — ver [doc da 0009](docs/iterations/0009-cpu-registers.md). Se a máscara for necessária, quem cobra é o 1.13.
 - [ ] 1.2 `Bus` trait + MMU: WRAM, HRAM, echo RAM, região proibida. Estado pós-boot (pular boot ROM).
 - [ ] 1.3 Laço M-cycle: `step()` avança 1 M-cycle. Fetch/decode/execute como máquina de estados.
 - [ ] 1.4 Opcodes: loads 8-bit.

@@ -13,6 +13,10 @@ tests/roms/
 # Logs e métricas brutas do loop.sh (métricas consolidadas vão em docs/)
 logs/
 
+# Saída crua da revisão cruzada (REVIEW=1). É insumo: se lê, classifica e
+# registra o achado no doc da iteração — o arquivo bruto não vai pro git.
+docs/reviews/
+
 # Cache de downloads (bundle de ROMs) — evita rebaixar a cada execução
 .cache/
 

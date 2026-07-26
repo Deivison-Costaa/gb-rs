@@ -55,8 +55,16 @@ for i in $(seq 1 "$N"); do
     echo "custo/turnos/ms: $(jq -r '[.total_cost_usd,.num_turns,.duration_ms]|@csv' "$LOG")"
   fi
 
-  # Revisão cruzada com o segundo modelo (não bloqueia, só registra).
-  ./scripts/review.sh || echo "(revisão cruzada falhou — seguindo)"
+  # Revisão cruzada com o segundo modelo — DESLIGADA por padrão.
+  #
+  # Ative com: REVIEW=1 ./scripts/loop.sh N
+  #
+  # Motivo de estar desligada: review.sh grava docs/reviews/<stamp>.md, o que
+  # suja a árvore e faz a iteração SEGUINTE abortar na guarda de árvore limpa
+  # lá em cima. Rodar em lote e revisar em lote não combinam sem essa guarda.
+  if [[ "${REVIEW:-0}" == "1" ]]; then
+    ./scripts/review.sh || echo "(revisão cruzada falhou — seguindo)"
+  fi
 done
 
 echo "Loop concluído: $N iterações."

@@ -315,3 +315,154 @@ Três ressalvas, para quem for citar o arquivo:
 A diferença de custo entre os modelos está no arquivo e dispensa comentário aqui:
 duas ordens de grandeza entre as linhas `claude-*` e as `opencode-*`, com o mesmo
 protocolo e o mesmo repositório.
+
+## 2026-07-26 — Os abortos eram do mecanismo de background do orquestrador
+
+Fecha a entrada anterior, que listava o harness como única hipótese não testada.
+
+**O experimento:** o mesmo `logs/oc-iter.sh`, mesmo modelo
+(`opencode-go/deepseek-v4-pro`), mesmo prompt, mesma máquina, mesmos minutos —
+mudando só **quem lança o processo**.
+
+| lançado por | tentativas no ROADMAP 1.7d | abortos |
+|---|---|---|
+| sessão do orquestrador (tarefa em background) | 3 | **3** |
+| terminal do usuário | 1 | **0** |
+
+A que rodou no terminal fechou em 9 minutos, 58 passos, US$ 0,070, PR #38.
+
+**Série completa:** 9 abortos, US$ 6,87. Seis em `claude -p` (US$ 6,76, Opus 5 e
+Sonnet 5) e três em `opencode` (US$ 0,11, DeepSeek V4 Pro).
+
+**Eliminado por medição, em ordem:** suspensão da máquina (journal ativo nas
+janelas), OOM killer, `systemd-oomd` (inativo), pressão de memória (PSI 0,00),
+rede (nenhum evento do NetworkManager), processos órfãos acumulando, o
+`claude -p` em si (sonda trivial completa em 4,5 s), o modelo (três), o CLI
+(dois) e o bloqueio de tela (abortou com a tela destravada).
+
+**Consequência prática:** as iterações passam a rodar no terminal do usuário
+(`logs/oc-loop.sh`), e o orquestrador fica com verificação entre iterações,
+auditoria, registro e PRs de infraestrutura. Olhando a sessão, é onde ele rendeu
+mais de qualquer forma: a bateria de mutação virando regra escrita, o corte do
+`STATUS.md`, a consolidação do controle negativo e as três auditorias de
+protocolo saíram todas daí, e nenhuma dependia de ele executar a iteração.
+
+**O que conteve o prejuízo** foi instrumentação feita antes, por outro motivo:
+métrica gravada mesmo na falha (sem ela os US$ 6,87 seriam invisíveis) e a
+guarda de árvore limpa com preservação em commit `wip:` — nenhum dos nove
+abortos perdeu trabalho.
+
+## 2026-07-26 — O título do PR era o nome da branch, e ninguém tinha reparado
+
+O merge é squash, então **o título do PR vira o título do commit em `main` para
+sempre** — é o índice que `git log` oferece do projeto.
+
+`gh pr create --fill` usa o assunto do commit quando há **um** commit, e cai
+para o **nome da branch** quando há mais de um. O `CLAUDE.md` manda "prefira 4
+commits pequenos a 1 grande" e o passo 10 mandava `--fill`: seguir as duas
+instruções garantia o título degradado.
+
+Medido nos PRs #26 a #39: todos os de 1 commit saíram com título legível; todos
+os de 2 ou mais viraram `iter/0028 cpu inc dec r16`, `iter/0025 cpu alu a imm8`,
+`iter/0029b roadmap 1.4` — cinco PRs que não dizem o que mudou.
+
+**Detalhe que fecha o raciocínio:** os PRs do opencode saíram com título bom
+porque ele faz **1 commit por PR** — ou seja, acertava o título por desobedecer
+a orientação de commits pequenos.
+
+Corrigido no PR #40: o passo 10 escreve o título no formato
+`iter NNNN: <o que entrega> (ROADMAP X.Y)`.
+
+## 2026-07-26 — Duas lacunas do protocolo que só apareceram na repetição
+
+1. **Caixa do pai.** O passo 9 dizia apenas "`[x]` no item concluído". Quando o
+   último sub-item de um grupo fechava, o pai ficava aberto — e a regra do passo
+   1 ("a próxima caixa não marcada, em ordem") passava a apontar para trabalho
+   feito. O 1.4 ficou assim por dez iterações; o 1.7 repetiu **no mesmo dia** em
+   que o 1.4 foi consertado. Corrigido no PR #39.
+
+2. **A corrida do `gh pr checks --watch`** estava registrada neste documento e
+   nos prompts avulsos do orquestrador desde a manhã, mas **nunca no `SKILL.md`**
+   — o arquivo que os agentes de fato leem. Derrubou o merge do #23 e reapareceu
+   no #35, onde os runs só apareceram na sétima tentativa (~60 s). Corrigido no
+   PR #40.
+
+Nos dois casos a primeira ocorrência pareceu descuido do agente e a segunda
+revelou defeito do processo. **Regra que sai daí:** falha que se repete em
+agentes diferentes não se conserta no artefato, conserta-se no protocolo.
+
+Vale notar o viés próprio: a lacuna 2 foi escrita pelo orquestrador num
+documento de registro e não no protocolo executável, o que é a mesma confusão
+entre "está anotado" e "está valendo" que a bateria de mutação já tinha exposto.
+
+## 2026-07-26 — O alvo era outro, e ficou como está
+
+Na 38ª iteração o usuário registrou que, ao iniciar o projeto, tinha em mente o
+**Game Boy Advance**, não o DMG. Decidiu ficar no DMG: o GBA seria mais
+impressionante, mas não caberia no prazo de **cerca de uma semana**.
+
+O que a troca custaria, medido no instante da descoberta: 16.057 linhas de Rust
+(13.641 delas em teste), das quais praticamente todas são específicas do SM83. O
+ARM7TDMI não é parente — são dois conjuntos de instruções (ARM de 32 bits e Thumb
+de 16), pipeline de 3 estágios com prefetch visível, PPU de seis modos com
+backgrounds afins. Muda a fonte de verdade (Pan Docs → GBATEK) e mudam as suítes
+de teste (blargg/mooneye → jsmolka/mGBA).
+
+O que **não** se perderia é o que o curso avalia: o protocolo de 11 passos, a
+bateria de mutação, o `STATUS.md` como handoff, os docs de iteração, este
+arquivo, o `docs/metricas.csv`, a CI, o scoreboard e as regras R3/R5/R6/R7.
+
+**O que fica registrado disso** é menos sobre consoles e mais sobre o método: um
+mal-entendido no enunciado sobreviveu 37 iterações sem ser detectado porque
+**nada no processo verifica a premissa** — o protocolo checa a próxima caixa do
+ROADMAP, não se o ROADMAP é do aparelho certo. Todos os controles do projeto
+(teste antes, bateria de mutação, spec obrigatória, revisão cruzada) olham para
+dentro do item. Nenhum olha para cima.
+
+Consequência prática para o prazo: o M8 (apresentação) é o entregável que o curso
+avalia e está no **fim** do ROADMAP. Com uma semana, o risco não é o emulador
+ficar incompleto — é ele ficar bom e o relatório não existir.
+
+## 2026-07-26 — A série de dez que parou na nona
+
+Primeira série longa rodada inteiramente pelo terminal do usuário, depois que o
+experimento dos abortos mostrou de quem era a culpa.
+
+| | |
+|---|---|
+| Concluídas | 8 de 10 |
+| Custo | US$ 0,88 |
+| Passos | 675 |
+| Tempo | 148 min |
+| Entregue | ROADMAP 1.8, 1.9 inteiro (256 opcodes do prefixo CB) e 1.10a |
+
+As oito que fecharam levaram de 10 a 17 minutos. A nona **estourou o teto de 45
+minutos com 17 passos** — travou duas vezes, a segunda por quinze minutos sem
+escrever no log, com 7% de CPU e sem processo filho para culpar. Na primeira vez
+havia um `cargo test` dormindo a 0% de CPU havia dez minutos; ele saiu sozinho
+antes de eu conseguir ler o `wchan`, e **o motivo não foi determinado**. Fica
+como não-explicado, e não como hipótese travestida de causa — o projeto já tem
+uma entrada sobre o custo de fazer o contrário.
+
+O `timeout` matar valeu mais do que eu matar: código de saída 124 distingue
+"estourou o teto" de "morreu de outra coisa" na coluna `resultado` do
+`docs/metricas.csv`. Os 346 linhas e 17 testes que o agente chegou a escrever
+ficaram preservados em `iter/0040-jp-cond-hl`, num commit `wip:`.
+
+### Proteção de branch, e por que ela quase não serviria
+
+Ligada depois que dois colegas ganharam acesso de escrita. Três decisões, e as
+três eram armadilhas:
+
+1. **Vale para admin.** O agente empurra autenticado como o dono do repositório.
+   Isentar admin deixaria a proteção valendo para todo mundo **menos** para quem
+   fez o push direto da 0036.
+2. **Zero aprovações exigidas.** Exigir uma revisão impediria o agente de mergear
+   qualquer PR — ele abre e fecha sozinho, e não há ninguém no laço às 3 da manhã.
+   Fica o que interessa (passa por PR, passa por CI) sem travar a cadeia.
+3. **Sem exigir branch atualizada.** No mesmo dia, o PR #46 entrou entre o começo
+   e o fim da iteração 0037; com essa regra ligada, o #47 teria sido bloqueado até
+   alguém atualizar a branch — e o passo 10 não sabe fazer isso.
+
+O padrão das três é o mesmo: a configuração "mais segura" de cada campo, marcada
+por reflexo, quebraria o processo sem proteger nada.

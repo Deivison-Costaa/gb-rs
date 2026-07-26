@@ -275,6 +275,9 @@ enum LdHlSpI8 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CbRotOp {
     Rlc,
+    Rrc,
+    Rl,
+    Rr,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -973,15 +976,23 @@ impl Cpu {
 
         match (opcode >> 3) & 0b11111 {
             0b00000 => self.cb_rlc(opcode),
+            0b00001 => self.cb_rrc(opcode),
+            0b00010 => self.cb_rl(opcode),
+            0b00011 => self.cb_rr(opcode),
             _ => State::Locked(Lockup::UndecodedOpcode(opcode)),
         }
     }
 
-    fn cb_rlc(&mut self, opcode: u8) -> State {
+    fn cb_rot(&mut self, opcode: u8, op: CbRotOp, carry_in: bool) -> State {
         match R8::from_bits(opcode) {
             R8::Register(register) => {
                 let value = self.read_r8(register);
-                let (result, carry) = alu::rlc(value);
+                let (result, carry) = match op {
+                    CbRotOp::Rlc => alu::rlc(value),
+                    CbRotOp::Rrc => alu::rrc(value),
+                    CbRotOp::Rl => alu::rl(value, carry_in),
+                    CbRotOp::Rr => alu::rr(value, carry_in),
+                };
                 self.registers.set_flag(Flag::Z, result == 0);
                 self.registers.set_flag(Flag::N, false);
                 self.registers.set_flag(Flag::H, false);
@@ -989,16 +1000,38 @@ impl Cpu {
                 self.write_r8(register, result);
                 State::Fetch
             }
-            R8::MemoryAtHl => State::CbRotHl(CbRotOp::Rlc, CbRotHlPhase::Read),
+            R8::MemoryAtHl => State::CbRotHl(op, CbRotHlPhase::Read),
         }
+    }
+
+    fn cb_rlc(&mut self, opcode: u8) -> State {
+        self.cb_rot(opcode, CbRotOp::Rlc, false)
+    }
+
+    fn cb_rrc(&mut self, opcode: u8) -> State {
+        self.cb_rot(opcode, CbRotOp::Rrc, false)
+    }
+
+    fn cb_rl(&mut self, opcode: u8) -> State {
+        let carry_in = self.registers.flag(Flag::C);
+        self.cb_rot(opcode, CbRotOp::Rl, carry_in)
+    }
+
+    fn cb_rr(&mut self, opcode: u8) -> State {
+        let carry_in = self.registers.flag(Flag::C);
+        self.cb_rot(opcode, CbRotOp::Rr, carry_in)
     }
 
     fn cb_rot_hl(&mut self, bus: &mut Bus, op: CbRotOp, phase: CbRotHlPhase) -> State {
         match phase {
             CbRotHlPhase::Read => {
                 let value = bus.read(self.registers.hl());
+                let carry_in = self.registers.flag(Flag::C);
                 let (result, carry) = match op {
                     CbRotOp::Rlc => alu::rlc(value),
+                    CbRotOp::Rrc => alu::rrc(value),
+                    CbRotOp::Rl => alu::rl(value, carry_in),
+                    CbRotOp::Rr => alu::rr(value, carry_in),
                 };
                 self.registers.set_flag(Flag::Z, result == 0);
                 self.registers.set_flag(Flag::N, false);

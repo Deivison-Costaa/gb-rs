@@ -201,7 +201,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     `alu::increment`/`decrement` devolvem o resultado em vez de escrever em `A`
     — o operando é qualquer `r8` ou `(HL)`. Ver
     [doc da 0027](docs/iterations/0027-cpu-inc-dec-r8.md) e `STATUS.md`, nota 48.
-- [ ] 1.7 Opcodes: ALU 16-bit + `ADD SP,e8` / `LD HL,SP+e8` (flags contraintuitivas).
+- [x] 1.7 Opcodes: ALU 16-bit + `ADD SP,e8` / `LD HL,SP+e8` (flags contraintuitivas).
   **Quebrado em quatro na 0028:** o grupo `x16/alu` da tabela de gbops tem **14**
   opcodes e, como o 1.6, a quebra por regra de decodificação não serve — há só
   duas formas de M-cycle (`fetch → internal` para os doze primeiros, `fetch →
@@ -213,12 +213,12 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     e não só para `C` (o 1.6e fez isso para `r8`). `fetch(escreve a metade
     baixa) → internal(escreve a metade alta)`, 2 M-cycles. Ver
     [doc da 0028](docs/iterations/0028-cpu-inc-dec-r16.md).
-   - [x] 1.7b `ADD HL,r16` (`$09 $19 $29 $39`) — 4 opcodes, `N` = `0` literal,
+  - [x] 1.7b `ADD HL,r16` (`$09 $19 $29 $39`) — 4 opcodes, `N` = `0` literal,
     `H`/`C` calculados sobre o par de 16 bits inteiro (carry do bit 11 e do
     bit 15) — ao contrário do `ADD SP,e8`/`LD HL,SP+e8` do 1.7c/1.7d, que
     calculam sobre o byte baixo. `Z` não é afetada. Mesma forma de M-cycle do
     1.7a.
-   - [x] 1.7c `ADD SP,e8` (`$E8`) — 1 opcode, 4 M-cycles
+  - [x] 1.7c `ADD SP,e8` (`$E8`) — 1 opcode, 4 M-cycles
     (`fetch → read(i8) → internal → write`), o mais longo do grupo. `Z`/`N`
     literais `0`; `H`/`C` calculados sobre o **byte baixo** de `SP` somado ao
     imediato — regra de 8 bits sobre um valor de 16, não o par inteiro do

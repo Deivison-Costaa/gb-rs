@@ -16,7 +16,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
   - [x] 0.3a `CartridgeHeader::parse(&[u8])` em `gb-core`: título, tipo de cartucho, tamanho de ROM/RAM, checksum do header (armazenado × calculado). Puro, sem I/O.
   - [x] 0.3b `gb-cli info <rom>`: leitura do arquivo, parsing de argumentos, impressão e códigos de saída.
 - [x] 0.4 `Cartridge` trait + `NoMbc` (ROM-only, 32KB). A RAM opcional da § No MBC **não** entrou: os tipos que a declaram (`$08`/`$09`) são os que o Pan Docs marca como comportamento desconhecido — ver [doc da 0007](docs/iterations/0007-cart-nombc.md).
-- [ ] 0.5 `scripts/fetch-test-roms.sh`: baixa blargg, mooneye, dmg-acid2 para `tests/roms/`.
+- [x] 0.5 `scripts/fetch-test-roms.sh`: baixa blargg, mooneye, dmg-acid2 para `tests/roms/`. Entregue pelo scaffold; a [0008](docs/iterations/0008-fetch-test-roms-guard.md) verificou (121 ROMs, três suítes) e cobriu com teste hermético. O fallback ainda entrega menos do que promete — `STATUS.md`, nota 17.
 
 ## M1 — CPU (sem gráficos)
 

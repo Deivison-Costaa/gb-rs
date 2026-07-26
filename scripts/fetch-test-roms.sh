@@ -23,8 +23,15 @@
 set -euo pipefail
 
 readonly BUNDLE_VERSION="v7.0"
-readonly BUNDLE_URL="https://github.com/c-sp/game-boy-test-roms/releases/download/${BUNDLE_VERSION}/game-boy-test-roms-${BUNDLE_VERSION}.zip"
-readonly BUNDLE_SHA256="b9a9d7a1075aa35a3d07c07c34974048672d8520dca9e07a50178f5860c3832c"
+
+# TEST_ROMS_BUNDLE_URL/_SHA256 são costura de teste, não configuração: existem
+# para `crates/gb-cli/tests/fetch_test_roms.rs` apontar o download para um zip
+# local (`file://`) e medir este script sem rede. Andam em par de propósito —
+# quem trocar só a URL esbarra no sha256 fixado e o script morre, que é
+# exatamente o comportamento que a fixação existe para dar. A CI não os define,
+# e `ci_does_not_override_the_pinned_bundle` reprova o dia em que definir.
+readonly BUNDLE_URL="${TEST_ROMS_BUNDLE_URL:-https://github.com/c-sp/game-boy-test-roms/releases/download/${BUNDLE_VERSION}/game-boy-test-roms-${BUNDLE_VERSION}.zip}"
+readonly BUNDLE_SHA256="${TEST_ROMS_BUNDLE_SHA256:-b9a9d7a1075aa35a3d07c07c34974048672d8520dca9e07a50178f5860c3832c}"
 
 readonly BLARGG_FALLBACK_URL="https://codeload.github.com/retrio/gb-test-roms/tar.gz/refs/heads/master"
 readonly ACID2_FALLBACK_URL="https://github.com/mattcurrie/dmg-acid2/releases/download/v1.0/dmg-acid2.gb"

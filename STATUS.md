@@ -3,9 +3,9 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0007 — `Cartridge` + `NoMbc` ([doc](docs/iterations/0007-cart-nombc.md)).
-**Próxima tarefa:** ROADMAP 0.5 — **mas leia a nota 15 antes de começar**: `scripts/fetch-test-roms.sh` já existe, já baixa as 121 ROMs e a CI o executa a cada push desde a 0002. A 0008 é iteração de *verificação e marcação*, não de implementação: confirme que o script cumpre o item, decida se falta guarda de teste, marque `[x]` e siga. Se sobrar tempo, o 1.1 (registradores) é o próximo trabalho de verdade — ler `docs/reference/02-cpu.md` antes (R1).
-**Marco atual:** M0 — Fundação
+**Última iteração concluída:** 0008 — guarda do `fetch-test-roms.sh` ([doc](docs/iterations/0008-fetch-test-roms-guard.md)). **Fecha o M0.**
+**Próxima tarefa:** ROADMAP 1.1 — registradores AF/BC/DE/HL/SP/PC, flags Z/N/H/C, pares de 8/16 bits. Primeiro item de hardware desde a 0007, então a R1 volta a morder: ler `docs/reference/02-cpu.md` **inteiro** antes de escrever, e `grep` pelo registrador no arquivo todo, não só na seção que o `docs/reference/README.md` aponta (nota 15). **Primeira pergunta a responder pela spec, não pela memória:** a tabela do § Flags Register em `02-cpu.md` lista só os bits 7–4 (`z n h c`) e **não diz nada** sobre os bits 3–0. "O nibble baixo de `F` é sempre zero, inclusive depois de `POP AF`" é folclore que eu ia escrever aqui como fato e não achei escrito em `docs/reference/` nenhum (`03-opcodes.md` l. 289 descreve `POP AF` sem mencionar máscara). Ou se acha a fonte e ela entra em `docs/reference/`, ou o 1.1 não implementa máscara nenhuma.
+**Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -85,6 +85,16 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
   "item do ROADMAP → arquivo a ler antes de implementar".
 - **ROMs de teste não entram no git.** `tests/roms/` é gitignored;
   `scripts/fetch-test-roms.sh` baixa o bundle fixado por tag e sha256.
+  **Agora isso é testado, não prometido:** `crates/gb-cli/tests/fetch_test_roms.rs`
+  roda o script de verdade contra um bundle falso local, servido por `file://`,
+  e afirma as quatro promessas — as três suítes chegam, `cgb_sound` é podada,
+  sha256 divergente derruba o script, segunda execução é no-op. Sem rede, em
+  0,1s. O par `TEST_ROMS_BUNDLE_URL`/`TEST_ROMS_BUNDLE_SHA256` é **costura de
+  teste**: existe só para apontar o download para um zip local, anda em par (URL
+  trocada sozinha esbarra no sha fixado e mata o script), e
+  `ci_does_not_override_the_pinned_bundle` reprova o dia em que o `ci.yml`
+  mencionar o prefixo. Seam que a produção possa usar por acidente é como se
+  perde uma fixação por sha256 sem ninguém notar.
 - **`scoreboard.csv` é acumulativo e versionado.** Cada execução anexa; nunca
   truncar. É a série temporal que vira gráfico no ROADMAP 8.2.
 - **A série completa mora na branch `scoreboard-data`, não em `main`.** Push em
@@ -325,9 +335,35 @@ contorno previsto no prompt de bootstrap.
     implementar, `grep` pelo registrador/opcode no arquivo inteiro** — não só na
     seção que o `docs/reference/README.md` aponta.
 
-16. **O 0.5 já está feito, mas não marcado.** `scripts/fetch-test-roms.sh` existe
-    desde o scaffold, baixa as 121 ROMs por tag e sha256, e a CI o roda a cada
-    push desde a 0002 — o item continua `[ ]` porque nenhuma iteração o marcou.
-    Não "implemente" de novo: verifique contra o texto do item, decida se falta
-    guarda de teste, marque e siga. Se o ROADMAP tiver outros itens já entregues
-    pelo scaffold, o mesmo vale.
+16. ~~**O 0.5 já está feito, mas não marcado.**~~ **Resolvida na 0008, e a
+    conferência valeu o turno.** O script cumpre o item ao pé da letra — 121
+    ROMs medidas, três suítes, `cgb_sound` ausente — mas era o único dos quatro
+    scripts do projeto sem teste nenhum, e a verificação virou cinco guardas e a
+    nota 17. **A moral vale para o resto do ROADMAP:** item entregue pelo
+    scaffold merece uma iteração de conferência, não um `[x]` de confiança.
+
+17. **O fallback do `fetch-test-roms.sh` entrega menos do que promete, e sai
+    `0`.** Quando o bundle está fora do ar, o script cai nas fontes oficiais por
+    suíte — e **não baixa a mooneye**: não existe release pré-montada upstream,
+    só o fonte, que exige RGBDS. Isso está escrito e é decisão consciente
+    (manter a CI viva em vez de derrubá-la por falha de rede). O problema é o
+    resto: `verify()` **imprime** a contagem da mooneye e nunca a confere, e
+    `main` sai `0` de qualquer jeito. Numa execução de fallback a CI fica verde
+    medindo 46 ROMs em vez de 121, e a única pista é uma linha de `ATENÇÃO:` no
+    meio do log — o denominador do placar encolhe 62% sem nada ficar vermelho.
+
+    A 0008 **não** consertou de propósito: inverter "sobrevive à queda da rede"
+    para "morre na queda da rede" é decisão de projeto, e contrabandear design
+    dentro de uma iteração de verificação é pior do que a nota ficar aberta.
+    Quem for mexer decide entre (a) `verify()` conferir a mooneye e `main`
+    propagar o veredito, (b) o `scoreboard.sh` recusar rodar com menos ROMs do
+    que a execução anterior mediu, ou (c) aceitar e documentar. A (b) é a que
+    protege a série da apresentação, que é o ativo de verdade.
+
+18. **Guarda de script bash não sofre a armadilha de mtime da nota 14.** O teste
+    lê o `.sh` em tempo de execução, então mutar o script não exige rebuild e o
+    veredito nunca é de outro experimento. Mas ganha uma armadilha própria: o
+    padrão de busca tem de casar **exatamente uma vez**, conferido antes de
+    aplicar. Na 0008 um mutante casou 0 vezes (o literal tinha acento e eu
+    escrevi sem) — o harness reportou `mutante inválido` em vez de um verde, que
+    é a diferença entre medir e se enganar.

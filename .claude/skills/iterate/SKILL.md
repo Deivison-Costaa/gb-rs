@@ -128,13 +128,25 @@ justamente o que escondeu dois sub-itens do 1.7 de uma varredura.
 
 ```
 git add -A
-git commit -m "feat(escopo): descrição"     # Conventional Commits
+git commit -m "feat(escopo): descrição"     # Conventional Commits, um por unidade lógica
 git push -u origin iter/NNNN-slug
-gh pr create --fill
+
+# Escreva o título. NÃO use --fill: com mais de um commit ele cai para o nome
+# da branch, e como o merge é squash isso vira o título em `main` para sempre.
+gh pr create --title "iter NNNN: <o que entrega> (ROADMAP X.Y)" --body "..."
+
+# `gh pr checks --watch` sai com exit 1, sem esperar, se o GitHub ainda não
+# registrou os runs. Espere aparecerem antes de observar.
+for i in $(seq 1 30); do gh pr checks >/dev/null 2>&1 && break; sleep 10; done
 gh pr checks --watch
+
 gh pr merge --squash --delete-branch
 git checkout main && git pull
 ```
+
+O título é o índice do projeto: `git log main` tem de deixar ler a escada de
+iterações sem abrir mais nada. Trabalho fora do ROADMAP leva sufixo
+(`iter 0017b: ...`), pela mesma convenção da branch.
 
 ## Passo 11 — PARAR
 

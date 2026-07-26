@@ -164,3 +164,95 @@ disse que suas três armadilhas "vinham pré-anunciadas no `STATUS.md`". A apost
 **Próxima tarefa**, que é denso e **cita as notas por número**. O índice mantém
 a descoberta; o parágrafo mantém o handoff. Se a qualidade cair, a bateria de
 mutação mede.
+
+## 2026-07-26 — O corte do `STATUS.md` não baixou o custo, e a previsão errada é o dado
+
+Previsão: cortar 91 KB do `STATUS.md` (~23k tokens) baixaria o contexto por
+turno, e essa parte seria **atribuível** porque a bateria de mutação mexeria em
+turnos e saída, não em contexto por turno.
+
+Medido, na primeira iteração sob as duas mudanças (0025): contexto por turno
+**subiu** de 150k para 154k, e depois para 167k na 0027.
+
+A premissa da atribuição estava errada. A bateria muta o fonte, roda a suíte,
+reverte e repete — cada ciclo desses despeja saída de ferramenta no contexto, de
+modo que ela infla **as duas** grandezas. Some-se que os testes cresceram de
+5.189 para mais de 8.000 linhas no mesmo período, e o corte foi engolido.
+
+**Conclusão que sobrevive:** o custo por iteração é função do tamanho do
+repositório, não da escolha de modelo. A economia de trocar Opus 5 por Sonnet 5
+foi consumida em menos de dez iterações. Nenhuma escolha de modelo muda essa
+inclinação; só reduzir o que entra em contexto muda — e reduzir documentação não
+basta quando o que cresce é o código de teste.
+
+## 2026-07-26 — Série de abortos sem causa identificada
+
+Seis execuções morreram sem entregar nada, **US$ 6,76**, todas com a mesma forma:
+o processo é cortado de fora, `api_error_status` nulo, zero negações de
+permissão, `stderr` vazio quando foi capturado.
+
+| horário | razão | turnos | custo |
+|---|---|---|---|
+| 05:29 | `aborted_streaming` | 33 | 1,36 |
+| 06:12 | `aborted_streaming` | 54 | 2,58 |
+| 06:19 | `aborted_streaming` | 27 | 1,33 |
+| 11:49 | `aborted_streaming` | 4 | 0,14 |
+| 11:55 | `aborted_tools` | 7 | 0,05 |
+| 11:56 | `aborted_streaming` | 35 | 1,30 |
+
+**Eliminado por medição, não por opinião:** suspensão da máquina (journal ativo
+durante as janelas; última suspensão em 25/07 17:47), OOM killer (nenhuma
+ocorrência), `systemd-oomd` (serviço inativo), pressão de memória (PSI em 0,00),
+rede (nenhum evento do NetworkManager nas janelas), processos órfãos acumulando
+(só a sessão-mãe viva), e o `claude -p` em si (sonda trivial completa em 4,5 s).
+
+**Não eliminado:** o mecanismo de tarefa em background do harness que hospeda o
+orquestrador. Todas as execuções, boas e ruins, passaram por ele — nunca esteve
+sob controle experimental. O teste que separa é rodar `./scripts/loop.sh 1` num
+terminal fora da sessão.
+
+**O que conteve o prejuízo** foi instrumentação criada antes, por outro motivo:
+métrica gravada mesmo na falha (senão esses US$ 6,76 seriam invisíveis) e a
+guarda de árvore limpa com preservação em commit `wip:` (nenhum aborto perdeu
+trabalho).
+
+## 2026-07-26 — O orquestrador violou a própria R1
+
+Diagnostiquei a primeira dupla de abortos como "provavelmente a máquina
+suspendendo", **sem medir**, e gravei isso na mensagem de um commit. Quatro
+comandos depois a medição desmentiu: o journal registrou atividade contínua em
+06:13, 06:17, 06:19 e 06:24.
+
+É exatamente o erro que a **R1** existe para impedir — intuição confiante sobre
+um mecanismo que se podia consultar — cometido na camada de processo, onde não
+há regra escrita para impedir. O `CLAUDE.md` protege o agente contra achismo
+sobre o SM83; ninguém protegia o orquestrador contra achismo sobre a máquina.
+
+Corrigido na origem (a branch não tinha ido para o `origin`, então o commit foi
+emendado em vez de deixar história falsa). Registrado aqui porque um projeto que
+mede erro de primeira tentativa não pode esconder os do próprio condutor.
+
+Correção adicional da mesma série: afirmei que os abortos estavam "acelerando"
+com três pontos (54 → 27 → 4 turnos). O quarto e o sexto vieram com 7 e 35. Não
+havia tendência; havia três pontos e uma reta imaginada.
+
+## 2026-07-26 — Duas vezes o processo sobreviveu por redundância acidental
+
+Padrão que só apareceu porque as duas coisas foram achadas no mesmo dia:
+
+1. **Cobertura do controle negativo de decodificação** (achado da 0026): nenhum
+   teste verificava a afirmação *positiva* de `decoded_elsewhere`. A proteção
+   existia só porque a lista estava duplicada em 12 arquivos. Consolidar —
+   correto e desejável — teria apagado a proteção com tudo verde. Só a bateria
+   de mutação, obrigatória havia uma iteração, pegou.
+
+2. **Caixa do ROADMAP 1.4**: fechada nos quatro sub-itens e **aberta no pai**
+   desde a 0017. A regra do passo 1 é "a próxima caixa não marcada, em ordem", e
+   literalmente a próxima era um item pronto havia dez iterações. Funcionou
+   porque o parágrafo **Próxima tarefa** do `STATUS.md` aponta para outro lugar e
+   os agentes seguem ele.
+
+Nos dois casos a fonte formal de verdade estava errada e uma redundância informal
+segurou o processo. Redundância que ninguém projetou não é robustez: é uma dívida
+que cobra no dia em que alguém a remove por ser redundante — e no caso 1 esse dia
+quase foi o mesmo em que foi descoberta.

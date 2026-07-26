@@ -478,8 +478,12 @@ fn opcode_76_is_halt_and_not_a_load_from_hl_into_hl() {
 ///
 /// - `$00` (`NOP`) e `$C3` (`JP u16`) — 1.3.
 /// - `00 ddd 110` (`$06 $0E $16 $1E $26 $2E $36 $3E`) — 1.4b.
+/// - `00 mm x010` (`$02 $0A $12 $1A $22 $2A $32 $3A`) — 1.4c.
 fn decoded_elsewhere(opcode: u8) -> bool {
-    opcode == 0x00 || opcode == 0xC3 || opcode & 0b1100_0111 == 0b0000_0110
+    opcode == 0x00
+        || opcode == 0xC3
+        || opcode & 0b1100_0111 == 0b0000_0110
+        || opcode & 0b1100_0111 == 0b0000_0010
 }
 
 #[test]

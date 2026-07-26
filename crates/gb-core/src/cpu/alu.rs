@@ -106,6 +106,27 @@ pub(super) fn rlc(value: u8) -> (u8, bool) {
     (result, carry)
 }
 
+// CB RRC: rotação circular à direita. spec: docs/reference/03-opcodes.md
+pub(super) fn rrc(value: u8) -> (u8, bool) {
+    let carry = (value & 0x01) != 0;
+    let result = (value >> 1) | (u8::from(carry) << 7);
+    (result, carry)
+}
+
+// CB RL: rotação à esquerda via carry. `carry_in` é o C antigo.
+pub(super) fn rl(value: u8, carry_in: bool) -> (u8, bool) {
+    let carry = (value & 0x80) != 0;
+    let result = (value << 1) | u8::from(carry_in);
+    (result, carry)
+}
+
+// CB RR: rotação à direita via carry.
+pub(super) fn rr(value: u8, carry_in: bool) -> (u8, bool) {
+    let carry = (value & 0x01) != 0;
+    let result = (value >> 1) | (u8::from(carry_in) << 7);
+    (result, carry)
+}
+
 pub(super) fn rlca(registers: &mut Registers) {
     let a = registers.a;
     let carry_out = (a & 0x80) != 0;

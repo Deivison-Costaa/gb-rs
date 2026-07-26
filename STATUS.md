@@ -3,12 +3,12 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0047 — máscara do nibble baixo de F no POP AF ([doc](docs/iterations/0047-cpu-fmask.md)). `write_r16_stk_low(Af, v)` e `set_af(v)` agora fazem `f = v & 0xF0`. ROM 08 (misc instrs) passou. ROM 11 (`op a,(hl)`) continua falhando — erro "27", pré-existente e independente da máscara (os valores C do teste já têm nibble baixo 0). Bateria: **5/5 pegos, 2/2 controles verdes** — o cache de build (nota 14) atacou na reversão de M5; `cargo clean` resolveu.
+**Última iteração concluída:** 0048 — correção do DAA ($27) ([doc](docs/iterations/0048-daa-fix.md)). `alu::daa` agora usa intermediário `u16` e threshold `a > 0x9F` (não `a > 0x99`). ROM 11 (`op a,(hl)`) e ROM 01 (`special`) passaram. O erro "27" impresso pela ROM era o **opcode** de DAA ($27), não um índice de teste — a nota 51 registra a armadilha. Bateria: **2/2 pegos, 1/1 controle verde**.
+**Iteração anterior:** 0047 — máscara do nibble baixo de F no POP AF.
 **Iteração anterior:** 0046 — `gb-cli run` + MBC1 mínimo.
 **Iteração anterior:** 0045 — stub da porta serial.
 **Iteração anterior:** 0044 — misc: `CPL`, `SCF`, `CCF`, `DAA`, `DI`, `EI`, `STOP`.
-**Iteração anterior:** 0043 — RST.
-**Próxima tarefa:** ROADMAP **1.14** (continua) — blargg `cpu_instrs/individual/11` + `cpu_instrs.gb` completo. ROM 08 passou com a máscara de F; **ROM 11 (`op a,(hl)`)** falha com erro "27" — o erro corresponde ao checksum da instrução LD (HL+),A com C=$F0 ou BIT 1,(HL), dependendo do formato de índice usado pelo blargg. A ROM 11 nunca passou (antes crashava, depois do 0046 passou a falhar ao chegar no teste). **Notas relevantes:** a nota 14 (bateria de mutação e cache de build — atacou na 0047), a nota 50 (MBC1 sem teste de banking — buraco herdado da 0046). **Invariante atualizada:** `F` mascara nibble baixo (adicionado na 0047).
+**Próxima tarefa:** ROADMAP **1.14** (continua) — blargg `cpu_instrs.gb` (agregado). ROMs individuais 01 e 03-11 passam (10/11); só 02-interrupts falha (esperado, sem timer/interrupções). O agregado `cpu_instrs.gb` ainda falha em sub-testes que dependem de timer/interrupções. **Notas relevantes:** a nota 51 (blargg imprime opcode em hex, não índice de teste — o "27" era DAA $27, não BIT 1,(HL)), a nota 14 (cache de build na bateria), a nota 50 (MBC1 sem teste de banking).
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -27,7 +27,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 
 | Suíte | Passando | Total |
 |---|---|---|
-| blargg cpu_instrs | 8 | 12 |
+| blargg cpu_instrs | 10 | 12 |
 | blargg instr_timing | 0 | 1 |
 | blargg mem_timing | 0 | 4 |
 | blargg mem_timing-2 | 0 | 4 |
@@ -210,3 +210,6 @@ Numeração é estável e citada no código: **nunca renumere**.
 49. **Um valor de "F sujo" único pode coincidir, por acidente, com o que uma
 50. **MBC1 sem teste de banking — adiantado do 4.2 para destravar o 1.13, mas
     a mutação que força banco constante 1 sobreviveu à suíte inteira.
+51. **ROM blargg imprime o opcode em hex, não o índice do teste.** O "27" da
+    ROM 11 era DAA ($27), não BIT 1,(HL). A 0048 perdeu metade da iteração nessa
+    confusão — ver corpo e lição em `docs/notas.md`.

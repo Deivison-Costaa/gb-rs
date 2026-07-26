@@ -211,7 +211,7 @@ fn ccf_takes_one_m_cycle() {
 #[test]
 fn daa_after_addition_adjusts_bcd_correctly() {
     // (A_in, N, C, H, expected_A, expected_C)
-    let cases: [(u8, bool, bool, bool, u8, bool); 8] = [
+    let cases: [(u8, bool, bool, bool, u8, bool); 12] = [
         (0x00, false, false, false, 0x00, false),
         (0x09, false, false, false, 0x09, false),
         (0x0A, false, false, false, 0x10, false),
@@ -220,6 +220,16 @@ fn daa_after_addition_adjusts_bcd_correctly() {
         (0xA0, false, false, false, 0x00, true),
         (0x00, false, false, true, 0x06, false),
         (0x9A, false, false, true, 0x00, true),
+        // O ajuste do nibble baixo estoura u8; a comparação do nibble alto
+        // usa o intermediário antes do truncamento. Ver iter 0048.
+        (0xFA, false, false, false, 0x60, true),
+        (0x9F, false, false, false, 0x05, true),
+        // H=1 idêntico a (A&0x0F)>9 para o nibble baixo com 0xFA, mas
+        // C de entrada também aciona o ajuste do nibble alto com 0xFA
+        (0xFA, false, true, false, 0x60, true),
+        // A=0x99 com H=1: o ajuste do nibble baixo leva a = 0x9F, que
+        // é exatamente igual ao threshold. Sem 0x60. Ver iter 0048.
+        (0x99, false, false, true, 0x9F, false),
     ];
 
     for (a_in, n, c, h, expected_a, expected_c) in cases {

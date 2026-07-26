@@ -1013,4 +1013,15 @@
     o teste inteiro (as quatro flags, INC e DEC, os quatro pares) sob as duas
     polaridades. Qualquer mutação que force um bit de flag para `0` ou para
     `1`, em qualquer direção, agora tem uma das duas rodadas partindo do lado
-    oposto — e não tem como se esconder.
+     oposto — e não tem como se esconder.
+
+51. **ROM blargg imprime o opcode em hex, não o índice do teste.** Quando uma
+    ROM de teste encontra um checksum que não bate, ela imprime o byte do opcode
+    via `print_a` (formato hex), não o número sequencial do teste. A 0048 perdeu
+    metade da iteração revisando BIT 1,(HL) porque o STATUS anterior descrevia
+    o erro "27" como índice (possivelmente BIT 1,(HL) ou LD (HL+),A). Na verdade,
+    "27" é o opcode de DAA ($27), e tanto a ROM 11 quanto a ROM 01 falhavam pelo
+    mesmo motivo — DAA estava errado desde a 0044.
+
+    Lição: antes de interpretar um número de erro do blargg, abra o fonte da ROM
+    e veja o que `print_a` imprime — é o byte em `(instr)`, não um contador.

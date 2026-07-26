@@ -292,18 +292,25 @@ fn the_unused_opcodes_are_exactly_the_eleven_the_spec_names() {
 
 #[test]
 fn an_opcode_this_emulator_has_not_reached_is_not_an_illegal_one() {
-    // `06` = `LD B,u8`: existe no SM83 e chega no 1.4. Confundir os dois
-    // rótulos faria o `gb-cli` reportar "ROM usa opcode inválido" quando o
-    // problema é o emulador estar incompleto — e as duas coisas se consertam
-    // em lugares diferentes.
-    let (mut cpu, mut bus) = machine(&[0x06, 0x42]);
+    // `04` = `INC B`: existe no SM83 e chega no 1.6. Confundir os dois rótulos
+    // faria o `gb-cli` reportar "ROM usa opcode inválido" quando o problema é
+    // o emulador estar incompleto — e as duas coisas se consertam em lugares
+    // diferentes.
+    //
+    // Era `$06` (`LD B,u8`) até o 1.4b implementá-lo. Este teste precisa de um
+    // opcode que ainda **não** exista aqui, então ele muda de exemplo a cada
+    // vez que o exemplo anterior fica pronto — e o dia em que não houver mais
+    // nenhum é o dia em que ele sai. `INC B` é o vizinho de `$06` na tabela
+    // (`00 ddd 100`, contra `00 ddd 110`), o que o torna também um guarda da
+    // máscara do 1.4b: uma máscara frouxa nos bits 2-0 engoliria os dois.
+    let (mut cpu, mut bus) = machine(&[0x04, 0x42]);
 
     cpu.step(&mut bus);
 
     assert_eq!(
         cpu.lockup(),
-        Some(Lockup::UndecodedOpcode(0x06)),
-        "`LD B,u8` não é opcode inexistente: é opcode que ainda não foi feito"
+        Some(Lockup::UndecodedOpcode(0x04)),
+        "`INC B` não é opcode inexistente: é opcode que ainda não foi feito"
     );
 }
 

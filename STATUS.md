@@ -3,11 +3,11 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0045 — stub da porta serial (`$FF01`/`$FF02`) ([doc](docs/iterations/0045-serial-stub.md)). Módulo `serial.rs` no crate root com `Serial { sb, sc, output }`. Roteamento em `Bus::read`/`write`: `$FF01`/`$FF02` vão para `self.serial`, os demais registradores de I/O continuam no array `io`. Escrever `$81` em SC (bit 7=1, bit 0=1, borda de subida do bit 7) dispara a transferência: o byte em SB é empurrado para `output` e SC.7 é limpo imediatamente. SC mascara bits 6–2 (`value & 0x83`). `Bus::take_serial_output()` drena a fila para o `gb-cli`. Sem temporização e sem interrupção serial (M2). `gb-cli run` continua saindo `2` (NOT_IMPLEMENTED). Bateria: **6/6 pegos, 2/2 controles verdes** — dois buracos de cobertura (rising edge e máscara de SC) foram encontrados e fechados durante a bateria.
+**Última iteração concluída:** 0046 — `gb-cli run` + MBC1 mínimo ([doc](docs/iterations/0046-gb-cli-run.md)). `gb-cli run <rom> --headless --max-cycles <n>` implementado: carrega a ROM, instancia `Bus` + `Cpu`, roda `step()` até `max_cycles`, `Lockup` ou `Stopped`, drena `take_serial_output()` para stdout e imprime `cycles=<n>`. Detecta `Passed`/`Failed` na saída serial (exit 0/1). MBC1 mínimo adiantado do 4.2 (só ROM banking, sem RAM) porque todas as ROMs blargg são MBC1. `Cpu::is_stopped()` adicionado para o laço detectar `STOP`. Bateria: **7/7 pegos, 2/2 controles verdes** — buraco de cobertura no banking do MBC1 (sem teste unitário; pertence ao 4.2).
+**Iteração anterior:** 0045 — stub da porta serial.
 **Iteração anterior:** 0044 — misc: `CPL`, `SCF`, `CCF`, `DAA`, `DI`, `EI`, `STOP`.
 **Iteração anterior:** 0043 — RST.
-**Iteração anterior:** 0042 — RET cc + RET + RETI.
-**Próxima tarefa:** ROADMAP **1.13** — blargg `cpu_instrs/individual/01` a `05`. Com a serial funcionando, é a primeira vez que ROMs de teste podem produzir saída legível pelo `scoreboard.sh`. É preciso: (1) implementar `gb-cli run <rom> --headless --max-cycles <n>`: carregar a ROM, instanciar `Bus` + `Cpu`, rodar `step()` até `max_cycles` ou `Lockup`, drenar `take_serial_output()` para stdout; (2) o `scoreboard.sh` já está preparado para capturar essa saída e comparar com os gabaritos — se o primeiro caractere bater `pass`, os demais `fail`. As ROMs 01 a 05 exercitam opcodes já implementados (loads, ALU, shifts, rotates, jumps condicionais) — o desafio não são os opcodes, é o laço de execução e o contrato de saída. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação).
+**Próxima tarefa:** ROADMAP **1.14** — blargg `cpu_instrs/individual/06` a `11` + `cpu_instrs.gb` completo. Com o `gb-cli run` e MBC1 funcionando, 5/12 ROMs já passam. As que faltam: 01 (POP AF — máscara de F), 02 (interrupções), 08 (DAA/SCF/CCF), 09 (op r,r — precisa de mais ciclos ou está travada), 10 (bit ops), 11 (op a,(hl)). O `cpu_instrs.gb` agregado também não passa. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação), a nota 50 (MBC1 sem teste de banking — buraco herdado da 0046).
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -26,7 +26,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 
 | Suíte | Passando | Total |
 |---|---|---|
-| blargg cpu_instrs | 0 | 12 |
+| blargg cpu_instrs | 5 | 12 |
 | blargg instr_timing | 0 | 1 |
 | blargg mem_timing | 0 | 4 |
 | blargg mem_timing-2 | 0 | 4 |
@@ -38,7 +38,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **577** (eram **568** antes da 0045 — +9 do novo arquivo `serial_stub`).
+Testes do workspace: **591** (eram **577** antes da 0046 — +14 do novo arquivo `run_command`).
 
 ## Invariantes
 
@@ -207,3 +207,5 @@ Numeração é estável e citada no código: **nunca renumere**.
 47. **Redundância acidental (12 cópias do mesmo controle) escondia um buraco
 48. **Uma flag que fica intocada não aparece lendo o `diff` — só testando os
 49. **Um valor de "F sujo" único pode coincidir, por acidente, com o que uma
+50. **MBC1 sem teste de banking — adiantado do 4.2 para destravar o 1.13, mas
+    a mutação que força banco constante 1 sobreviveu à suíte inteira.

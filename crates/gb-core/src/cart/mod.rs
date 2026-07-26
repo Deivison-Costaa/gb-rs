@@ -1,11 +1,13 @@
 //! Cartucho: cabeçalho, mapeadores e despacho. spec: `docs/reference/08-cartridges-mbc.md`.
 
 mod header;
+mod mbc1;
 mod nombc;
 
 pub use header::{
     CartridgeHeader, CartridgeType, HeaderChecksum, HeaderError, MIN_ROM_LEN, RamSize, RomSize,
 };
+pub use mbc1::Mbc1;
 pub use nombc::NoMbc;
 
 use std::fmt;
@@ -14,6 +16,9 @@ use std::fmt;
 pub const OPEN_BUS: u8 = 0xFF;
 
 const ROM_ONLY: u8 = 0x00;
+const MBC1: u8 = 0x01;
+const MBC1_RAM: u8 = 0x02;
+const MBC1_RAM_BATTERY: u8 = 0x03;
 
 // O cartucho visto pelo barramento: dois endereços, read e write.
 // write existe mesmo em ROM ONLY (no-op) — quem chama é o Bus, que não sabe o MBC.
@@ -50,9 +55,7 @@ impl fmt::Display for CartridgeError {
             }
             Self::RomTooLarge { len } => write!(
                 f,
-                "ROM de {len} bytes num cartucho sem MBC: $0000-$7FFF endereça \
-                 {max} bytes e não há mapeador para alcançar o resto",
-                max = NoMbc::MAX_ROM_LEN
+                "ROM de {len} bytes excede a capacidade declarada no cabeçalho"
             ),
         }
     }
@@ -77,10 +80,20 @@ impl From<HeaderError> for CartridgeError {
 // monta normalmente — quem trava por checksum é a boot ROM, que este emulador pula).
 // $08/$09 são recusados: RAM opcional sem comportamento documentado (ver docs/iterations/0007).
 pub fn load(rom: Vec<u8>) -> Result<Box<dyn Cartridge>, CartridgeError> {
-    let cartridge_type = CartridgeHeader::parse(&rom)?.cartridge_type();
+    let header = CartridgeHeader::parse(&rom)?;
+    let cartridge_type = header.cartridge_type();
+    let rom_banks = rom_bank_count(header.rom_size(), rom.len());
 
     match cartridge_type.code() {
         ROM_ONLY => Ok(Box::new(NoMbc::new(rom)?)),
+        MBC1 | MBC1_RAM | MBC1_RAM_BATTERY => Ok(Box::new(Mbc1::new(rom, rom_banks)?)),
         _ => Err(CartridgeError::UnsupportedType { cartridge_type }),
     }
+}
+
+fn rom_bank_count(rom_size: RomSize, rom_len: usize) -> usize {
+    rom_size.banks().map(|b| b as usize).unwrap_or_else(|| {
+        let banks = rom_len / 0x4000;
+        if banks == 0 { 2 } else { banks }
+    })
 }

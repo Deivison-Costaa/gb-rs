@@ -521,6 +521,11 @@ impl Cpu {
         matches!(self.state, State::Fetch)
     }
 
+    #[must_use]
+    pub const fn is_stopped(&self) -> bool {
+        matches!(self.state, State::Stopped)
+    }
+
     fn fetch(&mut self, bus: &Bus) -> State {
         let opcode = self.read_at_pc(bus);
 

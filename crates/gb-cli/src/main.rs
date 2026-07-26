@@ -5,6 +5,7 @@
 
 mod exit;
 mod info;
+mod run;
 
 use std::ffi::OsStr;
 use std::path::PathBuf;
@@ -29,8 +30,53 @@ fn main() -> ExitCode {
             info::report(&PathBuf::from(rom))
         }
         Some("run") => {
-            eprintln!("`run` chega no ROADMAP 1.12: ainda não há CPU para executar a ROM.");
-            ExitCode::from(exit::NOT_IMPLEMENTED)
+            let mut rom_path: Option<PathBuf> = None;
+            let mut headless = false;
+            let mut max_cycles: Option<u64> = None;
+
+            while let Some(arg) = args.next() {
+                let s = arg.to_string_lossy();
+                match s.as_ref() {
+                    "--headless" => headless = true,
+                    "--max-cycles" => {
+                        let Some(val) = args.next() else {
+                            return usage("`--max-cycles` precisa de um valor numérico");
+                        };
+                        let val_str = val.to_string_lossy();
+                        max_cycles = match val_str.parse() {
+                            Ok(n) => Some(n),
+                            Err(_) => {
+                                return usage(&format!(
+                                    "`--max-cycles` espera um número, recebeu `{val_str}`"
+                                ));
+                            }
+                        };
+                    }
+                    other if other.starts_with('-') => {
+                        return usage(&format!("flag desconhecida: `{other}`"));
+                    }
+                    _ => {
+                        if rom_path.is_some() {
+                            return usage("`run` recebe exatamente uma ROM");
+                        }
+                        rom_path = Some(PathBuf::from(arg));
+                    }
+                }
+            }
+
+            let Some(path) = rom_path else {
+                return usage("`run` precisa do caminho de uma ROM");
+            };
+
+            if !headless {
+                return usage("`run` exige `--headless` (modo gráfico ainda não existe)");
+            }
+
+            let Some(cycles) = max_cycles else {
+                return usage("`run` exige `--max-cycles <n>`");
+            };
+
+            run::execute(&path, cycles)
         }
         _ => usage(&format!(
             "subcomando desconhecido: {}",

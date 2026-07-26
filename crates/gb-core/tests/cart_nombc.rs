@@ -147,7 +147,7 @@ fn load_dispatches_rom_only_to_nombc() {
 
 #[test]
 fn load_refuses_types_it_cannot_map() {
-    for code in [0x01u8, 0x03, 0x05, 0x11, 0x13, 0x19, 0x42, 0xFF] {
+    for code in [0x05u8, 0x11, 0x13, 0x19, 0x42, 0xFF] {
         let rom = rom_of_type(code, 32 * KIB);
         match load(rom) {
             Err(CartridgeError::UnsupportedType { cartridge_type }) => assert_eq!(

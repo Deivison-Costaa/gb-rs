@@ -28,11 +28,14 @@
 //! passa verde por vacuidade até algo real exercitá-lo.
 //!
 //! O 1.4a acrescentou 63 opcodes e **três** formas de M-cycle, todas da mesma
-//! família: `fetch`, e depois no máximo um acesso ao barramento. Generalizar
-//! daí seria generalizar de um terço dos dados — as outras formas do `x8/lsm`
-//! (operando imediato no 1.4b, efeito colateral sobre `HL` no 1.4c, endereço
-//! de 16 bits no 1.4d) ainda não existem para contradizer o desenho. A
-//! decisão está marcada no ROADMAP, no 1.4d.
+//! família: `fetch`, e depois no máximo um acesso ao barramento. O 1.4b
+//! acrescentou mais oito e a **primeira** forma com dois acessos —
+//! `LD (HL),u8`, que lê o operando num M-cycle e escreve no seguinte.
+//!
+//! Duas famílias ainda não são uma tabela. O que falta para decidir o desenho
+//! são as formas do 1.4c (efeito colateral sobre `HL`) e do 1.4d (endereço de
+//! 16 bits e a página `$FF00`); generalizar antes delas seria a nota 8 com
+//! metade dos dados. A decisão está marcada no ROADMAP, no 1.4d.
 //!
 //! O que **nasceu** aqui é menor e vem direto da spec: [`R8`], o operando de
 //! três bits da § Block 1. Isso não é antecipação — é a codificação que a
@@ -112,9 +115,9 @@ pub enum Lockup {
     /// termina. Não são `NOP`.
     IllegalOpcode(u8),
     /// Opcode legítimo do SM83 que este emulador ainda não decodifica — hoje
-    /// **180** dos 245 que existem, e eles chegam nos itens 1.4b a 1.11 do
+    /// **172** dos 245 que existem, e eles chegam nos itens 1.4c a 1.11 do
     /// ROADMAP. Um deles é o [`HALT`], que só é "não decodificado" porque o
-    /// 2.3 ainda não chegou; os outros 179 nunca foram tentados.
+    /// 2.3 ainda não chegou; os outros 171 nunca foram tentados.
     ///
     /// Parar aqui, em vez de entrar em pânico, mantém o `gb-core` como máquina
     /// de estados: quem decide o que fazer com uma CPU parada é quem a roda.
@@ -193,6 +196,56 @@ impl R8 {
     }
 }
 
+/// O bloco `LD r8,u8` — `$06 $0E $16 $1E $26 $2E $36 $3E` (ROADMAP 1.4b).
+///
+/// `docs/reference/02-cpu.md`, § Block 0, layout de bits de `ld r8, imm8`:
+///
+/// ```text
+/// Bits | Campo
+///    7 | 0
+///    6 | 0
+///  5-3 | Dest (r8)
+///    2 | 1
+///    1 | 1
+///    0 | 0
+/// ```
+///
+/// O destino é o mesmo campo [`R8`] do 1.4a, nos mesmos bits 5-3. Oito
+/// combinações, oito opcodes — e aqui, ao contrário da § Block 1, **não há
+/// exceção**: o índice 6 dá `LD (HL),u8`, que é load como os outros sete.
+///
+/// Os opcodes não são contíguos (andam de 8 em 8), então o reconhecimento é por
+/// máscara e não por faixa: apagar os bits do destino tem de deixar
+/// [`LD_R8_U8_PATTERN`]. Os vizinhos que a máscara **não** pode deixar entrar
+/// são `INC r8` (`00 ddd 100`) e `DEC r8` (`00 ddd 101`), que compartilham os
+/// bits 7-6 e diferem só nos bits 2-0 — e que são o 1.6.
+const LD_R8_U8_MASK: u8 = 0b1100_0111;
+/// Ver [`LD_R8_U8_MASK`].
+const LD_R8_U8_PATTERN: u8 = 0b0000_0110;
+
+/// Os dois M-cycles de `LD (HL),u8` (`$36`) que vêm depois do `fetch`.
+///
+/// A coluna de gbops é `fetch → read(u8) → write((HL))`: **três** M-cycles, 12
+/// T-cycles, e o operando e a escrita são passos diferentes. O byte chega do
+/// fluxo de instruções no M2 e só vai para a memória no M3.
+///
+/// Juntar os dois no M2 e gastar o M3 num `internal` dá os mesmos 12 T-cycles,
+/// o mesmo estado final, e adianta a escrita em um M-cycle — para o timer e a
+/// PPU, que é o que a suíte Mooneye mede, não é a mesma instrução. Foi o
+/// esqueleto desta iteração, e **um** teste da suíte o reprovou: os outros
+/// nove passam contra ele, porque só olham o começo e o fim.
+///
+/// A tentação vem de generalizar o 1.4a, onde `LD r,(HL)` faz a leitura e a
+/// escrita no mesmo M2 e não tem terceiro M-cycle. Lá a coluna tem dois passos;
+/// aqui tem três. **A coluna é por instrução** — ver a nota 26 do `STATUS.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StoreImmediateToHl {
+    /// M2 — `read(u8)`. O byte fica no latch; a memória não é tocada.
+    ReadImmediate,
+    /// M3 — `write((HL))`.
+    Write,
+}
+
 /// Em que ponto de qual instrução a CPU está.
 ///
 /// O `match` de [`Cpu::step`] sobre este enum é total **sem** `_ =>`: estado
@@ -216,6 +269,14 @@ enum State {
     LoadFromHl(ByteRegister),
     /// Dentro de `LD (HL),r`. O M2 é `write(r->(HL))`.
     StoreToHl(ByteRegister),
+    /// Dentro de `LD r,u8`. O M2 é `read(u8->r)`: o byte é buscado no fluxo de
+    /// instruções e escrito no registrador no **mesmo** M-cycle, como no
+    /// `LD r,(HL)` do 1.4a. A diferença é de onde ele vem — de `PC`, que anda,
+    /// e não de `HL`, que não.
+    LoadImmediate(ByteRegister),
+    /// Dentro de `LD (HL),u8`. Ver [`StoreImmediateToHl`], onde está a única
+    /// decisão de timing deste sub-item.
+    StoreImmediateToHl(StoreImmediateToHl),
     /// A CPU parou, e não volta.
     Locked(Lockup),
 }
@@ -293,6 +354,8 @@ impl Cpu {
             State::JumpImmediate(phase) => self.jump_immediate(bus, phase),
             State::LoadFromHl(dest) => self.load_from_hl(bus, dest),
             State::StoreToHl(source) => self.store_to_hl(bus, source),
+            State::LoadImmediate(dest) => self.load_immediate(bus, dest),
+            State::StoreImmediateToHl(phase) => self.store_immediate_to_hl(bus, phase),
             // O tempo passa; a CPU não. Ver [`Lockup`].
             State::Locked(lockup) => State::Locked(lockup),
         };
@@ -303,9 +366,12 @@ impl Cpu {
     pub const fn lockup(&self) -> Option<Lockup> {
         match self.state {
             State::Locked(lockup) => Some(lockup),
-            State::Fetch | State::JumpImmediate(_) | State::LoadFromHl(_) | State::StoreToHl(_) => {
-                None
-            }
+            State::Fetch
+            | State::JumpImmediate(_)
+            | State::LoadFromHl(_)
+            | State::StoreToHl(_)
+            | State::LoadImmediate(_)
+            | State::StoreImmediateToHl(_) => None,
         }
     }
 
@@ -329,6 +395,9 @@ impl Cpu {
             // dentro da faixa abaixo e não é um load. Ver [`HALT`].
             HALT => State::Locked(Lockup::UndecodedOpcode(opcode)),
             LD_R8_R8_FIRST..=LD_R8_R8_LAST => self.load_r8_r8(opcode),
+            // O bloco `00 ddd 110` não é contíguo — os oito opcodes andam de 8
+            // em 8 —, então é máscara e não faixa. Ver [`LD_R8_U8_MASK`].
+            _ if opcode & LD_R8_U8_MASK == LD_R8_U8_PATTERN => Self::load_r8_u8(opcode),
             // Os onze `-` da coluna `GB CPU`. Ver [`Lockup::IllegalOpcode`].
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
@@ -401,6 +470,60 @@ impl Cpu {
     fn store_to_hl(&mut self, bus: &mut Bus, source: ByteRegister) -> State {
         bus.write(self.registers.hl(), self.read_r8(source));
         State::Fetch
+    }
+
+    /// Decodifica um opcode do bloco `00 ddd 110`.
+    ///
+    /// Nada acontece no M1 além do fetch: as duas formas leem o operando, e ele
+    /// está no byte seguinte, que é o M2. Por isso a função não toca em `self` —
+    /// ela só escolhe qual das duas colunas a instrução vai percorrer.
+    ///
+    /// | Dest | Bytes | T-cycles | Coluna |
+    /// |---|---|---|---|
+    /// | reg | 2 | 8 | `fetch → read(u8->r)` |
+    /// | `[hl]` | 2 | 12 | `fetch → read(u8) → write((HL))` |
+    ///
+    /// As duas são de **2 bytes**, e é a única coisa que todo o bloco tem em
+    /// comum com o do 1.4a: lá o segundo M-cycle é um acesso a `(HL)` e o `PC`
+    /// anda um só.
+    const fn load_r8_u8(opcode: u8) -> State {
+        match R8::from_bits(opcode >> 3) {
+            R8::Register(dest) => State::LoadImmediate(dest),
+            R8::MemoryAtHl => State::StoreImmediateToHl(StoreImmediateToHl::ReadImmediate),
+        }
+    }
+
+    /// M2 de `LD r,u8`: `read(u8->r)`.
+    ///
+    /// Um acesso ao barramento — o operando, em `PC` — e a escrita no
+    /// registrador, no mesmo M-cycle. É [`Cpu::load_from_hl`] com outra fonte de
+    /// endereço, e a diferença é que esta faz o `PC` andar.
+    fn load_immediate(&mut self, bus: &Bus, dest: ByteRegister) -> State {
+        let value = self.read_at_pc(bus);
+        self.write_r8(dest, value);
+        State::Fetch
+    }
+
+    /// M2 e M3 de `LD (HL),u8`.
+    ///
+    /// Dois M-cycles, dois acessos ao barramento, um em cada — o que mantém a
+    /// invariante de que uma chamada de [`Cpu::step`] faz no máximo um. O
+    /// porquê de a escrita ser do M3 está em [`StoreImmediateToHl`].
+    fn store_immediate_to_hl(&mut self, bus: &mut Bus, phase: StoreImmediateToHl) -> State {
+        match phase {
+            StoreImmediateToHl::ReadImmediate => {
+                self.latch = u16::from(self.read_at_pc(bus));
+                State::StoreImmediateToHl(StoreImmediateToHl::Write)
+            }
+            StoreImmediateToHl::Write => {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "o latch recebeu um byte no M2"
+                )]
+                bus.write(self.registers.hl(), self.latch as u8);
+                State::Fetch
+            }
+        }
     }
 
     /// O valor de um dos sete registradores de 8 bits.

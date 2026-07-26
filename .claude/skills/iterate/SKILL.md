@@ -14,6 +14,12 @@ saber tem que estar em `STATUS.md`, não na sua cabeça.
 Leia, nesta ordem: `STATUS.md`, `ROADMAP.md`, `CLAUDE.md`.
 Confirme: `git status` limpo, branch `main`, `git pull` feito.
 
+O `STATUS.md` traz **índices** de notas e de invariantes, não o corpo delas. O
+parágrafo **Próxima tarefa** cita por número as notas que valem para esta
+iteração: abra **essas** em `docs/notas.md`, e a invariante que o item tocar em
+`docs/invariantes.md`. Não leia os dois arquivos inteiros — somam 1.500 linhas
+e foram separados justamente para não entrar em contexto de graça.
+
 Se `STATUS.md` listar bloqueios não resolvidos, **pare e reporte**.
 
 ## Passo 1 — Escolher a tarefa
@@ -64,6 +70,17 @@ cargo test --all
 Tudo verde. Se o scoreboard **regrediu** em qualquer suíte, isso é bloqueante:
 conserte ou reverta.
 
+**Bateria de mutação — obrigatória.** Verde não prova que o teste mede: mutante
+que sobrevive é teste que não olha. Liste as maneiras de errar o que você acabou
+de implementar — valor de flag, instante do M-cycle, operando trocado, escrita a
+mais ou a menos — aplique **uma de cada vez** no fonte, e confirme que algum
+teste reprova. Some **controles**: mutações que *devem* passar, para provar que a
+suíte não reprova qualquer coisa. Registre o placar (`N/N pegos, M/M controles
+verdes`) no doc da iteração.
+
+Mutante que sobrevive é buraco de cobertura **medido**: escreva o teste que o
+mata antes de seguir. Cuidado com o rebuild por mtime — nota 14.
+
 ## Passo 7 — Documentar a iteração
 
 Copie `docs/iterations/TEMPLATE.md` para `docs/iterations/NNNN-slug.md` e
@@ -82,8 +99,19 @@ dados. Um log de iterações onde tudo sempre deu certo é um log inútil.
 
 ## Passo 8 — Atualizar STATUS.md
 
-Iteração concluída, próxima tarefa, placar atualizado, invariantes novas,
-bloqueios. Curto.
+Iteração concluída, próxima tarefa, placar, bloqueios. **Curto** — há teste
+guardando o teto de tamanho.
+
+O parágrafo **Próxima tarefa** é o handoff, e é o que mais rende no projeto
+inteiro: diga o que muda de forma em relação ao item anterior, que armadilhas a
+spec esconde, e **cite por número** as notas que a próxima iteração precisa
+abrir. Foi ele — não a seção de notas — que pré-anunciou as cinco armadilhas
+que a 0023 recebeu prontas.
+
+Nota ou invariante nova: **corpo** em `docs/notas.md` / `docs/invariantes.md`,
+**uma linha** de índice no `STATUS.md`. A numeração das notas é citada em
+comentários do código e nos docs de iteração — nota nova entra com o próximo
+número livre, e **nunca se renumera**.
 
 ## Passo 9 — Marcar o ROADMAP
 

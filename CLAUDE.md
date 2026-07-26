@@ -79,8 +79,10 @@ No código ficam só duas coisas, e curtas:
    passo 7 do protocolo.
 
 Justificativa de decisão, divergência do ROADMAP, citação longa de spec e
-narrativa **não moram no código** — moram em `docs/iterations/NNNN-slug.md` e
-no `STATUS.md`, que é de onde o relatório final puxa. A fonte se aponta com
+narrativa **não moram no código** — moram em `docs/iterations/NNNN-slug.md`,
+`docs/notas.md` e `docs/invariantes.md`, que é de onde o relatório final puxa.
+O `STATUS.md` guarda o estado e os **índices** dessas duas; decisão de como o
+trabalho foi conduzido vai para `docs/orquestracao.md`. A fonte se aponta com
 uma linha (`spec: docs/reference/03-opcodes.md`), não com um parágrafo.
 
 Se um bloco precisa de um parágrafo para ser entendido, o problema é o bloco.

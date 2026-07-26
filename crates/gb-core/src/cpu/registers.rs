@@ -19,6 +19,12 @@
 //! de 8 bits — a lista `r8` do § CPU Instruction Set é `b c d e h l [hl] a`,
 //! sem `f`. `F` só se lê e se escreve inteiro, via `AF` (o `r16stk` de
 //! `PUSH`/`POP`), ou um bit de cada vez, via [`Flag`].
+//!
+//! O estado com que a máquina começa a rodar está em
+//! [`Registers::after_boot_rom`] (ROADMAP 1.2b-i), e vem de outra spec:
+//! `docs/reference/01-memory-map.md` § Console state after boot ROM hand-off.
+
+use crate::cart::HeaderChecksum;
 
 /// Um dos quatro flags do SM83, com o bit que a spec lhe dá.
 ///
@@ -107,6 +113,73 @@ pub struct Registers {
 }
 
 impl Registers {
+    /// O estado em que a boot ROM do **DMG** entrega o controle ao cartucho.
+    ///
+    /// Spec: `docs/reference/01-memory-map.md` § Console state after boot ROM
+    /// hand-off → *CPU registers* (ROADMAP 1.2b-i). Este emulador não roda a
+    /// boot ROM — pula direto para `PC = $0100` com os registradores que ela
+    /// teria deixado.
+    ///
+    /// A tabela da spec tem **cinco colunas de modelo** (DMG0, DMG, MGB, SGB,
+    /// SGB2) e a daqui é a **DMG**. As outras não são variações de detalhe: o
+    /// DMG0, que é a coluna vizinha, tem `B=$FF`, `E=$C1`, `HL=$8403` e `F=$00`
+    /// — um estado inteiro, plausível, que boota, e que erra.
+    ///
+    /// `F` é a única linha que não é literal. A nota de rodapé da coluna diz:
+    ///
+    /// > If the header checksum is $00, then the carry and half-carry flags are
+    /// > clear; otherwise, they are both set.
+    ///
+    /// Daí o parâmetro. Ele é [`HeaderChecksum`] e não `u8` de propósito: o
+    /// tipo guarda os dois checksums — o gravado em `$014D` e o calculado a
+    /// partir de `$0134`–`$014C` — e a nota de rodapé se refere ao **gravado**,
+    /// ligando a palavra "header checksum" à § 014D, cuja primeira frase é
+    /// *"This byte contains an 8-bit checksum"*. Num cartucho que o boot ROM
+    /// deixaria rodar os dois coincidem e a distinção é invisível; ela só
+    /// aparece em ROM corrompida, que [`crate::cart::load`] monta de propósito.
+    /// Receber um `u8` deixaria essa escolha na mão de cada chamador, onde ela
+    /// some.
+    ///
+    /// Os bits 3–0 de `F` saem zero, e isso é consequência e não máscara: a
+    /// coluna descreve `F` por quatro flags, o corpo abaixo monta `F` a partir
+    /// desses quatro, e não sobra nada para pôr no nibble baixo. Continua
+    /// valendo o que a 0009 registrou — o Pan Docs do commit fixado não diz uma
+    /// frase sobre aqueles bits, e nada aqui os mascara.
+    ///
+    /// **A spec avisa que esta seção é frágil:** *"Some of the information
+    /// below is highly volatile […] some of it may contain errors."* Quem cobra
+    /// de verdade é a Mooneye `acceptance/boot_regs-dmgABC`, no ROADMAP 7.1.
+    #[must_use]
+    pub const fn after_boot_rom(checksum: HeaderChecksum) -> Self {
+        let carries = checksum.stored() != 0;
+
+        let mut regs = Self {
+            a: 0x01,
+            f: 0,
+            b: 0x00,
+            c: 0x13,
+            d: 0x00,
+            e: 0xD8,
+            h: 0x01,
+            l: 0x4D,
+            // Topo da HRAM: a pilha cresce para baixo a partir daqui.
+            sp: 0xFFFE,
+            // O ponto de entrada do cartucho. É por isso que a documentação de
+            // GB fala em "start address $0100" e não `$0000`.
+            pc: 0x0100,
+        };
+
+        // A linha `F` da coluna, entrada por entrada — inclusive o `N=0`, que
+        // é redundante contra o `f: 0` acima. Transcrição literal: quem for
+        // corrigir uma das quatro não precisa reconstruir de onde veio o resto.
+        regs.set_flag(Flag::Z, true);
+        regs.set_flag(Flag::N, false);
+        regs.set_flag(Flag::H, carries);
+        regs.set_flag(Flag::C, carries);
+
+        regs
+    }
+
     /// `AF` — `A` no byte alto, `F` no baixo.
     #[must_use]
     pub const fn af(&self) -> u16 {

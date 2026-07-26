@@ -169,6 +169,17 @@ const XOR_A_R8_PATTERN: u8 = 0b1010_1000;
 const OR_A_R8_PATTERN: u8 = 0b1011_0000;
 const CP_A_R8_PATTERN: u8 = 0b1011_1000;
 
+// `11 ooo 110`: mesma coluna de flag do 1.6a/1.6b/1.6c, operando vem do `PC`
+// em vez de `r8` (nota 43 — o `PC` é testemunha entre os M-cycles).
+const ADD_A_IMM8: u8 = 0xC6;
+const ADC_A_IMM8: u8 = 0xCE;
+const SUB_A_IMM8: u8 = 0xD6;
+const SBC_A_IMM8: u8 = 0xDE;
+const AND_A_IMM8: u8 = 0xE6;
+const XOR_A_IMM8: u8 = 0xEE;
+const OR_A_IMM8: u8 = 0xF6;
+const CP_A_IMM8: u8 = 0xFE;
+
 const HIGH_PAGE: u16 = 0xFF00;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -229,6 +240,7 @@ enum State {
     // `read((HL))` sem seta e em 8 T-cycles: o M2 lê e opera, e não há terceiro
     // passo onde o latch aterrissaria (ver docs/iterations/0022).
     AluFromHl(AluOp),
+    AluImmediate(AluOp),
     Locked(Lockup),
 }
 
@@ -278,6 +290,7 @@ impl Cpu {
             State::CopyHlToStackPointer => self.copy_hl_to_stack_pointer(),
             State::StoreStackPointer(phase) => self.store_stack_pointer(bus, phase),
             State::AluFromHl(op) => self.alu_from_hl(bus, op),
+            State::AluImmediate(op) => self.alu_immediate(bus, op),
             State::Locked(lockup) => State::Locked(lockup),
         };
     }
@@ -302,7 +315,8 @@ impl Cpu {
             | State::Absolute(..)
             | State::CopyHlToStackPointer
             | State::StoreStackPointer(_)
-            | State::AluFromHl(_) => None,
+            | State::AluFromHl(_)
+            | State::AluImmediate(_) => None,
         }
     }
 
@@ -357,6 +371,14 @@ impl Cpu {
             _ if opcode & ALU_A_R8_MASK == XOR_A_R8_PATTERN => self.alu_a_r8(AluOp::Xor, opcode),
             _ if opcode & ALU_A_R8_MASK == OR_A_R8_PATTERN => self.alu_a_r8(AluOp::Or, opcode),
             _ if opcode & ALU_A_R8_MASK == CP_A_R8_PATTERN => self.alu_a_r8(AluOp::Compare, opcode),
+            ADD_A_IMM8 => State::AluImmediate(AluOp::Add),
+            ADC_A_IMM8 => State::AluImmediate(AluOp::AddWithCarry),
+            SUB_A_IMM8 => State::AluImmediate(AluOp::Subtract),
+            SBC_A_IMM8 => State::AluImmediate(AluOp::SubtractWithCarry),
+            AND_A_IMM8 => State::AluImmediate(AluOp::And),
+            XOR_A_IMM8 => State::AluImmediate(AluOp::Xor),
+            OR_A_IMM8 => State::AluImmediate(AluOp::Or),
+            CP_A_IMM8 => State::AluImmediate(AluOp::Compare),
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
             }
@@ -630,6 +652,12 @@ impl Cpu {
 
     fn alu_from_hl(&mut self, bus: &Bus, op: AluOp) -> State {
         let operand = bus.read(self.registers.hl());
+        alu::apply(&mut self.registers, op, operand);
+        State::Fetch
+    }
+
+    fn alu_immediate(&mut self, bus: &Bus, op: AluOp) -> State {
+        let operand = self.read_at_pc(bus);
         alu::apply(&mut self.registers, op, operand);
         State::Fetch
     }

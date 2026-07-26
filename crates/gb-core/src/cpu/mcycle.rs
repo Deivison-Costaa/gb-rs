@@ -164,6 +164,9 @@ const ADD_A_R8_PATTERN: u8 = 0b1000_0000;
 const ADC_A_R8_PATTERN: u8 = 0b1000_1000;
 const SUB_A_R8_PATTERN: u8 = 0b1001_0000;
 const SBC_A_R8_PATTERN: u8 = 0b1001_1000;
+const AND_A_R8_PATTERN: u8 = 0b1010_0000;
+const XOR_A_R8_PATTERN: u8 = 0b1010_1000;
+const OR_A_R8_PATTERN: u8 = 0b1011_0000;
 const CP_A_R8_PATTERN: u8 = 0b1011_1000;
 
 const HIGH_PAGE: u16 = 0xFF00;
@@ -350,6 +353,9 @@ impl Cpu {
             _ if opcode & ALU_A_R8_MASK == SBC_A_R8_PATTERN => {
                 self.alu_a_r8(AluOp::SubtractWithCarry, opcode)
             }
+            _ if opcode & ALU_A_R8_MASK == AND_A_R8_PATTERN => self.alu_a_r8(AluOp::And, opcode),
+            _ if opcode & ALU_A_R8_MASK == XOR_A_R8_PATTERN => self.alu_a_r8(AluOp::Xor, opcode),
+            _ if opcode & ALU_A_R8_MASK == OR_A_R8_PATTERN => self.alu_a_r8(AluOp::Or, opcode),
             _ if opcode & ALU_A_R8_MASK == CP_A_R8_PATTERN => self.alu_a_r8(AluOp::Compare, opcode),
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))

@@ -1,4 +1,4 @@
-//! ALU de 8 bits (ROADMAP 1.6a/1.6b). spec: `02-cpu.md` § The Carry Flag, § The BCD Flags.
+//! ALU de 8 bits (ROADMAP 1.6a/1.6b/1.6c). spec: `02-cpu.md` § The Carry Flag, § The BCD Flags.
 
 use crate::cpu::{Flag, Registers};
 
@@ -9,6 +9,9 @@ pub(super) enum AluOp {
     Subtract,
     SubtractWithCarry,
     Compare,
+    And,
+    Xor,
+    Or,
 }
 
 // H/C invertem magnitude entre soma e subtração; o carry/empréstimo de entrada conta nos dois (ver docs/iterations/0023).
@@ -25,6 +28,9 @@ pub(super) fn apply(registers: &mut Registers, op: AluOp, operand: u8) {
             subtract(registers, operand, carry_in, true);
         }
         AluOp::Compare => subtract(registers, operand, 0, false),
+        AluOp::And => logic(registers, registers.a & operand, true),
+        AluOp::Xor => logic(registers, registers.a ^ operand, false),
+        AluOp::Or => logic(registers, registers.a | operand, false),
     }
 }
 
@@ -60,4 +66,13 @@ fn subtract(registers: &mut Registers, operand: u8, carry_in: u8, writes_result:
     registers.set_flag(Flag::N, true);
     registers.set_flag(Flag::H, half_borrow);
     registers.set_flag(Flag::C, borrowed);
+}
+
+// H/C do 1.6c são constantes na coluna, não conta: `half` chega pronto de `apply`, e `C` é sempre 0.
+fn logic(registers: &mut Registers, result: u8, half: bool) {
+    registers.a = result;
+    registers.set_flag(Flag::Z, result == 0);
+    registers.set_flag(Flag::N, false);
+    registers.set_flag(Flag::H, half);
+    registers.set_flag(Flag::C, false);
 }

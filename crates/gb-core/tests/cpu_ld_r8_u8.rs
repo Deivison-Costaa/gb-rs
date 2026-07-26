@@ -322,6 +322,7 @@ fn the_block_this_item_decodes_is_exactly_the_eight_opcodes_of_00_ddd_110() {
             )
             || (0x80..=0x8F).contains(&opcode)
             || (0x90..=0x9F).contains(&opcode)
+            || (0xA0..=0xB7).contains(&opcode)
             || (0xB8..=0xBF).contains(&opcode);
         let in_block = opcode & 0b1100_0111 == 0b0000_0110;
 

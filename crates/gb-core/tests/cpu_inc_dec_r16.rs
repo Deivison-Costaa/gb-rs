@@ -17,7 +17,14 @@ use support::decoded_elsewhere;
 const ENTRY: usize = 0x0100;
 
 const SEED: u16 = 0x2413;
-const DIRTY_F: u8 = 0b1010_0101;
+
+// Duas polaridades: uma mutação que força um bit de flag para 1 (ou para 0)
+// só aparece no lado onde aquele bit começava do jeito oposto. Um único
+// `DIRTY_F` que já tivesse, por acidente, o bit forçado no valor "certo"
+// deixaria a mutação passar despercebida (achado da bateria de mutação desta
+// iteração — ver `docs/iterations/0028-cpu-inc-dec-r16.md`).
+const ALL_FLAGS_SET: u8 = 0b1111_0000;
+const ALL_FLAGS_CLEAR: u8 = 0b0000_1111;
 
 const R16: [Pair; 4] = [Pair::Bc, Pair::De, Pair::Hl, Pair::Sp];
 
@@ -205,38 +212,42 @@ fn inc_and_dec_of_a_pair_leave_every_flag_untouched() {
         #[expect(clippy::cast_possible_truncation, reason = "índices de 0 a 3")]
         let rr = rr as u8;
 
-        for (opcode, seed_value) in [(inc_r16(rr), 0xFFFFu16), (inc_r16(rr), 0x0001)] {
-            let (mut cpu, mut bus) = machine(&[opcode]);
-            seed_registers(&mut cpu);
-            cpu.registers.f = DIRTY_F;
-            pair.set(&mut cpu, seed_value);
+        for dirty_f in [ALL_FLAGS_SET, ALL_FLAGS_CLEAR] {
+            for (opcode, seed_value) in [(inc_r16(rr), 0xFFFFu16), (inc_r16(rr), 0x0001)] {
+                let (mut cpu, mut bus) = machine(&[opcode]);
+                seed_registers(&mut cpu);
+                cpu.registers.f = dirty_f;
+                pair.set(&mut cpu, seed_value);
 
-            cpu.step(&mut bus);
-            cpu.step(&mut bus);
+                cpu.step(&mut bus);
+                cpu.step(&mut bus);
 
-            assert_eq!(
-                cpu.registers.f,
-                DIRTY_F,
-                "${opcode:02X}: `INC {}` de {seed_value:#06X} não toca em `F`",
-                pair.name()
-            );
-        }
+                assert_eq!(
+                    cpu.registers.f,
+                    dirty_f,
+                    "${opcode:02X}: `INC {}` de {seed_value:#06X} não toca em `F` \
+                     (partindo de {dirty_f:#010b})",
+                    pair.name()
+                );
+            }
 
-        for (opcode, seed_value) in [(dec_r16(rr), 0x0000u16), (dec_r16(rr), 0xFFFE)] {
-            let (mut cpu, mut bus) = machine(&[opcode]);
-            seed_registers(&mut cpu);
-            cpu.registers.f = DIRTY_F;
-            pair.set(&mut cpu, seed_value);
+            for (opcode, seed_value) in [(dec_r16(rr), 0x0000u16), (dec_r16(rr), 0xFFFE)] {
+                let (mut cpu, mut bus) = machine(&[opcode]);
+                seed_registers(&mut cpu);
+                cpu.registers.f = dirty_f;
+                pair.set(&mut cpu, seed_value);
 
-            cpu.step(&mut bus);
-            cpu.step(&mut bus);
+                cpu.step(&mut bus);
+                cpu.step(&mut bus);
 
-            assert_eq!(
-                cpu.registers.f,
-                DIRTY_F,
-                "${opcode:02X}: `DEC {}` de {seed_value:#06X} não toca em `F`",
-                pair.name()
-            );
+                assert_eq!(
+                    cpu.registers.f,
+                    dirty_f,
+                    "${opcode:02X}: `DEC {}` de {seed_value:#06X} não toca em `F` \
+                     (partindo de {dirty_f:#010b})",
+                    pair.name()
+                );
+            }
         }
     }
 }

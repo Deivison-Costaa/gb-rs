@@ -5,10 +5,12 @@
 //! dados, e quem os leva ao mundo é `gb-cli` ou `gb-desktop`. É isso que
 //! permite rodar as ROMs de teste headless na CI.
 //!
-//! No momento o crate está vazio: o ROADMAP 0.1 entrega só o esqueleto do
-//! workspace. A CPU chega em 1.1.
+//! Hoje o crate tem só o leitor do cabeçalho do cartucho (ROADMAP 0.3a).
+//! A CPU chega em 1.1.
 
 #![forbid(unsafe_code)]
+
+pub mod cart;
 
 /// Modelo de Game Boy que este core emula.
 ///

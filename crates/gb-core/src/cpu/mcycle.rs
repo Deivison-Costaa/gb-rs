@@ -108,6 +108,36 @@ enum ImmediatePair {
     ReadHighByte,
 }
 
+const PUSH_R16STK_MASK: u8 = 0b1100_1111;
+const PUSH_R16STK_PATTERN: u8 = 0b1100_0101;
+
+// Índice 3 é af, não sp — tabela vizinha da do R16.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum R16Stk {
+    Bc,
+    De,
+    Hl,
+    Af,
+}
+
+impl R16Stk {
+    const fn from_opcode(opcode: u8) -> Self {
+        match (opcode >> 4) & 0b11 {
+            0 => Self::Bc,
+            1 => Self::De,
+            2 => Self::Hl,
+            _ => Self::Af,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Push {
+    Internal,
+    WriteHighByte,
+    WriteLowByte,
+}
+
 // $E2 — 1 byte: C é o operando (erro #1 da 0017 — ver docs/iterations/0017).
 const LDH_C_A: u8 = 0xE2;
 const LDH_A_C: u8 = 0xF2;
@@ -157,6 +187,7 @@ enum State {
     LoadFromR16Mem(R16Mem),
     StoreToR16Mem(R16Mem),
     LoadImmediatePair(R16, ImmediatePair),
+    PushPair(R16Stk, Push),
     HighPageC(Direction),
     HighPageImmediate(Direction, HighPageImmediate),
     Absolute(Direction, Absolute),
@@ -199,6 +230,7 @@ impl Cpu {
             State::LoadFromR16Mem(source) => self.load_from_r16_mem(bus, source),
             State::StoreToR16Mem(dest) => self.store_to_r16_mem(bus, dest),
             State::LoadImmediatePair(target, phase) => self.load_immediate_pair(bus, target, phase),
+            State::PushPair(source, phase) => self.push_pair(bus, source, phase),
             State::HighPageC(direction) => self.high_page_c(bus, direction),
             State::HighPageImmediate(direction, phase) => {
                 self.high_page_immediate(bus, direction, phase)
@@ -221,6 +253,7 @@ impl Cpu {
             | State::LoadFromR16Mem(_)
             | State::StoreToR16Mem(_)
             | State::LoadImmediatePair(..)
+            | State::PushPair(..)
             | State::HighPageC(_)
             | State::HighPageImmediate(..)
             | State::Absolute(..) => None,
@@ -249,6 +282,9 @@ impl Cpu {
             }
             _ if opcode & LD_R16_U16_MASK == LD_R16_U16_PATTERN => {
                 State::LoadImmediatePair(R16::from_opcode(opcode), ImmediatePair::ReadLowByte)
+            }
+            _ if opcode & PUSH_R16STK_MASK == PUSH_R16STK_PATTERN => {
+                State::PushPair(R16Stk::from_opcode(opcode), Push::Internal)
             }
             LDH_C_A => State::HighPageC(Direction::Store),
             LDH_A_C => State::HighPageC(Direction::Load),
@@ -397,6 +433,38 @@ impl Cpu {
             R16::De => self.registers.d = value,
             R16::Hl => self.registers.h = value,
             R16::Sp => self.registers.sp = (self.registers.sp & 0x00FF) | ((value as u16) << 8),
+        }
+    }
+
+    // `write(upper->(--SP))`: o `--SP` é do passo da escrita, como o `HL++` do
+    // 1.4c. Decrementar no `internal` do M2 é o erro #1 da 0019.
+    fn push_pair(&mut self, bus: &mut Bus, source: R16Stk, phase: Push) -> State {
+        match phase {
+            Push::Internal => State::PushPair(source, Push::WriteHighByte),
+            Push::WriteHighByte => {
+                let [high, _] = self.read_r16_stk(source).to_be_bytes();
+                self.push_byte(bus, high);
+                State::PushPair(source, Push::WriteLowByte)
+            }
+            Push::WriteLowByte => {
+                let [_, low] = self.read_r16_stk(source).to_be_bytes();
+                self.push_byte(bus, low);
+                State::Fetch
+            }
+        }
+    }
+
+    fn push_byte(&mut self, bus: &mut Bus, value: u8) {
+        self.registers.sp = self.registers.sp.wrapping_sub(1);
+        bus.write(self.registers.sp, value);
+    }
+
+    const fn read_r16_stk(&self, which: R16Stk) -> u16 {
+        match which {
+            R16Stk::Bc => self.registers.bc(),
+            R16Stk::De => self.registers.de(),
+            R16Stk::Hl => self.registers.hl(),
+            R16Stk::Af => self.registers.af(),
         }
     }
 

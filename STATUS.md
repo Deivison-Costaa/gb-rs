@@ -3,10 +3,10 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0037 — RES (`CB 80`–`CB BF`) ([doc](docs/iterations/0037-cb-res.md)). 64 opcodes, bucket `0b10` do dispatch hierárquico preenchido. Mesmo layout que BIT mas sem flags e com write-back: registrador em 2 M-cycles, `(HL)` em 4 M-cycles com read-modify-write (novo estado `CbResHl(u8, CbResHlPhase)`). O `cb_res_hl` usa fases Read/Write como `cb_rot_hl`, armazenando o valor modificado no `latch` entre as fases. Bateria: **7/7 pegos, 2/2 controles verdes**.
-**Iteração anterior:** 0036 — BIT (`CB 40`–`CB 7F`) ([doc](docs/iterations/0036-cb-bit.md)).
-**Duas iterações atrás:** 0035 — CB SLA + SRA + SWAP + SRL (`CB 20`–`CB 3F`) ([doc](docs/iterations/0035-cb-sla-sra-swap-srl.md)).
-**Próxima tarefa:** ROADMAP **1.9f** — SET (`CB C0`–`CB FF`, 64 opcodes). Último bucket do prefixo CB (`0b11`). O layout é idêntico ao RES (bits 7-6 = bucket, bits 5-3 = bit index, bits 2-0 = registrador), a única diferença semântica é `value | (1 << bit_index)` em vez de `value & !(1 << bit_index)`. Sem flags. `(HL)` é read-modify-write em 4 M-cycles — mesma estrutura do RES, inclusive o estado de fases Read/Write e o `latch`. Pode-se criar `CbSetHl(u8, CbSetHlPhase)` análogo ao `CbResHl`, ou generalizar para um estado único `CbBitModifyHl(u8, CbBitModifyHlPhase)` que receba a operação como parâmetro — a primeira opção é mais segura (menos refatoração, menos risco de quebrar RES). **Notas relevantes:** a nota 8 (teste antes da implementação) com o novo cuidado de verificar `is_between_instructions()` para evitar falsos-positivos por lockup (achado da 0037); a nota 14 (bateria de mutação e mtime) com o cuidado de NÃO usar `git checkout` para reverter mutantes antes do commit (achado da 0037 — usar `cp` de backup); a nota 22 (a previsão de qual armadilha dói erra — e o handoff diz "idêntico ao RES", o que pode ser a armadilha).
+**Última iteração concluída:** 0038 — SET (`CB C0`–`CB FF`) ([doc](docs/iterations/0038-cb-set.md)). 64 opcodes, bucket `0b11` do dispatch hierárquico preenchido — último bucket do prefixo CB. Implementação idêntica ao RES com `value | (1 << bit_index)` em vez de `value & !(1 << bit_index)`; estado `CbSetHl(u8, CbSetHlPhase)` com fases Read/Write. Bateria: **7/7 pegos, 2/2 controles verdes**. Todos os 256 opcodes CB estão decodificados.
+**Iteração anterior:** 0037 — RES (`CB 80`–`CB BF`) ([doc](docs/iterations/0037-cb-res.md)).
+**Duas iterações atrás:** 0036 — BIT (`CB 40`–`CB 7F`) ([doc](docs/iterations/0036-cb-bit.md)).
+**Próxima tarefa:** ROADMAP **1.10** — jumps, calls, rets, RST (`$C0 $C2 $C4 $C7 $C8 $C9 $CA $CC $CD $CF $D0 $D2 $D4 $D7 $D8 $D9 $DA $DC $DF $E9` e os oito `RST`). `JP u16` (`$C3`) já saiu no 1.3. Os desvios condicionais têm **dois** tempos: tomam o desvio (mais M-cycles) ou não (menos). `JR cc,e8` e `CALL cc,u16` também entram aqui — a tabela gbops dá essas durações na coluna T-cycles. `RETI` é `RET` + `EI` em hardware, e `RST` é `CALL` para endereço fixo. **Este item é grande demais para um PR pequeno** (~300+ linhas de diff, múltiplos conceitos): a primeira iteração deve **quebrá-lo em sub-itens** no ROADMAP (por tipo de desvio: JR condicional, JP condicional, CALL/RET condicional, incondicionais, RST) e implementar só o primeiro. **Notas relevantes:** a nota 8 (teste antes da implementação) e a nota 14 (bateria de mutação). A nota 38 (`grep` por mnemônico em `02-cpu.md` pode devolver zero) merece atenção: os opcodes de desvio são blocos de codificação espalhados com nomenclatura diferente da gbops.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -37,7 +37,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **439** (eram **426** antes da 0037 — +13 do novo arquivo `cpu_cb_res`).
+Testes do workspace: **452** (eram **439** antes da 0038 — +13 do novo arquivo `cpu_cb_set`).
 
 ## Invariantes
 

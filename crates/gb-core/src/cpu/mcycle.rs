@@ -296,6 +296,12 @@ enum CbResHlPhase {
     Write,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CbSetHlPhase {
+    Read,
+    Write,
+}
+
 // match de Cpu::step é total sem _ =>: estado novo quebra a compilação.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -338,6 +344,8 @@ enum State {
     CbBit(u8),
     // RES (HL): read-modify-write, o u8 é o índice do bit (ver docs/iterations/0037).
     CbResHl(u8, CbResHlPhase),
+    // SET (HL): read-modify-write, o u8 é o índice do bit (ver docs/iterations/0038).
+    CbSetHl(u8, CbSetHlPhase),
     Locked(Lockup),
 }
 
@@ -397,6 +405,7 @@ impl Cpu {
             State::CbRotHl(op, phase) => self.cb_rot_hl(bus, op, phase),
             State::CbBit(bit) => self.cb_bit_hl(bus, bit),
             State::CbResHl(bit, phase) => self.cb_res_hl(bus, bit, phase),
+            State::CbSetHl(bit, phase) => self.cb_set_hl(bus, bit, phase),
             State::Locked(lockup) => State::Locked(lockup),
         };
     }
@@ -431,7 +440,8 @@ impl Cpu {
             | State::CbFetch
             | State::CbRotHl(..)
             | State::CbBit(_)
-            | State::CbResHl(..) => None,
+            | State::CbResHl(..)
+            | State::CbSetHl(..) => None,
         }
     }
 
@@ -1006,7 +1016,8 @@ impl Cpu {
             },
             0b01 => self.cb_bit(opcode),
             0b10 => self.cb_res(opcode),
-            _ => State::Locked(Lockup::UndecodedOpcode(opcode)),
+            0b11 => self.cb_set(opcode),
+            _ => unreachable!("opcode >> 6 é 2 bits (0..=3)"),
         }
     }
 
@@ -1079,6 +1090,36 @@ impl Cpu {
                 State::CbResHl(bit_index, CbResHlPhase::Write)
             }
             CbResHlPhase::Write => {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "o latch recebeu um byte no M3"
+                )]
+                bus.write(self.registers.hl(), self.latch as u8);
+                State::Fetch
+            }
+        }
+    }
+
+    fn cb_set(&mut self, opcode: u8) -> State {
+        let bit_index = (opcode >> 3) & 0b111;
+        match R8::from_bits(opcode) {
+            R8::Register(register) => {
+                let value = self.read_r8(register);
+                self.write_r8(register, value | (1 << bit_index));
+                State::Fetch
+            }
+            R8::MemoryAtHl => State::CbSetHl(bit_index, CbSetHlPhase::Read),
+        }
+    }
+
+    fn cb_set_hl(&mut self, bus: &mut Bus, bit_index: u8, phase: CbSetHlPhase) -> State {
+        match phase {
+            CbSetHlPhase::Read => {
+                let value = bus.read(self.registers.hl());
+                self.latch = u16::from(value | (1 << bit_index));
+                State::CbSetHl(bit_index, CbSetHlPhase::Write)
+            }
+            CbSetHlPhase::Write => {
                 #[expect(
                     clippy::cast_possible_truncation,
                     reason = "o latch recebeu um byte no M3"

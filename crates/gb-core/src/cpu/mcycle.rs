@@ -195,6 +195,10 @@ const DEC_R16_PATTERN: u8 = 0b0000_1011;
 const ADD_HL_R16_MASK: u8 = 0b1100_1111;
 const ADD_HL_R16_PATTERN: u8 = 0b0000_1001;
 
+const JR_U8: u8 = 0x18;
+const JR_COND_MASK: u8 = 0xE7;
+const JR_COND_PATTERN: u8 = 0x20;
+
 const CB_PREFIX: u8 = 0xCB;
 
 const RLCA: u8 = 0x07;
@@ -302,6 +306,15 @@ enum CbSetHlPhase {
     Write,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Condition {
+    Always,
+    NotZero,
+    Zero,
+    NotCarry,
+    Carry,
+}
+
 // match de Cpu::step é total sem _ =>: estado novo quebra a compilação.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -346,6 +359,8 @@ enum State {
     CbResHl(u8, CbResHlPhase),
     // SET (HL): read-modify-write, o u8 é o índice do bit (ver docs/iterations/0038).
     CbSetHl(u8, CbSetHlPhase),
+    JumpRelativeReadOffset(Condition),
+    JumpRelativeModifyPc,
     Locked(Lockup),
 }
 
@@ -406,6 +421,8 @@ impl Cpu {
             State::CbBit(bit) => self.cb_bit_hl(bus, bit),
             State::CbResHl(bit, phase) => self.cb_res_hl(bus, bit, phase),
             State::CbSetHl(bit, phase) => self.cb_set_hl(bus, bit, phase),
+            State::JumpRelativeReadOffset(cond) => self.jump_relative_read_offset(bus, cond),
+            State::JumpRelativeModifyPc => self.jump_relative_modify_pc(),
             State::Locked(lockup) => State::Locked(lockup),
         };
     }
@@ -441,7 +458,9 @@ impl Cpu {
             | State::CbRotHl(..)
             | State::CbBit(_)
             | State::CbResHl(..)
-            | State::CbSetHl(..) => None,
+            | State::CbSetHl(..)
+            | State::JumpRelativeReadOffset(_)
+            | State::JumpRelativeModifyPc => None,
         }
     }
 
@@ -472,6 +491,10 @@ impl Cpu {
                 State::Fetch
             }
             JP_U16 => State::JumpImmediate(JumpImmediate::ReadLowByte),
+            JR_U8 => State::JumpRelativeReadOffset(Condition::Always),
+            _ if opcode & JR_COND_MASK == JR_COND_PATTERN => {
+                State::JumpRelativeReadOffset(Self::decode_jr_condition(opcode))
+            }
             HALT => State::Locked(Lockup::UndecodedOpcode(opcode)),
             LD_R8_R8_FIRST..=LD_R8_R8_LAST => self.load_r8_r8(opcode),
             _ if opcode & LD_R8_U8_MASK == LD_R8_U8_PATTERN => Self::load_r8_u8(opcode),
@@ -558,6 +581,46 @@ impl Cpu {
                 State::Fetch
             }
         }
+    }
+
+    const fn decode_jr_condition(opcode: u8) -> Condition {
+        match (opcode >> 3) & 0b111 {
+            0b100 => Condition::NotZero,
+            0b101 => Condition::Zero,
+            0b110 => Condition::NotCarry,
+            _ => Condition::Carry,
+        }
+    }
+
+    fn jump_relative_read_offset(&mut self, bus: &Bus, condition: Condition) -> State {
+        let offset = self.read_at_pc(bus);
+        self.latch = u16::from(offset);
+        match condition {
+            Condition::Always => State::JumpRelativeModifyPc,
+            _ => {
+                if Self::evaluate_condition(self, condition) {
+                    State::JumpRelativeModifyPc
+                } else {
+                    State::Fetch
+                }
+            }
+        }
+    }
+
+    fn evaluate_condition(&self, condition: Condition) -> bool {
+        match condition {
+            Condition::Always => true,
+            Condition::NotZero => !self.registers.flag(Flag::Z),
+            Condition::Zero => self.registers.flag(Flag::Z),
+            Condition::NotCarry => !self.registers.flag(Flag::C),
+            Condition::Carry => self.registers.flag(Flag::C),
+        }
+    }
+
+    fn jump_relative_modify_pc(&mut self) -> State {
+        let offset = (self.latch as u8) as i8;
+        self.registers.pc = self.registers.pc.wrapping_add_signed(offset as i16);
+        State::Fetch
     }
 
     fn load_r8_r8(&mut self, opcode: u8) -> State {

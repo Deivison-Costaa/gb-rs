@@ -5,12 +5,14 @@
 //! dados, e quem os leva ao mundo é `gb-cli` ou `gb-desktop`. É isso que
 //! permite rodar as ROMs de teste headless na CI.
 //!
-//! Hoje o crate lê o cabeçalho do cartucho (ROADMAP 0.3a) e monta o cartucho
-//! sem mapeador (0.4). A CPU chega em 1.1 e o `Bus` que ligará os dois, em 1.2.
+//! Hoje o crate lê o cabeçalho do cartucho (ROADMAP 0.3a), monta o cartucho
+//! sem mapeador (0.4) e tem o banco de registradores da CPU (1.1). O `Bus` que
+//! ligará os dois chega em 1.2, e o laço de M-cycles em 1.3.
 
 #![forbid(unsafe_code)]
 
 pub mod cart;
+pub mod cpu;
 
 /// Modelo de Game Boy que este core emula.
 ///

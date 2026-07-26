@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0008 — guarda do `fetch-test-roms.sh` ([doc](docs/iterations/0008-fetch-test-roms-guard.md)). **Fecha o M0.**
-**Próxima tarefa:** ROADMAP 1.1 — registradores AF/BC/DE/HL/SP/PC, flags Z/N/H/C, pares de 8/16 bits. Primeiro item de hardware desde a 0007, então a R1 volta a morder: ler `docs/reference/02-cpu.md` **inteiro** antes de escrever, e `grep` pelo registrador no arquivo todo, não só na seção que o `docs/reference/README.md` aponta (nota 15). **Primeira pergunta a responder pela spec, não pela memória:** a tabela do § Flags Register em `02-cpu.md` lista só os bits 7–4 (`z n h c`) e **não diz nada** sobre os bits 3–0. "O nibble baixo de `F` é sempre zero, inclusive depois de `POP AF`" é folclore que eu ia escrever aqui como fato e não achei escrito em `docs/reference/` nenhum (`03-opcodes.md` l. 289 descreve `POP AF` sem mencionar máscara). Ou se acha a fonte e ela entra em `docs/reference/`, ou o 1.1 não implementa máscara nenhuma.
+**Última iteração concluída:** 0009 — registradores e flags do SM83 ([doc](docs/iterations/0009-cpu-registers.md)). A pergunta que a 0008 deixou aberta foi respondida: o nibble baixo de `F` **não** está no Pan Docs (conferido nos 75 arquivos do commit fixado, não só nas seções importadas), e o 1.1 não mascara nada. Ver a invariante e a nota 19.
+**Próxima tarefa:** ROADMAP 1.2 — `Bus` trait + MMU: WRAM, HRAM, echo RAM, região proibida, estado pós-boot. Ler `docs/reference/01-memory-map.md` inteiro (R1 + nota 15). **Duas coisas que a spec diz e a memória erra:** (a) a echo RAM em `$E000`–`$FDFF` espelha `$C000`–`$DDFF`, e **não** os 8 KiB inteiros de WRAM — o espelho é mais curto que a fonte, e `addr - 0x2000` sobre a faixa toda inventa 512 bytes que não existem; (b) `$FEA0`–`$FEFF` não é um valor só: a § FEA0–FEFF range diz `$FF` **quando a OAM está bloqueada** e `$00` fora disso no DMG, o que amarra a região proibida ao modo da PPU (M3) e não a uma constante. **E a lição da 0009, que vale mais que as duas:** a spec ser *omissa* não é a spec *concordar*. Quando bater a certeza de que "todo mundo sabe que é assim", transforme em pergunta com endereço — *em que arquivo, em que linha?* — e vá procurar a linha.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -34,6 +34,9 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | dmg-acid2 | 0 | 1 |
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
+
+Testes do workspace: **98** (eram 85 antes da 0009). Este número não é o placar
+— ele mede o que o projeto afirma sobre si mesmo, não o que o hardware cobra.
 
 ## Invariantes já estabelecidas
 
@@ -172,6 +175,31 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
   na 0006:** `blargg/mem_timing-2/rom_singles/03-modify_timing.gb` tem
   `03-MODIFY_TIMIN` seguido de `$80` em `$0143` — sem a regra, o CGB flag iria
   impresso junto.
+
+- **`F` carrega os 8 bits: o `gb-core` não mascara o nibble baixo.** O folclore
+  diz que os bits 3–0 de `F` são sempre zero e que `POP AF` os descarta. Pode
+  ser verdade no silício, mas **não está na spec deste projeto**: a tabela do
+  § Flags Register termina no bit 4, e a string `POP AF` não aparece em nenhum
+  dos 75 arquivos do Pan Docs no commit fixado (`03-opcodes.md` descreve `F1`
+  sem mencionar máscara). Pela R1, o que não está na spec não vira código.
+  `f_keeps_the_bits_the_spec_does_not_describe` fixa a **ausência** da máscara,
+  para que ela não entre depois por hábito. **Previsão registrada, a conferir e
+  não a retroajustar:** se a máscara for necessária, quem cobra é a blargg
+  `cpu_instrs/01-special` no 1.13 — e nesse dia a fonte entra em
+  `docs/reference/` junto com ela.
+- **Flags: `Z`=7, `N`=6, `H`=5, `C`=4, e o Z80 não vale de guia.** O § CPU
+  Comparison with Z80 diz que sinal e paridade/overflow **foram removidos** —
+  quem portar tabela de flags de Z80 põe `S` onde mora `Z`. As quatro posições
+  estão presas por teste ancorado na spec, não por ida e volta pelos acessores.
+- **`Registers`: campos de 8 bits públicos, pares de 16 bits são métodos.** Um
+  banco de registradores não tem invariante a proteger, e um acessor por
+  registrador só engrossaria o decodificador do 1.4. Onde há cálculo (compor e
+  dividir os pares), há método. `F` não é campo endereçável no sentido do `r8`:
+  a lista `r8` da spec é `b c d e h l [hl] a`, sem `f`.
+- **`Registers::default()` é tudo zero, e isso não é o estado pós-boot.**
+  `A=$01`, `SP=$FFFE`, `PC=$0100` são do 1.2 e estão em `01-memory-map.md`
+  § Console state after boot ROM hand-off. Zero é ausência de decisão, não
+  decisão errada — e há teste marcando a fronteira entre os dois itens.
 
 ## Bloqueios
 
@@ -312,6 +340,13 @@ contorno previsto no prompt de bootstrap.
     ROADMAP cobre isso hoje. Ou se fecha, ou se apaga a linha do `Cargo.toml`:
     declaração que ninguém checa é pior que declaração nenhuma.
 
+    **A 0009 conferiu uma vez, à mão, e passou:** ela introduziu `const fn` com
+    `&mut self` (estável desde 1.83) e atribuição desestruturante em contexto
+    const, e `cargo +1.85 test --all` deu **98/98** em `rustc 1.85.1`. Isso é um
+    ponto de dado, não uma guarda: dependeu de alguém lembrar de checar. O
+    próximo `const fn` — ou o primeiro `let ... else` mais novo que a MSRV —
+    entra sem ninguém olhar. A nota continua **aberta**.
+
 14. **Bateria de mutação: o cargo decide rebuild por mtime.** Reverter o fonte
     com `mv arquivo.bak arquivo` — ou aplicar uma mutação que falha em silêncio
     — devolve o arquivo com mtime **anterior** ao do artefato, e o `cargo test`
@@ -367,3 +402,24 @@ contorno previsto no prompt de bootstrap.
     aplicar. Na 0008 um mutante casou 0 vezes (o literal tinha acento e eu
     escrevi sem) — o harness reportou `mutante inválido` em vez de um verde, que
     é a diferença entre medir e se enganar.
+
+19. **A R1 protege contra spec não lida. Não protege contra spec omissa.** A
+    regra supõe que o modo de falha seja "o agente implementou de memória sem
+    ler". A 0009 encontrou o outro: a spec foi lida, e **não dizia nada** sobre
+    o ponto em questão (os bits 3–0 de `F`). Omissão não parece omissão quando
+    já se tem uma convicção pronta para preencher o buraco — `02-cpu.md` não
+    contradiz a máscara do nibble, ele simplesmente não fala dela, e "não
+    contradisse" é fácil de ler como "confirmou".
+
+    O que funcionou: transformar a convicção numa **pergunta com endereço** —
+    *em que arquivo, em que linha está escrito?* — e ir procurar a linha. Como
+    a resposta foi "em lugar nenhum", a busca teve de sair das seções que o
+    `docs/reference/README.md` importa e varrer o repositório inteiro do Pan
+    Docs no SHA fixado (75 arquivos). Ausência só se demonstra no corpus todo;
+    é por isso que a nota 15 não basta aqui.
+
+    E o que se faz com a resposta: **não implementar, e fixar a ausência com um
+    teste**, para que a decisão não se desfaça por hábito na iteração seguinte.
+    Junto, registrar a previsão falsificável de qual ROM cobraria o contrário —
+    assim, se o folclore estiver certo, o projeto descobre por evidência e com
+    data, em vez de retroajustar a memória.

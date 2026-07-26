@@ -434,6 +434,7 @@ impl Cpu {
 
     // Avança um M-cycle (R2). No máximo um acesso ao barramento.
     pub fn step(&mut self, bus: &mut Bus) {
+        bus.tick_timer();
         self.state = match self.state {
             State::Fetch => self.fetch(bus),
             State::JumpImmediate(condition, phase) => self.jump_immediate(bus, condition, phase),

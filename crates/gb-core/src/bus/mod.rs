@@ -6,7 +6,10 @@ mod boot;
 use crate::cart::{Cartridge, OPEN_BUS};
 use crate::serial::Serial;
 
+const DIV_ADDR: u16 = 0xFF04;
+
 const SB_ADDR: u16 = 0xFF01;
+
 const SC_ADDR: u16 = 0xFF02;
 
 const WRAM_LEN: usize = 8 * 1024;
@@ -61,6 +64,7 @@ pub struct Bus {
     io: [u8; boot::IO_LEN],
     ie: u8,
     serial: Serial,
+    sys_counter: u16,
 }
 
 impl Bus {
@@ -73,6 +77,7 @@ impl Bus {
             io: boot::IO,
             ie: boot::INTERRUPT_ENABLE,
             serial: Serial::new(),
+            sys_counter: 0xAB00,
         }
     }
 
@@ -84,6 +89,7 @@ impl Bus {
             Region::HighRam => self.hram[hram_index(addr)],
             Region::NotUsable => NOT_USABLE_READ,
             Region::IoRegisters => match addr {
+                DIV_ADDR => (self.sys_counter >> 8) as u8,
                 SB_ADDR | SC_ADDR => self.serial.read(addr),
                 _ => {
                     let index = io_index(addr);
@@ -105,6 +111,7 @@ impl Bus {
             Region::WorkRam | Region::EchoRam => self.wram[wram_index(addr)] = value,
             Region::HighRam => self.hram[hram_index(addr)] = value,
             Region::IoRegisters => match addr {
+                DIV_ADDR => self.sys_counter = 0,
                 SB_ADDR | SC_ADDR => self.serial.write(addr, value),
                 _ => {
                     let index = io_index(addr);
@@ -121,6 +128,10 @@ impl Bus {
     #[must_use]
     pub fn take_serial_output(&mut self) -> Vec<u8> {
         self.serial.take_output()
+    }
+
+    pub fn tick_timer(&mut self) {
+        self.sys_counter = self.sys_counter.wrapping_add(4);
     }
 }
 

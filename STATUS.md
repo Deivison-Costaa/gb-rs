@@ -3,15 +3,10 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0034 — CB RRC + RL + RR (`CB 08`–`CB 1F`) ([doc](docs/iterations/0034-cb-rrc-rl-rr.md)). 24 opcodes sobre o mecanismo da 0033: `cb_fetch` decodifica `0b00001` (RRC), `0b00010` (RL), `0b00011` (RR). `cb_rot` unifica o dispatch das quatro rotações, recebendo `carry_in` de `Flag::C` para RL/RR e `false` para RLC/RRC. Funções ALU novas: `alu::rrc(value)`, `alu::rl(value, carry_in)`, `alu::rr(value, carry_in)` — todas devolvem `(resultado, carry)` sem tocar em `Registers`. **Nenhum erro de hardware**: o mecanismo e as definições das rotações já tinham sido confirmados pela spec e pelo handoff. Erros foram de cálculo de teste (A=0x01 para RR zera) e de controle negativo (0x10/0x18 não estão em `decoded_elsewhere`). Bateria: **7/7 pegos, 2/2 controles verdes**.
-**Iteração anterior:** 0033 — CB prefix decode + RLC (`CB 00`–`CB 07`) ([doc](docs/iterations/0033-cb-prefix-decode-rlc.md)).
-**Duas iterações atrás:** 0032 — `RLCA`/`RRCA`/`RLA`/`RRA` ([doc](docs/iterations/0032-rotates.md)).
-**Próxima tarefa:** ROADMAP **1.9c** — SLA + SRA + SWAP + SRL (`CB 20`–`CB 3F`, 32 opcodes). O mecanismo de `CbFetch`/`cb_rot`/`cb_rot_hl` já está estabelecido; o trabalho é acrescentar as quatro operações. A armadilha persiste: `Z` calculado, `N=0`, `H=0`, `C` = bit deslocado para fora. As quatro novas operações são:
-- **SLA**: shift left arithmetic — igual a `rlc` mas C=0 incondicional no bit 0 (não circular). `carry = bit 7`, `result = value << 1`.
-- **SRA**: shift right arithmetic — bit 7 preservado (sign extension). `carry = bit 0`, `result = (value >> 1) | (value & 0x80)`.
-- **SWAP**: troca nibbles alto e baixo. `result = (value << 4) | (value >> 4)`, `Z` calculado, `N=0`, `H=0`, `C=0`.
-- **SRL**: shift right logical — C=0 no bit 7. `carry = bit 0`, `result = value >> 1`.
-Cada função em `alu.rs` no estilo de `rlc`. Nenhum dos 32 opcodes está em `decoded_elsewhere` (são todos segundos bytes de CB). Nota: `CB 3X` no Z80 é `SLL` mas no GB é `SWAP` (ver `docs/reference/02-cpu.md` linhas 817+).
+**Última iteração concluída:** 0035 — CB SLA + SRA + SWAP + SRL (`CB 20`–`CB 3F`) ([doc](docs/iterations/0035-cb-sla-sra-swap-srl.md)). 32 opcodes sobre o mecanismo da 0033: `cb_fetch` decodifica `0b00100` (SLA), `0b00101` (SRA), `0b00110` (SWAP), `0b00111` (SRL). `cb_rot` unifica o dispatch com as demais rotações. Funções ALU novas: `alu::sla(value)`, `alu::sra(value)`, `alu::swap(value)`, `alu::srl(value)`. `swap` retorna `carry = false` e usa `value.rotate_right(4)`. O `C = 0` incondicional do SWAP é tratado na ALU, não em `cb_rot`. **Nenhum erro de hardware**: a divergência SLL (Z80) × SWAP (GB) nos CB 30–3F estava pré-anunciada no handoff. Erros foram de API-Rust (clippy `manual_rotate`, closures heterogêneas em array) e de teste (A sobrescrito no loop multi-registro). Bateria: **7/7 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0034 — CB RRC + RL + RR (`CB 08`–`CB 1F`) ([doc](docs/iterations/0034-cb-rrc-rl-rr.md)).
+**Duas iterações atrás:** 0033 — CB prefix decode + RLC (`CB 00`–`CB 07`) ([doc](docs/iterations/0033-cb-prefix-decode-rlc.md)).
+**Próxima tarefa:** ROADMAP **1.9d** — BIT (`CB 40`–`CB 7F`, 64 opcodes). É um novo mecanismo dentro do prefixo CB: BIT não escreve no registrador, só testa um bit e ajusta flags (`Z` = bit testado, `N=0`, `H=1`, `C` intocado). `(HL)` são 12 T-cycles (read sem write — ao contrário de `cb_rot_hl`, que faz read-modify-write). A armadilha principal: o segundo byte do BIT usa bits 7-6 para selecionar a operação (0b01), bits 5-3 para o índice do bit, e bits 2-0 para o registrador — é a primeira operação CB que não cabe no dispatch por `(opcode >> 3) & 0b11111` porque o campo do bit está nos mesmos bits que o campo de operação das rotações. Será preciso um novo estado (`CbBit`) e uma nova função de dispatch que isola bits 7-6 primeiro. `H=1` é a primeira flag `H` não-zero numa operação CB, e a primeira desde o `AND` do 1.6c.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -42,7 +37,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **392** (eram **369** antes da 0034 — +23 do novo arquivo `cpu_cb_rrc_rl_rr`).
+Testes do workspace: **414** (eram **392** antes da 0035 — +22 do novo arquivo `cpu_cb_sla_sra_swap_srl`).
 
 ## Invariantes
 

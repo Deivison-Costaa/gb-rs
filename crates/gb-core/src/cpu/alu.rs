@@ -127,6 +127,35 @@ pub(super) fn rr(value: u8, carry_in: bool) -> (u8, bool) {
     (result, carry)
 }
 
+// CB SLA: shift left arithmetic, bit 0 ← 0.
+// spec: docs/reference/03-opcodes.md § CB 20–CB 27
+pub(super) fn sla(value: u8) -> (u8, bool) {
+    let carry = (value & 0x80) != 0;
+    let result = value << 1;
+    (result, carry)
+}
+
+// CB SRA: shift right arithmetic, bit 7 preservado (sign extension).
+pub(super) fn sra(value: u8) -> (u8, bool) {
+    let carry = (value & 0x01) != 0;
+    let result = (value >> 1) | (value & 0x80);
+    (result, carry)
+}
+
+// CB SWAP: troca nibbles alto e baixo; C = 0 sempre.
+// No Z80, CB 30-3F é SLL — divergência registrada em docs/reference/02-cpu.md:883.
+pub(super) fn swap(value: u8) -> (u8, bool) {
+    let result = value.rotate_right(4);
+    (result, false)
+}
+
+// CB SRL: shift right logical, bit 7 ← 0.
+pub(super) fn srl(value: u8) -> (u8, bool) {
+    let carry = (value & 0x01) != 0;
+    let result = value >> 1;
+    (result, carry)
+}
+
 pub(super) fn rlca(registers: &mut Registers) {
     let a = registers.a;
     let carry_out = (a & 0x80) != 0;

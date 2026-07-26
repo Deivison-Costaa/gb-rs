@@ -26,14 +26,14 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
   - [x] 1.2b Estado pós-boot: registradores da CPU e registradores de hardware (`$FF00`–`$FF7F`, `IE`) no hand-off da boot ROM, que este emulador pula. **Quebrado em dois na 0011:** são duas tabelas distintas da § Console state after boot ROM hand-off, e a segunda exige ligar uma região nova ao `Bus` — o que derruba `the_regions_without_an_owner_are_open_bus_and_swallow_writes` e não cabe no mesmo PR pequeno que a primeira.
     - [x] 1.2b-i Registradores da CPU no hand-off: a coluna **DMG** da tabela § CPU registers. `F` não é constante — `H` e `C` saem do checksum do cabeçalho, e é o **gravado em `$014D`**, não o calculado; ver [doc da 0011](docs/iterations/0011-cpu-boot-state.md). Puro, sem tocar no `Bus`.
     - [x] 1.2b-ii Registradores de hardware no hand-off: `$FF00`–`$FF7F` e `IE`, a partir da coluna **DMG / MGB** da tabela § Hardware registers. A tabela dá valor a **41** dos 128 endereços, marca **15** como `---` (só CGB) e **não menciona 72** — os 87 últimos continuam sem dono, e a wave RAM sai dessa lista com a APU (6.4). `OBP0`/`OBP1` são `??` na spec e `$00` por escolha; ver [doc da 0012](docs/iterations/0012-bus-io-boot-state.md). Valor inicial, **não** semântica: sem máscara, sem read-only, sem efeito colateral — isso vem com o componente dono.
-- [ ] 1.3 Laço M-cycle: `step()` avança 1 M-cycle. Fetch/decode/execute como máquina de estados.
+- [x] 1.3 Laço M-cycle: `step()` avança 1 M-cycle. Fetch/decode/execute como máquina de estados. **`JP u16` (`C3`) entrou junto, e o item não pedia:** com só `NOP` decodificado a máquina não tem estado — instruction-stepped e cycle-stepped dão o mesmo resultado, e a R2 fica sem teste que a separe do que ela proíbe. Medido, não suposto: contra o esqueleto instruction-stepped, o teste de `NOP` **passou**. Ver [doc da 0013](docs/iterations/0013-cpu-mcycle-loop.md). Os onze opcodes inexistentes travam a CPU (`02-cpu.md` § Moved, Removed, and Added Opcodes); os 243 ainda não decodificados param com `Lockup::UndecodedOpcode`, que é rótulo diferente de propósito.
 - [ ] 1.4 Opcodes: loads 8-bit.
 - [ ] 1.5 Opcodes: loads 16-bit + stack (PUSH/POP).
 - [ ] 1.6 Opcodes: ALU 8-bit (ADD/ADC/SUB/SBC/AND/OR/XOR/CP/INC/DEC) — **atenção ao half-carry**.
 - [ ] 1.7 Opcodes: ALU 16-bit + `ADD SP,e8` / `LD HL,SP+e8` (flags contraintuitivas).
 - [ ] 1.8 Opcodes: rotações e shifts (RLCA/RRCA/RLA/RRA — divergem do prefixo CB no flag Z).
 - [ ] 1.9 Opcodes: prefixo CB completo (BIT/RES/SET/rot).
-- [ ] 1.10 Opcodes: jumps, calls, rets, RST — com timing condicional correto.
+- [ ] 1.10 Opcodes: jumps, calls, rets, RST — com timing condicional correto. `JP u16` (`C3`) já saiu no 1.3; o que sobra aqui é o difícil — os desvios condicionais duram tempos diferentes conforme tomem ou não o desvio (`8 / 12`, `12 / 24`), e essa é a coluna que a tabela dá em dois valores.
 - [ ] 1.11 Opcodes: misc — `DAA`, `CPL`, `SCF`, `CCF`, `DI`, `EI`, `NOP`, `STOP`.
 - [ ] 1.12 Stub da porta serial (FF01/FF02) → `gb-cli` imprime em stdout.
 - [ ] 1.13 blargg `cpu_instrs/individual/01` a `05`.

@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0012 — registradores de hardware no hand-off da boot ROM ([doc](docs/iterations/0012-bus-io-boot-state.md)). Fecha o **1.2b** e com ele o **1.2 inteiro**. As quatro armadilhas que a 0011 deixou anotadas se materializaram todas as quatro, e nenhuma delas era a que se esperava: a coluna DMG saiu certa de memória (`DIV`/`STAT`/`LY`), e o que errou foi folclore de emulador (`DMA=$00`, `OBP*=$FF`, `BANK=$01`) mais a suposição estrutural de que a faixa de I/O é um array plano.
-**Próxima tarefa:** ROADMAP 1.3 — laço de M-cycle: `Cpu::step()` avança **um** M-cycle e volta; fetch/decode/execute como máquina de estados. Spec: `docs/reference/02-cpu.md` e a tabela de timing do `03-opcodes.md` (gbops `90b9bf296aed`). **É a R2, e é a regra mais cara de violar do projeto** — "executa a instrução inteira e depois soma N ciclos" passa nos testes unitários, quebra a suíte Mooneye e é refatoração de tudo. **O que já está pronto para ser ligado:** `Registers::after_boot_rom(checksum)` (1.2b-i) e `Bus::new(cart)` (1.2a + 1.2b-ii) dão o estado inicial completo, e nada no código ainda junta os dois — quem cria o dono dos dois é esta iteração. **Duas asperezas conhecidas:** (a) `Bus::new` exige um `Box<dyn Cartridge>`, então testar opcode sem cartucho pede ou um cartucho de teste (é o que `bus_boot_state.rs` faz, em 6 linhas) ou extrair a interface de memória — o 1.2a registrou que extrair **então** é mudança local, e este é o "então"; (b) `Bus::read`/`write` não avançam o tempo de propósito, e é o laço quem tem de chamá-los uma vez por M-cycle, **no ponto certo dentro da instrução** — é isso que a Mooneye mede.
+**Última iteração concluída:** 0013 — o laço de M-cycles ([doc](docs/iterations/0013-cpu-mcycle-loop.md)). Fecha o **1.3**, a R2. `Cpu::step(&mut Bus)` avança um M-cycle e volta; `NOP` e `JP u16` decodificados, os onze opcodes inexistentes travando a CPU. Os três erros de memória foram os previstos pela regra e nenhum pela intuição: `step()` instruction-stepped (o desenho que sai sozinho), o desvio de `JP` no M3 em vez do M4, e opcode desconhecido tratado como `NOP`. A aspereza (a) que a 0012 previa **não se materializou** — não foi preciso extrair interface de memória do `Bus`.
+**Próxima tarefa:** ROADMAP 1.4 — opcodes de load de 8 bits. Spec: `docs/reference/03-opcodes.md` (a coluna *M-cycles passo a passo*, não só a de T-cycles). **O que já está pronto:** `Cpu::fetch` decodifica e `State` nomeia os M-cycles; acrescentar opcode é acrescentar variante de `State` e braço no `match`. **É aqui que a tabela de micro-operações deve nascer** — a 0013 não a escreveu de propósito (nota 8: abstração sem nada que a exercite passa verde por vacuidade), e o 1.4 é a primeira iteração com casos suficientes para generalizar em vez de chutar: `LD r,r'` (1 M-cycle), `LD r,u8` (2), `LD r,(HL)` (2), `LD (HL),u8` (3). **Duas armadilhas anotadas:** (a) `wrapping_add` no `PC` é comportamento real e **nenhum teste o cobre** — medido pela bateria de mutação da 0013, e o 1.4 é quem primeiro terá operando atravessando `$FFFF`; (b) `02-cpu.md` § CPU Instruction Set **não serve** para ler semântica de opcode — a conversão a achatou em layouts de bits sem prosa. Ver nota 24.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -35,7 +35,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **131** (eram 122 antes da 0012). Este número não é o placar
+Testes do workspace: **142** (eram 131 antes da 0013). Este número não é o placar
 — ele mede o que o projeto afirma sobre si mesmo, não o que o hardware cobra.
 
 ## Invariantes já estabelecidas
@@ -298,6 +298,48 @@ Testes do workspace: **131** (eram 122 antes da 0012). Este número não é o pl
   memória mais escorregadio da tabela porque o número é plausível e vem de uma
   coluna vizinha de verdade; ver erro #1 da [0012](docs/iterations/0012-bus-io-boot-state.md).
 
+- **`Cpu::step(&mut Bus)` avança um M-cycle e não devolve contagem.** A
+  assinatura é metade da R2: não há número de ciclos a retornar porque a
+  resposta é sempre um, e não há laço interno até a instrução acabar porque
+  parar no meio é o objetivo. Uma chamada faz **no máximo um** acesso ao
+  barramento — os M-cycles `internal` da tabela não fazem nenhum. Timer (2.1),
+  PPU (M3) e APU (M6) são tiquetaqueados aqui quando existirem.
+- **O `fetch` é o primeiro M-cycle da instrução, e ele conta.** `NOP` é 1
+  M-cycle e esse M-cycle é o próprio fetch; `JP u16` é 4, dos quais o fetch é o
+  primeiro. É a contabilidade de gbops, **não** uma afirmação sobre o pipeline
+  do silício (no hardware o último M-cycle se sobrepõe ao fetch seguinte). Os
+  dois modelos dão o mesmo total por instrução, e é o total que a Mooneye cobra.
+- **`JP u16` desvia no M4, não no M3.** Depois de `read(u16:upper)` o alvo já
+  está inteiro dentro da CPU e ainda falta um M-cycle: a coluna é
+  `fetch → read(u16:lower) → read(u16:upper) → internal(branch decision?)`.
+  Escrever o `PC` junto com o byte alto dá as mesmas 4 M-cycles e desloca o
+  desvio em um — invisível em teste de instrução isolada, visível para o timer e
+  a PPU. `each_step_advances_one_m_cycle_not_one_instruction` observa o `PC`
+  **entre** os quatro passos justamente porque no fim os dois modelos coincidem.
+- **`Cpu` não é dono do `Bus`.** Recebe `&mut Bus` a cada M-cycle
+  (`CLAUDE.md` § Arquitetura). Não existe tipo `GameBoy`: quem possui os dois
+  hoje são os testes, e a partir do 1.12 será o `gb-cli run`. **A aspereza que a
+  0012 previu não existiu** — testar opcode sem cartucho não pediu extrair
+  interface de memória do `Bus`; um cartucho de teste de 32 KiB com o programa
+  em `$0100` custa seis linhas, e o `Bus` segue `struct` concreto sem vtable.
+- **Não há tabela de micro-operações, e a ausência é deliberada.** `State`
+  nomeia os M-cycles das duas instruções que existem e o `match` é total sem
+  `_ =>`. Um `enum MicroOp` genérico agora seria a nota 8 outra vez: abstração
+  sem nada que a exercite. Quem generaliza é o 1.4, que terá casos.
+- **`Lockup` distingue "o SM83 não tem esse opcode" de "este emulador ainda não
+  chegou nele".** Mesmo efeito, origens opostas, consertos em lugares
+  diferentes: `IllegalOpcode` significa que a ROM executou lixo,
+  `UndecodedOpcode` que falta implementar. Parar em vez de entrar em pânico é o
+  que mantém o `gb-core` como máquina de estados (mesma escolha do `NoMbc`).
+  São **onze** os inexistentes — `D3 DB DD E3 E4 EB EC ED F4 FC FD`. `D9` é
+  `RETI` no Game Boy (era `EXX` no Z80) e **não** entra na lista; quem contar os
+  `-` da coluna do Z80 conta outra coisa.
+- **Onde a CPU para de travar é escolha, não spec.** A § Moved, Removed, and
+  Added Opcodes diz que o opcode trava a CPU e não diz nada sobre o `PC`. O
+  `PC = $0101` daqui é consequência do modelo de fetch — o byte é lido e o `PC`
+  passa por ele antes de haver o que decodificar — e nada observável depende
+  disso, porque a CPU não volta a andar.
+
 ## Bloqueios
 
 _(nenhum)_
@@ -456,6 +498,12 @@ contorno previsto no prompt de bootstrap.
     **aberta**, e o 1.3 vai encostar nisso outra vez: máquina de estados de
     M-cycle é onde `const fn` e `match` exaustivo aparecem em quantidade.
 
+    **Quarto ponto de dado na 0013:** **142/142** em `1.85`. A previsão acima
+    acertou o conteúdo — `const fn` com `match` sobre enum e `matches!` em
+    contexto const — e nada disso é mais novo que a MSRV. Quatro acertos
+    seguidos por lembrança continuam não sendo uma guarda, e o 1.4 multiplica
+    esse tipo de código por 245 opcodes. Continua **aberta**.
+
 14. **Bateria de mutação: o cargo decide rebuild por mtime.** Reverter o fonte
     com `mv arquivo.bak arquivo` — ou aplicar uma mutação que falha em silêncio
     — devolve o arquivo com mtime **anterior** ao do artefato, e o `cargo test`
@@ -585,6 +633,20 @@ contorno previsto no prompt de bootstrap.
     quatro reprovaram. Sem ele o PR fecharia 9/9 verde com cinco testes que
     nunca tinham sido exercitados contra nada.
 
+    **Sexta repetição na 0013, e a novidade é que foram *dois* esqueletos.** O
+    primeiro erro de memória era arquitetural — `step()` instruction-stepped — e
+    um esqueleto assim **não tem M3 nem M4 onde os erros de timing possam
+    aparecer**: ele esconde os erros seguintes em vez de os revelar. Rodar o
+    esqueleto A (instruction-stepped, 3 de 11 pegos), consertar só aquilo, e
+    rodar o esqueleto B (cycle-stepped com o desvio no M3 e opcode desconhecido
+    virando `NOP`, 2 de 11 pegos) mediu três erros que um esqueleto só teria
+    mostrado como um.
+
+    **Regra que sai daí:** quando o erro de memória é de *forma* e não de
+    *valor*, um esqueleto não basta — o erro de forma colapsa o espaço onde os
+    outros viveriam. Encadeie esqueletos, do erro mais estrutural para o mais
+    local, e rode a suíte contra cada um.
+
 21. **O terceiro modo de falha da R1: spec ambígua.** A regra supôs "o agente
     não leu" (original); a nota 19 achou "a spec é omissa"; a 0011 achou
     **"a spec é ambígua, e as duas leituras coincidem em todo caso real"**.
@@ -636,3 +698,59 @@ contorno previsto no prompt de bootstrap.
     arquivo; a 0012, logo abaixo — e ainda assim é fácil ler a tabela sem seguir
     os marcadores. **`??` e `---` numa tabela de spec são ponteiros, não
     valores.** Nunca traduza um deles para número sem ler a nota que o define.
+
+24. **O quarto modo de falha da R1: a spec local corrompida na conversão.** A
+    regra supôs "o agente não leu" (original); a nota 19 achou "a spec é
+    omissa"; a nota 21 achou "a spec é ambígua". A 0013 achou o pior de ler:
+    **a spec está no repositório, tem 890 linhas, tem tabelas bem formadas, e o
+    conteúdo se perdeu no HTML→Markdown.**
+
+    A § CPU Instruction Set do `02-cpu.md` deveria descrever cada instrução.
+    O que há são layouts de bits soltos: `nop` aparece como oito linhas
+    `| 7 | 0 |`…`| 0 | 0 |` sem uma palavra sobre o que faz, e a tabela de
+    placeholders (`r8`, `r16`, `r16stk`, `r16mem`, `cond`) virou **uma** tabela
+    com os índices 0–3 repetidos quatro vezes e sem cabeçalho que diga a qual
+    grupo cada bloco pertence. Quem for implementar 1.4–1.11 lendo aquele
+    arquivo não acha semântica nenhuma.
+
+    Isto é pior que omissão e que ambiguidade porque **nada no arquivo sinaliza
+    a perda**. Omissão deixa buraco visível; ambiguidade entrega valor plausível
+    dos dois lados; conversão corrompida entrega estrutura convincente e
+    conteúdo zero, e "eu li a seção" fica tecnicamente verdadeiro.
+
+    **Onde está a informação de verdade:** `03-opcodes.md` (gbops) para timing,
+    flags e passo a passo de M-cycles — que é completo e foi o que sustentou a
+    0013. Para prosa, o link que a própria seção dá, `gbz80(7)`
+    (rgbds.gbdev.io), que **não** está em `docs/reference/`.
+
+    **Não foi consertado na 0013**, e a decisão é a mesma que a 0008 tomou na
+    nota 17: `01-`…`09-` são gerados, mexer à mão contraria o
+    `docs/reference/README.md`, e o conserto é no `fetch-reference-docs.sh` —
+    decisão de projeto, não contrabando dentro de uma iteração de outra coisa.
+    Quem for mexer decide entre (a) melhorar a conversão daquela seção, (b)
+    trazer `gbz80(7)` para `docs/reference/` como fonte de prosa, ou (c) marcar
+    a seção como inútil no README e apontar todo mundo para o `03-opcodes.md`.
+    A (b) é a que o M1 inteiro vai querer.
+
+25. **O controle negativo pega o que os esqueletos não pegam — e às vezes é o
+    único que pega.** Na 0013, os dois esqueletos deixaram
+    `the_unused_opcodes_are_exactly_the_eleven_the_spec_names` passar sem nunca
+    ter tido nada para reprovar: os dois traziam a lista certa. A bateria de
+    mutação mostrou que aquele teste era **o único** capaz de pegar o mutante
+    mais provável da seção — acrescentar `$D9` à lista de ilegais, que é `EXX`
+    no Z80 e `RETI` no Game Boy. O outro teste de opcode ilegal só confere que
+    os onze travam, e "os onze travam" continua verdade quando são doze.
+
+    **A forma geral:** teste que afirma *pertinência* ("estes N estão na lista")
+    não pega *excesso* ("e mais um"). Onde a spec dá uma lista fechada, o teste
+    tem de varrer o complemento — na 0013, os 256 opcodes, afirmando dos dois
+    lados. Isso já tinha sido escrito na 0011 como "controle negativo por
+    coluna"; a leitura nova é que ele **não** é redundância defensiva, é o
+    único instrumento para uma classe inteira de erro.
+
+    **E a bateria mediu um buraco que ninguém tinha visto:** o mutante
+    `wrapping_add` → `saturating_add` no `PC` foi classificado como controle
+    (deveria ficar verde) e ficou — mas por falta de teste, não por
+    equivalência. A volta do `PC` em `$FFFF` é comportamento real e **não está
+    coberto**. Não é bug; é cobertura ausente, medida e datada. Quem fecha é o
+    1.4, o primeiro item com operando que pode atravessar `$FFFF`.

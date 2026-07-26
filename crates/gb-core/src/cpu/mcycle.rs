@@ -199,6 +199,10 @@ const JR_U8: u8 = 0x18;
 const JR_COND_MASK: u8 = 0xE7;
 const JR_COND_PATTERN: u8 = 0x20;
 
+const JP_COND_MASK: u8 = 0xE7;
+const JP_COND_PATTERN: u8 = 0xC2;
+const JP_HL: u8 = 0xE9;
+
 const CB_PREFIX: u8 = 0xCB;
 
 const RLCA: u8 = 0x07;
@@ -319,7 +323,7 @@ enum Condition {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
     Fetch,
-    JumpImmediate(JumpImmediate),
+    JumpImmediate(Condition, JumpImmediate),
     LoadFromHl(ByteRegister),
     StoreToHl(ByteRegister),
     LoadImmediate(ByteRegister),
@@ -392,7 +396,7 @@ impl Cpu {
     pub fn step(&mut self, bus: &mut Bus) {
         self.state = match self.state {
             State::Fetch => self.fetch(bus),
-            State::JumpImmediate(phase) => self.jump_immediate(bus, phase),
+            State::JumpImmediate(condition, phase) => self.jump_immediate(bus, condition, phase),
             State::LoadFromHl(dest) => self.load_from_hl(bus, dest),
             State::StoreToHl(source) => self.store_to_hl(bus, source),
             State::LoadImmediate(dest) => self.load_immediate(bus, dest),
@@ -432,7 +436,7 @@ impl Cpu {
         match self.state {
             State::Locked(lockup) => Some(lockup),
             State::Fetch
-            | State::JumpImmediate(_)
+            | State::JumpImmediate(..)
             | State::LoadFromHl(_)
             | State::StoreToHl(_)
             | State::LoadImmediate(_)
@@ -490,7 +494,15 @@ impl Cpu {
                 alu::rra(&mut self.registers);
                 State::Fetch
             }
-            JP_U16 => State::JumpImmediate(JumpImmediate::ReadLowByte),
+            JP_U16 => State::JumpImmediate(Condition::Always, JumpImmediate::ReadLowByte),
+            JP_HL => {
+                self.registers.pc = self.registers.hl();
+                State::Fetch
+            }
+            _ if opcode & JP_COND_MASK == JP_COND_PATTERN => State::JumpImmediate(
+                Self::decode_jp_condition(opcode),
+                JumpImmediate::ReadLowByte,
+            ),
             JR_U8 => State::JumpRelativeReadOffset(Condition::Always),
             _ if opcode & JR_COND_MASK == JR_COND_PATTERN => {
                 State::JumpRelativeReadOffset(Self::decode_jr_condition(opcode))
@@ -566,20 +578,33 @@ impl Cpu {
         }
     }
 
-    fn jump_immediate(&mut self, bus: &Bus, phase: JumpImmediate) -> State {
+    fn jump_immediate(&mut self, bus: &Bus, condition: Condition, phase: JumpImmediate) -> State {
         match phase {
             JumpImmediate::ReadLowByte => {
                 self.latch = u16::from(self.read_at_pc(bus));
-                State::JumpImmediate(JumpImmediate::ReadHighByte)
+                State::JumpImmediate(condition, JumpImmediate::ReadHighByte)
             }
             JumpImmediate::ReadHighByte => {
                 self.latch |= u16::from(self.read_at_pc(bus)) << 8;
-                State::JumpImmediate(JumpImmediate::SetProgramCounter)
+                if Self::evaluate_condition(self, condition) {
+                    State::JumpImmediate(condition, JumpImmediate::SetProgramCounter)
+                } else {
+                    State::Fetch
+                }
             }
             JumpImmediate::SetProgramCounter => {
                 self.registers.pc = self.latch;
                 State::Fetch
             }
+        }
+    }
+
+    const fn decode_jp_condition(opcode: u8) -> Condition {
+        match (opcode >> 3) & 0b11 {
+            0b00 => Condition::NotZero,
+            0b01 => Condition::Zero,
+            0b10 => Condition::NotCarry,
+            _ => Condition::Carry,
         }
     }
 

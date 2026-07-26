@@ -80,12 +80,17 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
   gbops o classifica em `x16/alu`, e ele é o 1.7. A quebra é por **regra de
   decodificação**, como a do 1.4: cada sub-item é um bloco de codificação com
   uma forma própria, e sobram dois avulsos. 14 = 4 + 4 + 4 + 2.
-  - [ ] 1.5a `LD r16,u16` (`$01 $11 $21 $31`) — o bloco `00 rr 0001`
+  - [x] 1.5a `LD r16,u16` (`$01 $11 $21 $31`) — o bloco `00 rr 0001`
     (§ Block 0 do `02-cpu.md`), 3 M-cycles. Primeiro uso do placeholder `r16`
     (`bc de hl sp`, e não `af` — esse é o `r16stk` do 1.5b/1.5c). A coluna
     escreve **metade do par por M-cycle** (`read(u16:lower->C)` →
     `read(u16:upper->B)`): latchar os dois bytes e escrever o par no fim dá o
-    mesmo estado final e os mesmos 12 T-cycles.
+    mesmo estado final e os mesmos 12 T-cycles. **É o que eu escrevi de
+    memória**, copiando o `JP u16` do mesmo arquivo — que latcha porque tem um
+    quarto M-cycle `internal`, e este não tem. 7 dos 8 testes passam contra essa
+    versão; ver [doc da 0018](docs/iterations/0018-cpu-ld-r16-u16.md) e
+    `STATUS.md`, nota 34. A seta da coluna faz parte do passo: `read(u16:lower)`
+    sem seta (o `$FA`) é que é latch.
   - [ ] 1.5b `PUSH r16stk` (`$C5 $D5 $E5 $F5`) — o bloco `11 rr 0101`,
     4 M-cycles: `fetch → internal → write(upper->(--SP)) → write(lower->(--SP))`.
     Primeiro `internal` do projeto que não é o último passo, e primeiro operando

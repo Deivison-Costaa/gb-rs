@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0017 — endereço absoluto e a página `$FF00` ([doc](docs/iterations/0017-cpu-ld-absolute-ff00.md)). Fecha o **1.4d** e com ele o grupo `x8/lsm` inteiro (85 opcodes): `$EA $FA` (3 bytes, 4 M-cycles), `$E0 $F0` (2 bytes, 3) e `$E2 $F2` (**1** byte, 2 — `C` é o operando e não há byte a buscar, o que as tabelas antigas erram). **A tabela de micro-operações se decidiu, e a resposta é *não***: `State` cresce por variante de forma, e o que se generalizou foi só o último passo — `Cpu::access`, compartilhado pelas três formas, a primeira função de M-cycle que serve a instruções diferentes. **A iteração sobreviveu ao agente:** a sessão de Claude Code que a começou morreu no meio do RED→GREEN com a árvore suja; uma sessão de Kimi K3 (OpenCode) retomou, e o que a salvou foi os erros #1 e #2 estarem **documentados nos comentários do código**. O único vermelho encontrado era do arnês (laço de 4 passos fixos para instruções de 2/3/4 M-cycles — quarta categoria de erro do projeto, e a primeira que não é de memória: **erro de medição**). Ver nota 33.
-**Próxima tarefa:** ROADMAP 1.5 — loads de 16-bit + stack (`PUSH`/`POP`). Spec: `docs/reference/03-opcodes.md` (o grupo `x16/lsm`) e `02-cpu.md`. **O que muda de forma em relação ao 1.4:** `PUSH`/`POP` fazem **dois** acessos com `SP` modificado **entre** eles — o segundo operando do projeto (depois do `HL±` do 1.4c) que é registrador e endereço ao mesmo tempo, agora decrementado/incrementado **no meio** da instrução. A regra prática da nota 32 vale dobrada: asserção depois de **cada** M-cycle, e um teste que observe `SP` e a memória entre os dois acessos. `POP AF` esbarra na decisão do 1.1 de **não** mascarar o nibble baixo de `F` — a previsão falsificável continua de pé: se a máscara for necessária, quem cobra é a blargg `cpu_instrs/01-special` no 1.13.
+**Última iteração concluída:** 0018 — `LD r16,u16`, o bloco `00 rr 0001` ([doc](docs/iterations/0018-cpu-ld-r16-u16.md)). Quebra o **1.5** em quatro sub-itens (14 opcodes, cinco formas de M-cycle; 14 = 4 + 4 + 4 + 2) e entrega o **1.5a**: `$01 $11 $21 $31`, 3 M-cycles. **O erro foi o da nota 26/30 pela terceira vez, agora na terceira direção possível** — depois de acrescentar um M-cycle (0014) e de adiantar um acesso (0015), aqui foi *atrasar* dois efeitos: latchar os dois bytes e escrever o par no fim do M3, como o `JumpImmediate` faz 40 linhas acima no mesmo arquivo. A coluna diz `read(u16:lower->**C**)`: meia metade por M-cycle. **7 dos 8 testes passam contra a versão errada**, e o único que a reprova é também o único que pega dois dos nove mutantes da bateria. `LD HL,SP+i8` (`$F8`) não é deste grupo — gbops o põe em `x16/alu` e ele é o 1.7. Ver nota 34.
+**Próxima tarefa:** ROADMAP 1.5b — `PUSH r16stk` (`$C5 $D5 $E5 $F5`), o bloco `11 rr 0101`. Spec: `docs/reference/03-opcodes.md` (linhas `C5 D5 E5 F5`) e `02-cpu.md` § Block 3. **Três coisas novas de uma vez:** 4 M-cycles com o `internal` **no meio** (`fetch → internal → write(upper->(--SP)) → write(lower->(--SP))`, e o byte **alto** vai primeiro); `SP` decrementado **entre** os dois acessos — o segundo operando do projeto que é registrador e endereço ao mesmo tempo, depois do `HL±` do 1.4c; e o placeholder `r16stk`, cujo índice 3 é `af` e **não** `sp` (o `r16` do 1.5a é a tabela vizinha, e `the_fourth_pair_of_r16_is_sp_and_not_af` existe para que a troca quebre). A regra prática da nota 32 vale dobrada: asserção depois de **cada** M-cycle, lendo `SP` **e** a memória entre os dois acessos. É o 1.5b, e não o 1.5a, que testa a previsão da 0017 sobre a tabela de micro-operações.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -35,8 +35,10 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **196** (eram 177 antes da 0017). Este número não é o placar
-— ele mede o que o projeto afirma sobre si mesmo, não o que o hardware cobra.
+Testes do workspace: **205** (eram **197** antes da 0018 — a 0017 anotou 196, e a
+contagem medida em `main` era 197; erro de anotação, não teste perdido). Este
+número não é o placar — ele mede o que o projeto afirma sobre si mesmo, não o
+que o hardware cobra.
 
 ## Invariantes já estabelecidas
 
@@ -415,6 +417,37 @@ Testes do workspace: **196** (eram 177 antes da 0017). Este número não é o pl
   reprova é a única asserção que lê `HL` *entre* os dois `step`. É por isso que
   `State::LoadFromR16Mem` carrega o **par** e não o endereço: com o par, o efeito
   não tem onde acontecer antes do M2. Ver nota 32.
+
+- **`LD r16,u16` escreve meia metade por M-cycle, e não o par no fim.** Três
+  M-cycles, 12 T-cycles, coluna `fetch → read(u16:lower->C) → read(u16:upper->B)`:
+  a metade **baixa** já está no registrador ao fim do M2. O `JP u16` está no
+  mesmo arquivo, tem operando do mesmo tamanho, e latcha os dois bytes para
+  escrever o `PC` de uma vez — mas ele tem **quatro** passos e o quarto é
+  `internal`; aqui os três passos são todos acesso e não há onde o par
+  "acontecer de verdade". **7 dos 8 testes do 1.5a passam contra a versão que
+  latcha.** Ver nota 34.
+- **A seta da coluna faz parte do passo.** `read(u16:lower->C)` e
+  `read(u16:lower)` são M-cycles diferentes, e gbops escreve os dois: o `$FA`
+  (`LD A,(u16)`) tem o segundo, porque ali o byte vai mesmo para um latch
+  interno. Ler a seta como decoração foi o erro #1 da 0018.
+- **`r16` é `bc de hl sp`; `af` é do `r16stk`, que é outra tabela.** São dois dos
+  quatro placeholders de par que a § CPU Instruction Set define, e a conversão
+  para Markdown fundiu os quatro numa tabela só, sem cabeçalho (nota 24) — o que
+  deixa a distinção legível apenas pela **ordem** dos blocos: `r8`, `r16`,
+  `r16stk`, `r16mem`, `cond`. `the_fourth_pair_of_r16_is_sp_and_not_af` fixa o
+  índice 3 do `r16` para que a tabela vizinha, que chega no 1.5b, não o
+  sobrescreva por contágio.
+- **`SP` é a única metade de par que não é um campo de 8 bits.** `B`/`C`,
+  `D`/`E`, `H`/`L` são `u8` no banco; `SP` é `u16`. Por isso existem
+  `write_r16_low`/`write_r16_high`: "escrever a metade baixa" é atribuição em
+  três casos e máscara no quarto. Esquecer o `& 0xFF00` é invisível no estado
+  final — a metade alta é reescrita no M3 logo em seguida — e só o teste que lê
+  o par **entre** os M-cycles o pega.
+- **`LD HL,SP+i8` (`$F8`) não é do `x16/lsm`.** gbops o classifica em `x16/alu`
+  e o ROADMAP o tem no 1.7. A intuição o põe junto do `$F9` (`LD SP,HL`, que é
+  `lsm`) porque o mnemônico começa igual e ele escreve num par de 16 bits; o que
+  o separa é calcular flags — e as dele são as contraintuitivas (`H`/`C` sobre o
+  **byte baixo**).
 - **O endereço é o valor de antes do `HL±`, e quem confirma isso não é a § Block
   0.** O `++`/`--` postfixo de gbops afirma; a confirmação independente está na
   § OAM Corruption Bug do `06-ppu.md`, que fala do conteúdo de 16 bits
@@ -628,6 +661,11 @@ contorno previsto no prompt de bootstrap.
     é que o item não existe no ROADMAP, e o protocolo de iteração só executa o
     que está no ROADMAP. **Dívida que ninguém agenda não é priorizada baixo; é
     invisível.**
+
+    **Oitavo ponto de dado na 0018:** **205/205** em `1.85` (`cargo 1.85.1`),
+    com `u16::to_le_bytes`/`swap_bytes` em contexto const e máscara com
+    `!0x00FFu16`. A 0017 não registrou a conferência; oito iterações, sete
+    anotações — a lacuna é o argumento do 7.4 melhor do que qualquer das sete.
 
     **Sétimo ponto de dado na 0016:** **177/177** em `1.85` (`cargo 1.85.1`),
     com `const fn` sobre enum de dois bits e `wrapping_add`/`wrapping_sub` em
@@ -1094,3 +1132,52 @@ contorno previsto no prompt de bootstrap.
     "revisão suja a árvore" — **estava errado**: `docs/reviews/` está no
     `.gitignore` desde a 0004 e a guarda de árvore limpa não a vê. O custo de
     tempo/crédito por iteração é o motivo que resta, e ele é real.
+
+34. **A nota 26/30 tem três direções, e a 0018 fechou o trio.** O erro é sempre
+    o mesmo: uma instrução vizinha, correta, lida como regra geral. O que muda é
+    o sentido em que ela desloca o efeito.
+
+    - 0014 — **acrescentou** um M-cycle (`LD r,(HL)` em três, generalizando o
+      `internal` do `JP u16`).
+    - 0015 — **adiantou** um acesso (`LD (HL),u8` escrevendo no M2,
+      generalizando a correção da 0014).
+    - 0018 — **atrasou** dois efeitos (as metades de `LD r16,u16` para o fim do
+      M3, generalizando o latch do `JP u16`).
+
+    **A novidade da 0018 é a fonte.** Nas duas anteriores a regra falsa vinha do
+    `STATUS.md` — prosa forte sobre um caso, lida como princípio. Aqui veio do
+    **código**: `JumpImmediate` está 40 linhas acima no mesmo arquivo, tem
+    operando do mesmo tamanho, e latcha os dois bytes. Não é lembrança nem
+    invariante mal escrita; é o vizinho mais próximo do cursor. O corolário da
+    nota 26 (dizer de qual instrução a invariante é) não alcança isso: não havia
+    invariante no meio, havia `self.latch |= ... << 8` na tela.
+
+    **O que separa os dois casos está na coluna, e é contável:** o `JP u16` tem
+    quatro passos e o quarto é `internal`; o `LD r16,u16` tem três, todos acesso.
+    Latchar exige um passo onde o par possa ser escrito, e esse passo só existe
+    quando a coluna o dá. **Antes de copiar a forma da instrução vizinha, conte
+    os passos das duas.**
+
+    **E a seta é o outro sinal, mais barato de ler:** `read(u16:lower->C)` diz
+    onde o byte para; `read(u16:lower)` (que é o que o `$FA` tem) diz que ele
+    fica no latch. As duas notações convivem na mesma coluna, na mesma tabela, e
+    a diferença entre elas é exatamente a diferença entre as duas implementações.
+
+    **Proporção medida pela terceira vez:** 9/10 na 0015, 10/11 na 0016, 7/8
+    aqui. Não mede fraqueza da suíte — mede que a classe inteira de erro é
+    invisível fora do instante do acesso. E pela primeira vez a bateria de
+    mutação concorda numericamente: dos nove mutantes, **dois** são pegos por um
+    único teste, e é o mesmo teste nos dois casos.
+
+35. **Guarda de ausência não entra na conta do esqueleto, por construção.** A
+    nota 28 disse isso na 0014; a 0018 mediu o caso extremo.
+    `no_16_bit_immediate_load_touches_the_flags` não reprovou o código anterior
+    (a CPU travava, e CPU travada não mexe em `F`), não reprovou o esqueleto (eu
+    não ia escrever um `LD` que mexe em flag) e não reprovou nenhum dos **oito**
+    mutantes de comportamento. Foi preciso escrever um nono mutante só para ele.
+
+    **Procedimento que sai daí:** ao montar a bateria, separe os testes em
+    "afirmam presença" e "afirmam ausência", e garanta pelo menos um mutante por
+    teste do segundo grupo. Sem isso, um `PEGOS: 8/8` convive com um teste que
+    nunca foi exercitado — e a conta não denuncia, porque ela conta mutantes,
+    não testes.

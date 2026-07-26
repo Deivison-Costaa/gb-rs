@@ -108,8 +108,9 @@ enum ImmediatePair {
     ReadHighByte,
 }
 
-const PUSH_R16STK_MASK: u8 = 0b1100_1111;
+const R16STK_MASK: u8 = 0b1100_1111;
 const PUSH_R16STK_PATTERN: u8 = 0b1100_0101;
+const POP_R16STK_PATTERN: u8 = 0b1100_0001;
 
 // Índice 3 é af, não sp — tabela vizinha da do R16.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -136,6 +137,12 @@ enum Push {
     Internal,
     WriteHighByte,
     WriteLowByte,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pop {
+    ReadLowByte,
+    ReadHighByte,
 }
 
 // $E2 — 1 byte: C é o operando (erro #1 da 0017 — ver docs/iterations/0017).
@@ -188,6 +195,7 @@ enum State {
     StoreToR16Mem(R16Mem),
     LoadImmediatePair(R16, ImmediatePair),
     PushPair(R16Stk, Push),
+    PopPair(R16Stk, Pop),
     HighPageC(Direction),
     HighPageImmediate(Direction, HighPageImmediate),
     Absolute(Direction, Absolute),
@@ -231,6 +239,7 @@ impl Cpu {
             State::StoreToR16Mem(dest) => self.store_to_r16_mem(bus, dest),
             State::LoadImmediatePair(target, phase) => self.load_immediate_pair(bus, target, phase),
             State::PushPair(source, phase) => self.push_pair(bus, source, phase),
+            State::PopPair(target, phase) => self.pop_pair(bus, target, phase),
             State::HighPageC(direction) => self.high_page_c(bus, direction),
             State::HighPageImmediate(direction, phase) => {
                 self.high_page_immediate(bus, direction, phase)
@@ -254,6 +263,7 @@ impl Cpu {
             | State::StoreToR16Mem(_)
             | State::LoadImmediatePair(..)
             | State::PushPair(..)
+            | State::PopPair(..)
             | State::HighPageC(_)
             | State::HighPageImmediate(..)
             | State::Absolute(..) => None,
@@ -283,8 +293,11 @@ impl Cpu {
             _ if opcode & LD_R16_U16_MASK == LD_R16_U16_PATTERN => {
                 State::LoadImmediatePair(R16::from_opcode(opcode), ImmediatePair::ReadLowByte)
             }
-            _ if opcode & PUSH_R16STK_MASK == PUSH_R16STK_PATTERN => {
+            _ if opcode & R16STK_MASK == PUSH_R16STK_PATTERN => {
                 State::PushPair(R16Stk::from_opcode(opcode), Push::Internal)
+            }
+            _ if opcode & R16STK_MASK == POP_R16STK_PATTERN => {
+                State::PopPair(R16Stk::from_opcode(opcode), Pop::ReadLowByte)
             }
             LDH_C_A => State::HighPageC(Direction::Store),
             LDH_A_C => State::HighPageC(Direction::Load),
@@ -454,9 +467,34 @@ impl Cpu {
         }
     }
 
+    // `read((SP++)->C)`: meia metade por M-cycle, como o 1.5a — latchar os dois
+    // é o erro #1 da 0018.
+    fn pop_pair(&mut self, bus: &Bus, target: R16Stk, phase: Pop) -> State {
+        let byte = self.pop_byte(bus);
+
+        match phase {
+            Pop::ReadLowByte => {
+                self.write_r16_stk_low(target, byte);
+                State::PopPair(target, Pop::ReadHighByte)
+            }
+            Pop::ReadHighByte => {
+                self.write_r16_stk_high(target, byte);
+                State::Fetch
+            }
+        }
+    }
+
     fn push_byte(&mut self, bus: &mut Bus, value: u8) {
         self.registers.sp = self.registers.sp.wrapping_sub(1);
         bus.write(self.registers.sp, value);
+    }
+
+    // Pós-incremento: lê em `SP` e só então anda. A simetria com `push_byte` é de
+    // papel, não de notação — `(--SP)` lá, `(SP++)` aqui.
+    fn pop_byte(&mut self, bus: &Bus) -> u8 {
+        let byte = bus.read(self.registers.sp);
+        self.registers.sp = self.registers.sp.wrapping_add(1);
+        byte
     }
 
     const fn read_r16_stk(&self, which: R16Stk) -> u16 {
@@ -465,6 +503,24 @@ impl Cpu {
             R16Stk::De => self.registers.de(),
             R16Stk::Hl => self.registers.hl(),
             R16Stk::Af => self.registers.af(),
+        }
+    }
+
+    const fn write_r16_stk_low(&mut self, which: R16Stk, value: u8) {
+        match which {
+            R16Stk::Bc => self.registers.c = value,
+            R16Stk::De => self.registers.e = value,
+            R16Stk::Hl => self.registers.l = value,
+            R16Stk::Af => self.registers.f = value,
+        }
+    }
+
+    const fn write_r16_stk_high(&mut self, which: R16Stk, value: u8) {
+        match which {
+            R16Stk::Bc => self.registers.b = value,
+            R16Stk::De => self.registers.d = value,
+            R16Stk::Hl => self.registers.h = value,
+            R16Stk::Af => self.registers.a = value,
         }
     }
 

@@ -103,11 +103,18 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     [doc da 0019](docs/iterations/0019-cpu-push-r16stk.md) e `STATUS.md`,
     nota 36. O layout de bits está sob o cabeçalho **`pop r16stk`** do
     `02-cpu.md`: a string `push` não existe no arquivo (nota 38).
-  - [ ] 1.5c `POP r16stk` (`$C1 $D1 $E1 $F1`) — o bloco `11 rr 0001`,
+  - [x] 1.5c `POP r16stk` (`$C1 $D1 $E1 $F1`) — o bloco `11 rr 0001`,
     3 M-cycles: `fetch → read((SP++)->lower) → read((SP++)->upper)`. É onde
     `POP AF` esbarra na decisão do 1.1 de **não** mascarar o nibble baixo de `F`
     — a previsão registrada (quem cobra é a blargg `cpu_instrs/01-special` no
-    1.13) continua de pé e não deve ser retroajustada aqui.
+    1.13) continua de pé e **não** foi retroajustada. As três armadilhas
+    anunciadas no handoff (pós-incremento, meia metade por M-cycle, `F` sem
+    máscara) **não viraram código** — primeira vez que o `STATUS.md` descreve o
+    erro seguinte em vez do anterior. O achado ficou na comparação com a 0019:
+    é o mesmo erro de forma nos dois lados da pilha, e **8 de 10 testes passam**
+    contra ele no `PUSH` contra **3 de 10** no `POP` — o lado que escreve tolera
+    o erro de instante em silêncio, o que lê grita. Ver
+    [doc da 0020](docs/iterations/0020-cpu-pop-r16stk.md) e `STATUS.md`, nota 40.
   - [ ] 1.5d Os dois avulsos: `LD SP,HL` (`$F9`, 2 M-cycles,
     `fetch → internal`) e `LD (u16),SP` (`$08`, **5** M-cycles e dois bytes
     escritos em endereços consecutivos — a instrução mais longa do projeto até

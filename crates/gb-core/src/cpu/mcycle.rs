@@ -3,6 +3,7 @@
 use crate::bus::Bus;
 use crate::cart::HeaderChecksum;
 use crate::cpu::Registers;
+use crate::cpu::alu::{self, AluOp};
 
 const NOP: u8 = 0x00;
 const JP_U16: u8 = 0xC3;
@@ -156,6 +157,11 @@ const LD_A_IMM16: u8 = 0xFA;
 const LD_SP_HL: u8 = 0xF9;
 const LD_IMM16_SP: u8 = 0x08;
 
+// `10 ooo rrr`: a operação em 5-3, o operando em 2-0. Só `000` e `001` aqui.
+const ALU_A_R8_MASK: u8 = 0b1111_1000;
+const ADD_A_R8_PATTERN: u8 = 0b1000_0000;
+const ADC_A_R8_PATTERN: u8 = 0b1000_1000;
+
 const HIGH_PAGE: u16 = 0xFF00;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -213,6 +219,9 @@ enum State {
     // A coluna do $F9 não põe seta em passo nenhum: o instante é escolha (ver docs/iterations/0021).
     CopyHlToStackPointer,
     StoreStackPointer(StoreStackPointer),
+    // `read((HL))` sem seta e em 8 T-cycles: o M2 lê e opera, e não há terceiro
+    // passo onde o latch aterrissaria (ver docs/iterations/0022).
+    AluFromHl(AluOp),
     Locked(Lockup),
 }
 
@@ -261,6 +270,7 @@ impl Cpu {
             State::Absolute(direction, phase) => self.absolute(bus, direction, phase),
             State::CopyHlToStackPointer => self.copy_hl_to_stack_pointer(),
             State::StoreStackPointer(phase) => self.store_stack_pointer(bus, phase),
+            State::AluFromHl(op) => self.alu_from_hl(bus, op),
             State::Locked(lockup) => State::Locked(lockup),
         };
     }
@@ -284,7 +294,8 @@ impl Cpu {
             | State::HighPageImmediate(..)
             | State::Absolute(..)
             | State::CopyHlToStackPointer
-            | State::StoreStackPointer(_) => None,
+            | State::StoreStackPointer(_)
+            | State::AluFromHl(_) => None,
         }
     }
 
@@ -325,6 +336,10 @@ impl Cpu {
             LD_A_IMM16 => State::Absolute(Direction::Load, Absolute::ReadLowByte),
             LD_SP_HL => State::CopyHlToStackPointer,
             LD_IMM16_SP => State::StoreStackPointer(StoreStackPointer::ReadAddressLow),
+            _ if opcode & ALU_A_R8_MASK == ADD_A_R8_PATTERN => self.alu_a_r8(AluOp::Add, opcode),
+            _ if opcode & ALU_A_R8_MASK == ADC_A_R8_PATTERN => {
+                self.alu_a_r8(AluOp::AddWithCarry, opcode)
+            }
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
             }
@@ -583,6 +598,23 @@ impl Cpu {
                 State::Fetch
             }
         }
+    }
+
+    fn alu_a_r8(&mut self, op: AluOp, opcode: u8) -> State {
+        match R8::from_bits(opcode) {
+            R8::Register(source) => {
+                let operand = self.read_r8(source);
+                alu::apply(&mut self.registers, op, operand);
+                State::Fetch
+            }
+            R8::MemoryAtHl => State::AluFromHl(op),
+        }
+    }
+
+    fn alu_from_hl(&mut self, bus: &Bus, op: AluOp) -> State {
+        let operand = bus.read(self.registers.hl());
+        alu::apply(&mut self.registers, op, operand);
+        State::Fetch
     }
 
     const fn copy_hl_to_stack_pointer(&mut self) -> State {

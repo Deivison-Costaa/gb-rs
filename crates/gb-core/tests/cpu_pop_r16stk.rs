@@ -122,14 +122,20 @@ fn every_pair_is_popped_low_byte_first_from_the_lower_address() {
             cpu.step(&mut bus);
         }
 
+        let expected = if pair == Pair::Af {
+            POPPED & 0xFFF0
+        } else {
+            POPPED
+        };
+
         assert_eq!(
             pair.get(&cpu),
-            POPPED,
+            expected,
             "${opcode:02X} é `POP {}`: a metade **baixa** vem do endereço mais \
              baixo e é a primeira lida. Invertidas as duas, o par fica {:#06X} — \
              e o `PUSH` do 1.5b, que escreve a alta primeiro, deixaria de fechar",
             pair.name(),
-            POPPED.swap_bytes()
+            expected.swap_bytes()
         );
         assert_eq!(
             cpu.registers.sp, STACK_AFTER,
@@ -147,13 +153,18 @@ fn the_stack_pointer_moves_between_the_two_reads() {
         let (mut cpu, mut bus) = machine_popping(pair, rr);
 
         cpu.step(&mut bus);
+        let after_m1 = if pair == Pair::Af {
+            PREVIOUS & 0xFFF0
+        } else {
+            PREVIOUS
+        };
         assert_eq!(
             cpu.registers.sp, STACK_BOTTOM,
             "${opcode:02X}: o M1 é o fetch e não mexe no `SP`"
         );
         assert_eq!(
             pair.get(&cpu),
-            PREVIOUS,
+            after_m1,
             "${opcode:02X}: e não escreve em `{name}`"
         );
         assert!(
@@ -170,9 +181,14 @@ fn the_stack_pointer_moves_between_the_two_reads() {
              (o espelho literal do `(--SP)` do `PUSH`) leria {HIGH_SLOT:#06X} aqui \
              e passaria do topo no M3"
         );
+        let after_m2 = if pair == Pair::Af {
+            AFTER_LOW_HALF & 0xFFF0
+        } else {
+            AFTER_LOW_HALF
+        };
         assert_eq!(
             pair.get(&cpu),
-            AFTER_LOW_HALF,
+            after_m2,
             "${opcode:02X}: a seta da coluna diz `->{name}:lower`, então a metade \
              baixa **já está** no registrador ao fim do M2. Latchar os dois bytes \
              e escrever o par no fim do M3 dá o mesmo estado final e os mesmos 12 \
@@ -188,9 +204,14 @@ fn the_stack_pointer_moves_between_the_two_reads() {
             cpu.registers.sp, STACK_AFTER,
             "${opcode:02X}: o M3 lê em {HIGH_SLOT:#06X} e anda de novo"
         );
+        let after_m3 = if pair == Pair::Af {
+            POPPED & 0xFFF0
+        } else {
+            POPPED
+        };
         assert_eq!(
             pair.get(&cpu),
-            POPPED,
+            after_m3,
             "${opcode:02X}: o M3 é `read((SP++)->{name}:upper)`"
         );
         assert!(
@@ -213,7 +234,7 @@ fn the_fourth_pair_of_r16stk_is_af_and_not_sp() {
 
     assert_eq!(
         cpu.registers.af(),
-        POPPED,
+        POPPED & 0xFFF0,
         "$F1 é `POP AF`: o índice 3 do placeholder `r16stk` é `af`. O `r16` do \
          1.5a é a tabela vizinha e tem `sp` nesse índice"
     );
@@ -225,7 +246,7 @@ fn the_fourth_pair_of_r16stk_is_af_and_not_sp() {
 }
 
 #[test]
-fn pop_af_loads_the_whole_f_byte_including_the_low_nibble() {
+fn pop_af_masks_the_low_nibble_of_f() {
     const DIRTY_F: u8 = 0b0101_0111;
 
     let (mut cpu, mut bus) = machine(&[pop_pair(3)]);
@@ -239,13 +260,10 @@ fn pop_af_loads_the_whole_f_byte_including_the_low_nibble() {
 
     assert_eq!(
         cpu.registers.f,
-        DIRTY_F,
-        "o 1.1 decidiu **não** mascarar os bits 3–0 de `F`, e o `POP` é a metade \
-         da decisão que **lê**: {:#010b} seria o folclore (`POP AF` descarta o \
-         nibble baixo) entrando por hábito. A spec no commit fixado não descreve \
-         esses bits; quem cobra a máscara, se ela for necessária, é a blargg \
-         `cpu_instrs/01-special` no 1.13, e não este teste",
-        DIRTY_F & 0xF0
+        DIRTY_F & 0xF0,
+        "POP AF mascara o nibble baixo de F: os bits 3–0 são sempre 0 no hardware. \
+         A blargg cpu_instrs/01-special e cpu_instrs/08-misc cobraram a máscara \
+         (ver docs/iterations/0047)"
     );
 }
 
@@ -263,7 +281,7 @@ fn pop_af_is_the_only_one_of_the_four_that_writes_the_flags() {
         }
 
         let expected = if pair == Pair::Af {
-            POPPED_BYTES[1]
+            POPPED_BYTES[1] & 0xF0
         } else {
             DIRTY_F
         };

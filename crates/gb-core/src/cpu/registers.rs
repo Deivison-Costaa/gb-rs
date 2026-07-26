@@ -94,11 +94,11 @@ impl Registers {
         pair(self.h, self.l)
     }
 
-    // Sem máscara no nibble baixo de F: o Pan Docs no commit fixado não descreve
-    // os bits 3–0. Se for necessária, quem cobra é cpu_instrs/01-special no 1.13
-    // (ver docs/iterations/0009).
+    // Máscara no nibble baixo de F adicionada na 0047: a blargg cpu_instrs/01-special
+    // e cpu_instrs/08-misc cobraram. O hardware tem só 4 bits no registrador F
+    // (ver docs/iterations/0009, docs/iterations/0047).
     pub const fn set_af(&mut self, value: u16) {
-        (self.a, self.f) = split(value);
+        (self.a, self.f) = (split(value).0, split(value).1 & 0xF0);
     }
 
     pub const fn set_bc(&mut self, value: u16) {

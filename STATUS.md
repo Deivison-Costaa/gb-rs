@@ -3,11 +3,12 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0046 — `gb-cli run` + MBC1 mínimo ([doc](docs/iterations/0046-gb-cli-run.md)). `gb-cli run <rom> --headless --max-cycles <n>` implementado: carrega a ROM, instancia `Bus` + `Cpu`, roda `step()` até `max_cycles`, `Lockup` ou `Stopped`, drena `take_serial_output()` para stdout e imprime `cycles=<n>`. Detecta `Passed`/`Failed` na saída serial (exit 0/1). MBC1 mínimo adiantado do 4.2 (só ROM banking, sem RAM) porque todas as ROMs blargg são MBC1. `Cpu::is_stopped()` adicionado para o laço detectar `STOP`. Bateria: **7/7 pegos, 2/2 controles verdes** — buraco de cobertura no banking do MBC1 (sem teste unitário; pertence ao 4.2).
+**Última iteração concluída:** 0047 — máscara do nibble baixo de F no POP AF ([doc](docs/iterations/0047-cpu-fmask.md)). `write_r16_stk_low(Af, v)` e `set_af(v)` agora fazem `f = v & 0xF0`. ROM 08 (misc instrs) passou. ROM 11 (`op a,(hl)`) continua falhando — erro "27", pré-existente e independente da máscara (os valores C do teste já têm nibble baixo 0). Bateria: **5/5 pegos, 2/2 controles verdes** — o cache de build (nota 14) atacou na reversão de M5; `cargo clean` resolveu.
+**Iteração anterior:** 0046 — `gb-cli run` + MBC1 mínimo.
 **Iteração anterior:** 0045 — stub da porta serial.
 **Iteração anterior:** 0044 — misc: `CPL`, `SCF`, `CCF`, `DAA`, `DI`, `EI`, `STOP`.
 **Iteração anterior:** 0043 — RST.
-**Próxima tarefa:** ROADMAP **1.14** — blargg `cpu_instrs/individual/06` a `11` + `cpu_instrs.gb` completo. Com o `gb-cli run` e MBC1 funcionando, 5/12 ROMs já passam. As que faltam: 01 (POP AF — máscara de F), 02 (interrupções), 08 (DAA/SCF/CCF), 09 (op r,r — precisa de mais ciclos ou está travada), 10 (bit ops), 11 (op a,(hl)). O `cpu_instrs.gb` agregado também não passa. **Notas relevantes:** a nota 8 (teste antes da implementação), a nota 14 (bateria de mutação), a nota 50 (MBC1 sem teste de banking — buraco herdado da 0046).
+**Próxima tarefa:** ROADMAP **1.14** (continua) — blargg `cpu_instrs/individual/11` + `cpu_instrs.gb` completo. ROM 08 passou com a máscara de F; **ROM 11 (`op a,(hl)`)** falha com erro "27" — o erro corresponde ao checksum da instrução LD (HL+),A com C=$F0 ou BIT 1,(HL), dependendo do formato de índice usado pelo blargg. A ROM 11 nunca passou (antes crashava, depois do 0046 passou a falhar ao chegar no teste). **Notas relevantes:** a nota 14 (bateria de mutação e cache de build — atacou na 0047), a nota 50 (MBC1 sem teste de banking — buraco herdado da 0046). **Invariante atualizada:** `F` mascara nibble baixo (adicionado na 0047).
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -26,7 +27,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 
 | Suíte | Passando | Total |
 |---|---|---|
-| blargg cpu_instrs | 5 | 12 |
+| blargg cpu_instrs | 8 | 12 |
 | blargg instr_timing | 0 | 1 |
 | blargg mem_timing | 0 | 4 |
 | blargg mem_timing-2 | 0 | 4 |
@@ -38,7 +39,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **591** (eram **577** antes da 0046 — +14 do novo arquivo `run_command`).
+Testes do workspace: **643** (eram **591** antes da 0047 — +52 entre 0045, 0046 e 0047).
 
 ## Invariantes
 

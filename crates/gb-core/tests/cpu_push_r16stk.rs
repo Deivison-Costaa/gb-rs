@@ -107,15 +107,27 @@ fn every_pair_is_pushed_high_byte_first_to_the_higher_address() {
             cpu.step(&mut bus);
         }
 
+        let expected_bytes = if pair == Pair::Af {
+            [PUSHED_BYTES[0], PUSHED_BYTES[1] & 0xF0]
+        } else {
+            PUSHED_BYTES
+        };
+
+        let expected_swapped = if pair == Pair::Af {
+            PUSHED.swap_bytes() & 0xFFF0
+        } else {
+            PUSHED.swap_bytes()
+        };
+
         assert_eq!(
             [bus.read(HIGH_SLOT), bus.read(LOW_SLOT)],
-            PUSHED_BYTES,
+            expected_bytes,
             "${opcode:02X} é `PUSH {}`: a metade **alta** vai para o endereço mais \
              alto, e é ela que a coluna escreve primeiro. Invertido, a pilha fica \
              {:?} — e a leitura little-endian de volta daria {:#06X}",
             pair.name(),
-            [PUSHED_BYTES[1], PUSHED_BYTES[0]],
-            PUSHED.swap_bytes()
+            [expected_bytes[1], expected_bytes[0]],
+            expected_swapped
         );
         assert_eq!(
             cpu.registers.sp, LOW_SLOT,
@@ -158,6 +170,13 @@ fn the_stack_pointer_moves_between_the_two_writes() {
         );
 
         cpu.step(&mut bus);
+        let high_expected = PUSHED_BYTES[0];
+        let low_expected = if pair == Pair::Af {
+            PUSHED_BYTES[1] & 0xF0
+        } else {
+            PUSHED_BYTES[1]
+        };
+
         assert_eq!(
             cpu.registers.sp, HIGH_SLOT,
             "${opcode:02X}: o M3 decrementa o `SP` e escreve `{name}:upper` no \
@@ -165,7 +184,7 @@ fn the_stack_pointer_moves_between_the_two_writes() {
         );
         assert_eq!(
             bus.read(HIGH_SLOT),
-            PUSHED_BYTES[0],
+            high_expected,
             "${opcode:02X}: a metade alta de `{name}` já está na pilha depois do M3"
         );
         assert_eq!(
@@ -186,7 +205,7 @@ fn the_stack_pointer_moves_between_the_two_writes() {
         );
         assert_eq!(
             bus.read(LOW_SLOT),
-            PUSHED_BYTES[1],
+            low_expected,
             "${opcode:02X}: o M4 é `write({name}:lower->(--SP))`"
         );
         assert!(
@@ -229,11 +248,10 @@ fn the_fourth_pair_of_r16stk_is_af_and_not_sp() {
 
     assert_eq!(
         [bus.read(HIGH_SLOT), bus.read(LOW_SLOT)],
-        PUSHED_BYTES,
+        [PUSHED_BYTES[0], PUSHED_BYTES[1] & 0xF0],
         "$F5 é `PUSH AF`: o índice 3 do placeholder `r16stk` é `af`. O `r16` do \
          1.5a é a tabela vizinha e tem `sp` nesse índice — empilhar o `SP` daria \
-         {:#06X}, que é o próprio ponteiro",
-        STACK_TOP
+         {PUSHED:#06X}"
     );
 }
 

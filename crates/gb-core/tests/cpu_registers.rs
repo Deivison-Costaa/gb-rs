@@ -87,7 +87,11 @@ fn each_pair_is_independent_of_the_others() {
 
     assert_eq!(regs.bc(), 0xFFFF, "escrever DE não pode tocar em BC");
     assert_eq!(regs.hl(), 0xFFFF, "escrever DE não pode tocar em HL");
-    assert_eq!(regs.af(), 0xFFFF, "escrever DE não pode tocar em AF");
+    assert_eq!(
+        regs.af(),
+        0xFFF0,
+        "escrever DE não pode tocar em AF — F é mascarado"
+    );
     assert_eq!(regs.de(), 0x0000);
 }
 
@@ -185,13 +189,17 @@ fn the_flags_ignore_the_bits_below_bit_four() {
 }
 
 #[test]
-fn f_keeps_the_bits_the_spec_does_not_describe() {
+fn set_af_masks_the_low_nibble_of_f() {
     let mut regs = Registers::default();
 
     regs.set_af(0x120F);
 
-    assert_eq!(regs.f, 0x0F, "1.1 não mascara F: a spec não pede");
-    assert_eq!(regs.af(), 0x120F, "o que entrou em AF tem de sair igual");
+    assert_eq!(regs.f, 0x00, "o nibble baixo de F é sempre 0 no hardware");
+    assert_eq!(
+        regs.af(),
+        0x1200,
+        "A fica intacto; o que entrou em AF com F mascarado sai igual"
+    );
 }
 
 #[test]

@@ -1000,7 +1000,7 @@ impl Cpu {
             R16Stk::Bc => self.registers.c = value,
             R16Stk::De => self.registers.e = value,
             R16Stk::Hl => self.registers.l = value,
-            R16Stk::Af => self.registers.f = value,
+            R16Stk::Af => self.registers.f = value & 0xF0,
         }
     }
 

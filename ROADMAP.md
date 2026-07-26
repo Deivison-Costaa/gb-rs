@@ -134,7 +134,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     asserção de `PC` **entre** os M-cycles (nota 32 aplicada ao operando, não só
     à memória). Ver [doc da 0021](docs/iterations/0021-cpu-ld-stack-pointer.md)
     e `STATUS.md`, notas 42 e 43.
-- [ ] 1.6 Opcodes: ALU 8-bit (ADD/ADC/SUB/SBC/AND/OR/XOR/CP/INC/DEC) — **atenção
+- [x] 1.6 Opcodes: ALU 8-bit (ADD/ADC/SUB/SBC/AND/OR/XOR/CP/INC/DEC) — **atenção
   ao half-carry**. **Quebrado em cinco na 0022:** o grupo `x8/alu` da tabela de
   gbops tem **88** opcodes em quatro blocos de codificação (`10 ooo rrr`,
   `11 ooo 110`, `00 ddd 100`, `00 ddd 101`), e a quebra do 1.4 e do 1.5 — por
@@ -192,12 +192,15 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     pegou um operando de teste que não distinguia `XOR` de `OR`, e um par
     `ADD`/`SUB` sem o controle "ignora o carry de entrada" (nota 46). Ver
     [doc da 0025](docs/iterations/0025-cpu-alu-a-imm8.md).
-  - [ ] 1.6e `INC r8` e `DEC r8` (`00 ddd 100` e `00 ddd 101`) — 16 opcodes.
+  - [x] 1.6e `INC r8` e `DEC r8` (`00 ddd 100` e `00 ddd 101`) — 16 opcodes.
     **Não tocam `C`**: a coluna é `-`, e é a divergência de flags que mais
     aparece em ROM real. `$34`/`$35` (`INC (HL)`/`DEC (HL)`) são **3 M-cycles**,
     `fetch → read((HL)) → write((HL))` — read-modify-write no **mesmo** endereço,
     em passos **diferentes**: juntar os dois num M-cycle dá a mesma memória e os
     mesmos 12 T-cycles, que é o erro #1 da 0015 numa forma nova.
+    `alu::increment`/`decrement` devolvem o resultado em vez de escrever em `A`
+    — o operando é qualquer `r8` ou `(HL)`. Ver
+    [doc da 0027](docs/iterations/0027-cpu-inc-dec-r8.md) e `STATUS.md`, nota 48.
 - [ ] 1.7 Opcodes: ALU 16-bit + `ADD SP,e8` / `LD HL,SP+e8` (flags contraintuitivas).
 - [ ] 1.8 Opcodes: rotações e shifts (RLCA/RRCA/RLA/RRA — divergem do prefixo CB no flag Z).
 - [ ] 1.9 Opcodes: prefixo CB completo (BIT/RES/SET/rot).

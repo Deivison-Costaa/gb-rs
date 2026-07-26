@@ -969,3 +969,24 @@
     escondendo, sem querer, uma proteção que ninguém desenhou de propósito.
     Rodar a bateria de mutação **depois** de consolidar é o que torna essa
     perda visível antes do merge, não depois.
+
+
+48. **Uma flag que fica intocada não aparece lendo o `diff` — só testando os
+    dois lados do estouro.** `INC`/`DEC r8` (1.6e) é a primeira operação da
+    ALU cuja coluna `C` é `-`: nenhuma linha em `alu::increment`/`decrement`
+    menciona `Flag::C`. Essa ausência não deixa rastro no código — um
+    `set_flag(Flag::C, ...)` esquecido e um `set_flag(Flag::C, ...)` que
+    nunca deveria existir são, ao ler o arquivo, exatamente a mesma coisa:
+    nada escrito.
+
+    A bateria de mutação tornou isso visível na direção oposta: acrescentar
+    `registers.set_flag(Flag::C, result < value)` (um carry aritmético
+    "razoável" para quem está pensando em `ADD`, não em `INC`) só quebra
+    teste se o caso escolhido **estourar o byte inteiro** (`0xFF` → `0x00`)
+    com `C` começando limpo — um carry calculado ligaria aqui, o correto é
+    ficar limpo. O caso espelhado (sem estouro nenhum, `C` começando ligado)
+    pega o mutante oposto, o que zera `C` incondicionalmente. Precisa dos
+    dois: testar só um lado deixa passar um mutante que acerta por acaso
+    nesse lado e erra no outro — a mesma forma da nota 46, agora sobre uma
+    flag que devia ficar parada em vez de um operando que devia distinguir
+    operações.

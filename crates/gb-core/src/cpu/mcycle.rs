@@ -180,6 +180,11 @@ const XOR_A_IMM8: u8 = 0xEE;
 const OR_A_IMM8: u8 = 0xF6;
 const CP_A_IMM8: u8 = 0xFE;
 
+// `00 ddd 100`/`00 ddd 101`: únicos da ALU que deixam `C` intocado (1.6e).
+const INC_DEC_R8_MASK: u8 = 0b1100_0111;
+const INC_R8_PATTERN: u8 = 0b0000_0100;
+const DEC_R8_PATTERN: u8 = 0b0000_0101;
+
 const HIGH_PAGE: u16 = 0xFF00;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -216,6 +221,20 @@ enum StoreStackPointer {
     WriteHighHalf,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IncDecOp {
+    Increment,
+    Decrement,
+}
+
+// Espelha StoreImmediateToHl: o `(HL)` do 1.6e é read-modify-write, não read+apply
+// como o AluFromHl do 1.6a (nota 45) — leitura e escrita são M-cycles distintos.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IncDecHl {
+    Read,
+    Write,
+}
+
 // match de Cpu::step é total sem _ =>: estado novo quebra a compilação.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -241,6 +260,7 @@ enum State {
     // passo onde o latch aterrissaria (ver docs/iterations/0022).
     AluFromHl(AluOp),
     AluImmediate(AluOp),
+    IncDecHl(IncDecOp, IncDecHl),
     Locked(Lockup),
 }
 
@@ -291,6 +311,7 @@ impl Cpu {
             State::StoreStackPointer(phase) => self.store_stack_pointer(bus, phase),
             State::AluFromHl(op) => self.alu_from_hl(bus, op),
             State::AluImmediate(op) => self.alu_immediate(bus, op),
+            State::IncDecHl(op, phase) => self.inc_dec_hl(bus, op, phase),
             State::Locked(lockup) => State::Locked(lockup),
         };
     }
@@ -316,7 +337,8 @@ impl Cpu {
             | State::CopyHlToStackPointer
             | State::StoreStackPointer(_)
             | State::AluFromHl(_)
-            | State::AluImmediate(_) => None,
+            | State::AluImmediate(_)
+            | State::IncDecHl(..) => None,
         }
     }
 
@@ -379,6 +401,12 @@ impl Cpu {
             XOR_A_IMM8 => State::AluImmediate(AluOp::Xor),
             OR_A_IMM8 => State::AluImmediate(AluOp::Or),
             CP_A_IMM8 => State::AluImmediate(AluOp::Compare),
+            _ if opcode & INC_DEC_R8_MASK == INC_R8_PATTERN => {
+                self.inc_dec_r8(IncDecOp::Increment, opcode)
+            }
+            _ if opcode & INC_DEC_R8_MASK == DEC_R8_PATTERN => {
+                self.inc_dec_r8(IncDecOp::Decrement, opcode)
+            }
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
             }
@@ -660,6 +688,46 @@ impl Cpu {
         let operand = self.read_at_pc(bus);
         alu::apply(&mut self.registers, op, operand);
         State::Fetch
+    }
+
+    fn inc_dec_r8(&mut self, op: IncDecOp, opcode: u8) -> State {
+        match R8::from_bits(opcode >> 3) {
+            R8::Register(register) => {
+                let value = self.read_r8(register);
+                let result = match op {
+                    IncDecOp::Increment => alu::increment(&mut self.registers, value),
+                    IncDecOp::Decrement => alu::decrement(&mut self.registers, value),
+                };
+                self.write_r8(register, result);
+                State::Fetch
+            }
+            R8::MemoryAtHl => State::IncDecHl(op, IncDecHl::Read),
+        }
+    }
+
+    // Leitura no M2, escrita no M3 — o mesmo endereço em passos diferentes.
+    // Juntar os dois no M2 dá a mesma memória final com um M-cycle a menos
+    // (erro #1 da 0015 numa forma nova).
+    fn inc_dec_hl(&mut self, bus: &mut Bus, op: IncDecOp, phase: IncDecHl) -> State {
+        match phase {
+            IncDecHl::Read => {
+                let value = bus.read(self.registers.hl());
+                let result = match op {
+                    IncDecOp::Increment => alu::increment(&mut self.registers, value),
+                    IncDecOp::Decrement => alu::decrement(&mut self.registers, value),
+                };
+                self.latch = u16::from(result);
+                State::IncDecHl(op, IncDecHl::Write)
+            }
+            IncDecHl::Write => {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "o latch recebeu um byte no M2"
+                )]
+                bus.write(self.registers.hl(), self.latch as u8);
+                State::Fetch
+            }
+        }
     }
 
     const fn copy_hl_to_stack_pointer(&mut self) -> State {

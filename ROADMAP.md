@@ -133,7 +133,56 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     asserção de `PC` **entre** os M-cycles (nota 32 aplicada ao operando, não só
     à memória). Ver [doc da 0021](docs/iterations/0021-cpu-ld-stack-pointer.md)
     e `STATUS.md`, notas 42 e 43.
-- [ ] 1.6 Opcodes: ALU 8-bit (ADD/ADC/SUB/SBC/AND/OR/XOR/CP/INC/DEC) — **atenção ao half-carry**.
+- [ ] 1.6 Opcodes: ALU 8-bit (ADD/ADC/SUB/SBC/AND/OR/XOR/CP/INC/DEC) — **atenção
+  ao half-carry**. **Quebrado em cinco na 0022:** o grupo `x8/alu` da tabela de
+  gbops tem **88** opcodes em quatro blocos de codificação (`10 ooo rrr`,
+  `11 ooo 110`, `00 ddd 100`, `00 ddd 101`), e a quebra do 1.4 e do 1.5 — por
+  regra de decodificação, uma forma de M-cycle por sub-item — **não serve aqui**.
+  As formas de M-cycle são só três em 88 linhas (`fetch`; `fetch → read`;
+  `fetch → read((HL)) → write((HL))`), e a dimensão que de fato muda é a
+  **coluna de flags**: `Z N H C` calculadas, `N` literal `0` × literal `1`,
+  `H` carry × empréstimo × literal `1` × literal `0`, `C` calculada × literal `0`
+  × **não afetada**. Então o corte é por **semântica de flag**, e os dois últimos
+  sub-itens por bloco. 88 = 16 + 24 + 24 + 8 + 16.
+  - [x] 1.6a `ADD a,r8` e `ADC a,r8` (`$80`–`$8F`) — os blocos `10 000 rrr` e
+    `10 001 rrr`, 16 opcodes. **As primeiras flags calculadas do projeto**: até
+    a 0021 as 254 linhas implementadas tinham `-` nas quatro colunas. `H` está
+    **definido** na § BCD Flags do `02-cpu.md` (*"carry for the lower 4 bits of
+    the result"*) e `C` na § The Carry Flag (*"higher than $FF"*) — as duas
+    definições, e não uma deduzida da outra. `ADC` consome o `C` de **entrada**,
+    e o `H` dele conta-o: `A=$0F` + `$00` + `C=1` é o único caso que separa as
+    duas versões. Duas formas de M-cycle: 1 para registrador, 2 para `(HL)`
+    (`fetch → read((HL))`, **sem seta** — e a ausência de seta aqui **não** é
+    latch, porque a linha tem 8 T-cycles e não 12: não existe o terceiro passo
+    onde o latch aterrissaria, e a nota 34 lida como regra geral erra aqui).
+    **O achado é o M16:** ler `(HL)` dentro do fetch e gastar o M2 aplicando
+    preserva `A`, as flags, os 2 M-cycles e os 8 T-cycles, e **passou verde nos
+    251 testes** — o operando de uma ALU não tem testemunha entre os passos, e
+    quem o pega é trocar a memória **entre** os dois `step`. Ver
+    [doc da 0022](docs/iterations/0022-cpu-add-adc-r8.md) e `STATUS.md`,
+    notas 44 e 45.
+  - [ ] 1.6b `SUB a,r8`, `SBC a,r8` e `CP a,r8` (`$90`–`$9F` e `$B8`–`$BF`) —
+    os blocos `10 010 rrr`, `10 011 rrr` e `10 111 rrr`, 24 opcodes. `N` é `1`
+    **literal**, e o `H` é **empréstimo** do bit 4 e não carry: três colunas com
+    a mesma letra do 1.6a e o significado invertido. `CP` é a única das oito que
+    **não escreve em `A`** — só produz flags. `CP` fica aqui e não com o `AND`
+    porque a coluna de flags dele é a do `SUB`, letra por letra; o que o separa
+    do bloco `10 010` é só a ausência da escrita.
+  - [ ] 1.6c `AND a,r8`, `XOR a,r8` e `OR a,r8` (`$A0`–`$B7`) — os blocos
+    `10 100 rrr`, `10 101 rrr` e `10 110 rrr`, 24 opcodes. Aqui `H` e `C` são
+    **constantes na coluna**, não resultado de conta: `AND` tem `H` = `1` e
+    `C` = `0`; `XOR` e `OR` têm `H` = `0` e `C` = `0`. Um half-carry calculado
+    "genericamente" pelas três erra as três.
+  - [ ] 1.6d `alu a,imm8` (`$C6 $CE $D6 $DE $E6 $EE $F6 $FE`) — o bloco
+    `11 ooo 110`, 8 opcodes, 2 M-cycles (`fetch → read(u8)`). As mesmas oito
+    operações dos três sub-itens acima, com o operando vindo do `PC` em vez de
+    `r8`. Nota 43: o operando é lido num passo que o estado final não distingue.
+  - [ ] 1.6e `INC r8` e `DEC r8` (`00 ddd 100` e `00 ddd 101`) — 16 opcodes.
+    **Não tocam `C`**: a coluna é `-`, e é a divergência de flags que mais
+    aparece em ROM real. `$34`/`$35` (`INC (HL)`/`DEC (HL)`) são **3 M-cycles**,
+    `fetch → read((HL)) → write((HL))` — read-modify-write no **mesmo** endereço,
+    em passos **diferentes**: juntar os dois num M-cycle dá a mesma memória e os
+    mesmos 12 T-cycles, que é o erro #1 da 0015 numa forma nova.
 - [ ] 1.7 Opcodes: ALU 16-bit + `ADD SP,e8` / `LD HL,SP+e8` (flags contraintuitivas).
 - [ ] 1.8 Opcodes: rotações e shifts (RLCA/RRCA/RLA/RRA — divergem do prefixo CB no flag Z).
 - [ ] 1.9 Opcodes: prefixo CB completo (BIT/RES/SET/rot).

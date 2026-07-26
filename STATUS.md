@@ -3,13 +3,13 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0049 — registrador DIV ($FF04) ([doc](docs/iterations/0049-div-register.md)). `sys_counter: u16` incrementa 4 por M-cycle; `DIV = counter >> 8` (16384 Hz); escrita em $FF04 zera o contador. Bateria: **4/4 pegos, 2/2 controles verdes**. O agregado `cpu_instrs.gb` **continua sem passar**: os sub-testes de interrupção usam loops em `IF`, não em `DIV`, e queimam ~200M+ ciclos até bater no `max_cycles`. Para destravar o agregado o próximo passo é TIMA/TMA/TAC (timer completo) — o `DIV` sozinho não basta.
+**Última iteração concluída:** 0050 — TIMA, TMA, TAC (timer completo) ([doc](docs/iterations/0050-timer-tima-tma-tac.md)). Falling-edge detection nos 4 clocks (bit 9/3/5/7 do `sys_counter`), overflow com atraso de 1 M-cycle (TIMA=$00 por um ciclo, reload de TMA + IF bit 2 no ciclo seguinte), cancelamento de overflow por escrita em TIMA durante o ciclo A. Bateria: **6/6 pegos, 2/2 controles verdes**. O timer seta o bit 2 de IF, mas sem o controlador de interrupções (2.2) o `cpu_instrs.gb` agregado continua falhando nos sub-testes de interrupção.
+**Iteração anterior:** 0049 — registrador DIV ($FF04).
 **Iteração anterior:** 0048 — correção do DAA ($27).
 **Iteração anterior:** 0047 — máscara do nibble baixo de F no POP AF.
 **Iteração anterior:** 0046 — `gb-cli run` + MBC1 mínimo.
-**Iteração anterior:** 0045 — stub da porta serial.
-**Próxima tarefa:** ROADMAP **2.1** (início) — TIMA, TMA, TAC (timer completo). O DIV ($FF04) já foi implementado na 0049; faltam os três registradores de controle, o clock select, o enable e o comportamento de overflow. Com TIMA/TMA/TAC funcionando, o `IF` passa a receber o bit de timer — e os sub-testes de interrupção do `cpu_instrs.gb` passam a completar (embora continuem falhando até o controlador de interrupções 2.2). **Notas relevantes:** a nota 51 (blargg imprime opcode em hex), a nota 14 (cache de build), a nota 50 (MBC1 sem teste de banking). O `sys_counter` de 16 bits já está no `Bus` e já é chamado de `Cpu::step` — a infra está pronta.
-**Marco atual:** M1 → transição para M2 (timer iniciado)
+**Próxima tarefa:** ROADMAP **2.2** — Interrupções: IE/IF/IME, vetores, timing de despacho, `EI` com delay de 1 instrução. O timer (2.1) está completo e seta o bit 2 de IF a cada overflow de TIMA. O que falta para os sub-testes de interrupção do `cpu_instrs.gb` passarem é o controlador: IE ($FFFF), IF ($FF0F), IME (internal), os 5 vetores ($0040/$0048/$0050/$0058/$0060) e o dispatch com prioridade fixa (VBlank > LCD STAT > Timer > Serial > Joypad). **Notas relevantes:** a nota 51 (blargg imprime opcode em hex), a nota 14 (cache de build). A spec de interrupções está em `docs/reference/05-interrupts.md`.
+**Marco atual:** M2 — timer completo, iniciando interrupções
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -147,6 +147,10 @@ importar para o item da vez.
 - O `sys_counter` de 16 bits avança 4 por M-cycle e o `DIV` lê `>> 8`.
 - Escrever qualquer valor em `$FF04` zera `sys_counter`; o byte escrito é ignorado.
 - O timer avança via `Bus::tick_timer()`, chamado de `Cpu::step`, e não de `read`/`write`.
+- O timer usa falling-edge detection: `prev_and_result == 1 && and_result == 0` incrementa TIMA.
+- O overflow de TIMA tem atraso de 1 M-cycle: TIMA=$00 no ciclo A, reload de TMA + IF bit 2 no ciclo B.
+- Escrita em TIMA durante o ciclo A (state=Overflowed) cancela o reload; escrita durante o ciclo B (state=Reloading) é ignorada.
+- Escritas em DIV e TAC também disparam falling-edge detection (antes e depois da alteração de estado).
 
 ## Bloqueios
 
@@ -216,3 +220,10 @@ Numeração é estável e citada no código: **nunca renumere**.
 51. **ROM blargg imprime o opcode em hex, não o índice do teste.** O "27" da
     ROM 11 era DAA ($27), não BIT 1,(HL). A 0048 perdeu metade da iteração nessa
     confusão — ver corpo e lição em `docs/notas.md`.
+52. **O mapeamento do clock select do timer (`00→bit 9, 01→bit 3, 10→bit 5,
+    11→bit 7`) não é contíguo nem ordenado por frequência.** O bit 3 gera a
+    frequência mais alta (262144 Hz) porque `sys_counter` avança 4 por M-cycle:
+    `2^(bit+1)/4` M-cycles por tick. A 0050 confirmou cada entrada contra a
+    coluna DMG da tabela § Timer and Divider Registers. O default de `clock_bit`
+    retorna 9, mas só é atingido para `select ≥ 4` (impossível dado `tac & 0x03`).
+    Ver corpo em `docs/notas.md`.

@@ -304,6 +304,103 @@ impl R16Mem {
     }
 }
 
+/// `$E2` — `LD (FF00+C),A`. 1 byte, 2 M-cycles: `fetch → write(A->(FF00+C))`.
+///
+/// **Um** byte, e é onde a memória deste agente estava errada (0017): tabelas de
+/// opcode que circulam há décadas listam `LDH (C),A` como instrução de dois
+/// bytes, com um operando que não existe. O registrador `C` **é** o operando, e
+/// ele já está na CPU — não há byte a buscar no fluxo de instruções.
+///
+/// A coluna `Bytes` de gbops diz `1`. Os 8 T-cycles não desempatam: eles fixam o
+/// número de M-cycles, não o de bytes, e um `PC` que ande dois deixa os dois
+/// M-cycles no lugar e o efeito na memória certo. O que quebra é a instrução
+/// **seguinte**, que passa a ser buscada um byte adiante.
+const LDH_C_A: u8 = 0xE2;
+/// `$F2` — `LD A,(FF00+C)`. 1 byte, 2 M-cycles: `fetch → read((FF00+C)->A)`.
+/// Ver [`LDH_C_A`] para o byte que não existe.
+const LDH_A_C: u8 = 0xF2;
+/// `$E0` — `LD (FF00+u8),A`. 2 bytes, 3 M-cycles:
+/// `fetch → read(u8) → write(A->(FF00+u8))`.
+const LDH_IMM8_A: u8 = 0xE0;
+/// `$F0` — `LD A,(FF00+u8)`. 2 bytes, 3 M-cycles:
+/// `fetch → read(u8) → read((FF00+u8)->A)`.
+const LDH_A_IMM8: u8 = 0xF0;
+/// `$EA` — `LD (u16),A`. 3 bytes, 4 M-cycles:
+/// `fetch → read(u16:lower) → read(u16:upper) → write(A->(u16))`.
+const LD_IMM16_A: u8 = 0xEA;
+/// `$FA` — `LD A,(u16)`. 3 bytes, 4 M-cycles:
+/// `fetch → read(u16:lower) → read(u16:upper) → read((u16)->A)`.
+const LD_A_IMM16: u8 = 0xFA;
+
+/// A base da página alta: `$FF00`, o começo da faixa de I/O.
+///
+/// A § Comparison with the Z80 diz por que estes opcodes existem: *"Unlike the
+/// 8080 and Z80, the Game Boy has no dedicated I/O bus and no IN/OUT opcodes.
+/// Instead, I/O ports are accessed directly by normal LD instructions, or by new
+/// LD (FF00+n) opcodes."* A página não é espaço de endereçamento à parte — é o
+/// fim do mapa de memória, e estes quatro opcodes só encurtam o caminho.
+///
+/// O `|` do cálculo do endereço podia ser `+` sem diferença: o deslocamento tem
+/// 8 bits e a base tem os 8 bits baixos zerados, então a soma nunca estoura e a
+/// página tem exatamente tantos endereços quantos o operando tem valores.
+const HIGH_PAGE: u16 = 0xFF00;
+
+/// Em que lado do acesso está `A` — o bit 4 do opcode (ROADMAP 1.4d).
+///
+/// Os três sub-itens anteriores do 1.4 eram blocos de bits com um campo
+/// variável; este é **três pares**, e dentro de cada par o bit 4 escolhe a
+/// direção: `$Ex` escreve, `$Fx` lê. Fora dos pares o bit 4 não significa nada,
+/// e é por isso que o decodificador reconhece os seis opcode a opcode, e não por
+/// máscara — qualquer máscara frouxa o bastante para pegar `$E0`, `$E2` e `$EA`
+/// de uma vez leva junto `$E8` (`ADD SP,i8`) e `$F8` (`LD HL,SP+i8`), que são o
+/// 1.7.
+///
+/// O outro operando não aparece no opcode porque não varia: é sempre `A`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Direction {
+    /// `$Ex` — `A` vai para a memória.
+    Store,
+    /// `$Fx` — a memória vai para `A`.
+    Load,
+}
+
+/// Os dois M-cycles de `$E0`/`$F0` que vêm depois do `fetch`.
+///
+/// Mesma forma do [`StoreImmediateToHl`] do 1.4b — um M-cycle para o operando,
+/// outro para o acesso —, e o mesmo erro à espreita: juntar os dois no M2 e
+/// gastar o M3 num `internal` dá os mesmos 12 T-cycles e o mesmo estado final, e
+/// adianta o acesso em um M-cycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HighPageImmediate {
+    /// M2 — `read(u8)`. O deslocamento chega e vira endereço no latch; a página
+    /// alta não é tocada.
+    ReadOffset,
+    /// M3 — o acesso, na direção que o bit 4 escolheu.
+    Access,
+}
+
+/// Os três M-cycles de `$EA`/`$FA` que vêm depois do `fetch`.
+///
+/// É o primeiro operando de dois bytes desde o `JP u16`, e o parecido acaba no
+/// M4: lá o quarto passo é `internal(branch decision?)` e aqui é o **acesso**.
+/// Escrever (ou ler) junto com o byte alto e gastar o M4 num `internal` dá os
+/// mesmos 16 T-cycles e o mesmo estado final — foi o segundo erro do esqueleto
+/// da 0017, e dois dos dezenove testes o reprovaram.
+///
+/// A regra que gera esses dois enganos é sempre a mesma e não existe: **a coluna
+/// é por instrução**. Ver as notas 26, 30 e 32 do `STATUS.md`, que são três
+/// iterações seguidas errando *em qual* M-cycle o efeito cai.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Absolute {
+    /// M2 — `read(u16:lower)`.
+    ReadLowByte,
+    /// M3 — `read(u16:upper)`. Depois deste passo o endereço está inteiro dentro
+    /// da CPU, e ainda falta um M-cycle antes de a memória ser tocada.
+    ReadHighByte,
+    /// M4 — o acesso, na direção que o bit 4 escolheu.
+    Access,
+}
+
 /// Os dois M-cycles de `LD (HL),u8` (`$36`) que vêm depois do `fetch`.
 ///
 /// A coluna de gbops é `fetch → read(u8) → write((HL))`: **três** M-cycles, 12
@@ -369,6 +466,15 @@ enum State {
     /// Dentro de `LD (r16mem),A`. O M2 é `write(A->(rr))`. Ver
     /// [`State::LoadFromR16Mem`] para o porquê de o par viajar aqui.
     StoreToR16Mem(R16Mem),
+    /// Dentro de `LD (FF00+C),A` / `LD A,(FF00+C)`. O M2 é o acesso, e o
+    /// endereço sai de `C` — que já estava na CPU quando o opcode chegou.
+    ///
+    /// Não há operando no fluxo de instruções: [`LDH_C_A`] tem **um** byte.
+    HighPageC(Direction),
+    /// Dentro de `LD (FF00+u8),A` / `LD A,(FF00+u8)`. Ver [`HighPageImmediate`].
+    HighPageImmediate(Direction, HighPageImmediate),
+    /// Dentro de `LD (u16),A` / `LD A,(u16)`. Ver [`Absolute`].
+    Absolute(Direction, Absolute),
     /// A CPU parou, e não volta.
     Locked(Lockup),
 }
@@ -450,6 +556,11 @@ impl Cpu {
             State::StoreImmediateToHl(phase) => self.store_immediate_to_hl(bus, phase),
             State::LoadFromR16Mem(source) => self.load_from_r16_mem(bus, source),
             State::StoreToR16Mem(dest) => self.store_to_r16_mem(bus, dest),
+            State::HighPageC(direction) => self.high_page_c(bus, direction),
+            State::HighPageImmediate(direction, phase) => {
+                self.high_page_immediate(bus, direction, phase)
+            }
+            State::Absolute(direction, phase) => self.absolute(bus, direction, phase),
             // O tempo passa; a CPU não. Ver [`Lockup`].
             State::Locked(lockup) => State::Locked(lockup),
         };
@@ -467,7 +578,10 @@ impl Cpu {
             | State::LoadImmediate(_)
             | State::StoreImmediateToHl(_)
             | State::LoadFromR16Mem(_)
-            | State::StoreToR16Mem(_) => None,
+            | State::StoreToR16Mem(_)
+            | State::HighPageC(_)
+            | State::HighPageImmediate(..)
+            | State::Absolute(..) => None,
         }
     }
 
@@ -503,6 +617,19 @@ impl Cpu {
             _ if opcode & LD_R16MEM_MASK == LOAD_R16MEM_PATTERN => {
                 State::LoadFromR16Mem(R16Mem::from_opcode(opcode))
             }
+            // Os seis do 1.4d, um a um. **Não** há máscara aqui, e a ausência é
+            // da spec: os seis são três pares, e os bits que eles têm em comum
+            // deixariam passar dezesseis opcodes. Ver [`Direction`].
+            //
+            // Nada acontece no M1 além do fetch, nem mesmo nos dois que já têm o
+            // endereço à mão (`$E2`/`$F2`): a coluna põe o acesso no M2, e o
+            // fetch é o M1 inteiro.
+            LDH_C_A => State::HighPageC(Direction::Store),
+            LDH_A_C => State::HighPageC(Direction::Load),
+            LDH_IMM8_A => State::HighPageImmediate(Direction::Store, HighPageImmediate::ReadOffset),
+            LDH_A_IMM8 => State::HighPageImmediate(Direction::Load, HighPageImmediate::ReadOffset),
+            LD_IMM16_A => State::Absolute(Direction::Store, Absolute::ReadLowByte),
+            LD_A_IMM16 => State::Absolute(Direction::Load, Absolute::ReadLowByte),
             // Os onze `-` da coluna `GB CPU`. Ver [`Lockup::IllegalOpcode`].
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
@@ -685,6 +812,79 @@ impl Cpu {
                 self.registers.set_hl(address.wrapping_sub(1));
                 address
             }
+        }
+    }
+
+    /// M2 de `LD (FF00+C),A` e `LD A,(FF00+C)`.
+    ///
+    /// A instrução tem 1 byte, então o `PC` já está no opcode seguinte desde o
+    /// fetch — ver [`LDH_C_A`]. O endereço não custa M-cycle nenhum: `C` está
+    /// na CPU e a base é constante.
+    fn high_page_c(&mut self, bus: &mut Bus, direction: Direction) -> State {
+        let address = HIGH_PAGE | u16::from(self.registers.c);
+        self.access(bus, direction, address);
+        State::Fetch
+    }
+
+    /// M2 e M3 de `LD (FF00+u8),A` e `LD A,(FF00+u8)`.
+    ///
+    /// Dois acessos ao barramento, um em cada M-cycle — o que mantém a
+    /// invariante de que uma chamada de [`Cpu::step`] faz no máximo um. O
+    /// deslocamento vira endereço já no M2 porque a base é constante; guardar o
+    /// byte cru e somar no M3 daria o mesmo, e o latch é de 16 bits de qualquer
+    /// forma.
+    fn high_page_immediate(
+        &mut self,
+        bus: &mut Bus,
+        direction: Direction,
+        phase: HighPageImmediate,
+    ) -> State {
+        match phase {
+            HighPageImmediate::ReadOffset => {
+                self.latch = HIGH_PAGE | u16::from(self.read_at_pc(bus));
+                State::HighPageImmediate(direction, HighPageImmediate::Access)
+            }
+            HighPageImmediate::Access => {
+                self.access(bus, direction, self.latch);
+                State::Fetch
+            }
+        }
+    }
+
+    /// M2 a M4 de `LD (u16),A` e `LD A,(u16)`.
+    ///
+    /// Os dois primeiros passos são os do `JP u16`, literalmente: `read`,
+    /// `read`, little-endian, montados no mesmo latch. O quarto é que diverge —
+    /// lá é `internal(branch decision?)`, aqui é o acesso. Ver [`Absolute`].
+    fn absolute(&mut self, bus: &mut Bus, direction: Direction, phase: Absolute) -> State {
+        match phase {
+            Absolute::ReadLowByte => {
+                self.latch = u16::from(self.read_at_pc(bus));
+                State::Absolute(direction, Absolute::ReadHighByte)
+            }
+            Absolute::ReadHighByte => {
+                self.latch |= u16::from(self.read_at_pc(bus)) << 8;
+                State::Absolute(direction, Absolute::Access)
+            }
+            Absolute::Access => {
+                self.access(bus, direction, self.latch);
+                State::Fetch
+            }
+        }
+    }
+
+    /// O passo do acesso, que é o mesmo nas três formas do 1.4d: só o endereço
+    /// muda de origem, e a [`Direction`] escolhe o lado. `A` é sempre o outro
+    /// operando, e nenhuma das seis linhas toca em flag.
+    ///
+    /// É a primeira vez no projeto que um passo de M-cycle é compartilhado por
+    /// instruções diferentes — três formas de resolver endereço convergindo num
+    /// acesso só. Ver a § "Por que ainda não há tabela de micro-operações" no
+    /// topo do arquivo, onde isso é o dado que faltava para a decisão.
+    fn access(&mut self, bus: &mut Bus, direction: Direction, address: u16) {
+        match direction {
+            Direction::Store => bus.write(address, self.registers.a),
+            Direction::Load => self.registers.a = bus.read(address),
         }
     }
 

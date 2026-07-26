@@ -909,3 +909,25 @@
     em vez de um registrador — o resto do 1.6, o `BIT` do 1.9, e os desvios
     condicionais do 1.10, onde o byte lido decide o `PC` e não fica em campo
     nenhum.
+
+46. **O operando de teste tem de distinguir os casos que o teste alega
+    cobrir — e isso é achado pela bateria de mutação, não pela leitura do
+    teste.** A 0025 (`alu a,imm8`) escreveu um teste genérico, um `for` sobre
+    as oito operações, com um único operando fixo (`0x0C`) contra
+    `SEED_A = 0x21`. Os dois não compartilham bit nenhum, então `A & operando`
+    e `A ^ operando` colapsam nos mesmos zero bits que sobram: `XOR` e `OR`
+    deram o mesmo resultado (`0x2D`) por coincidência de dado, não porque o
+    código estivesse certo. Mutar `XOR_A_IMM8` para despachar `AluOp::Or` (ou
+    o inverso) não quebrava teste nenhum — o teste lia como se cobrisse as
+    três operações bit a bit, mas só cobria duas.
+
+    O mesmo padrão apareceu do outro lado: o teste de `ADC`/`SBC` consumindo o
+    carry de entrada existia, mas faltava o controle inverso (`ADD`/`SUB`
+    **ignorando** o carry) — sem ele, uma ALU que sempre soma/subtrai o carry
+    de entrada passa no teste que existe.
+
+    A nota 25 já dizia isto sobre o controle negativo (`decoded_elsewhere`);
+    esta é a mesma doutrina aplicada ao **dado de entrada** de um teste
+    positivo. Escolher o operando (ou o par de operandos) que separa os casos
+    é parte de escrever o teste — verificado, nas duas vezes, só depois que um
+    mutante sobreviveu à bateria.

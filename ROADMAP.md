@@ -27,7 +27,28 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
     - [x] 1.2b-i Registradores da CPU no hand-off: a coluna **DMG** da tabela § CPU registers. `F` não é constante — `H` e `C` saem do checksum do cabeçalho, e é o **gravado em `$014D`**, não o calculado; ver [doc da 0011](docs/iterations/0011-cpu-boot-state.md). Puro, sem tocar no `Bus`.
     - [x] 1.2b-ii Registradores de hardware no hand-off: `$FF00`–`$FF7F` e `IE`, a partir da coluna **DMG / MGB** da tabela § Hardware registers. A tabela dá valor a **41** dos 128 endereços, marca **15** como `---` (só CGB) e **não menciona 72** — os 87 últimos continuam sem dono, e a wave RAM sai dessa lista com a APU (6.4). `OBP0`/`OBP1` são `??` na spec e `$00` por escolha; ver [doc da 0012](docs/iterations/0012-bus-io-boot-state.md). Valor inicial, **não** semântica: sem máscara, sem read-only, sem efeito colateral — isso vem com o componente dono.
 - [x] 1.3 Laço M-cycle: `step()` avança 1 M-cycle. Fetch/decode/execute como máquina de estados. **`JP u16` (`C3`) entrou junto, e o item não pedia:** com só `NOP` decodificado a máquina não tem estado — instruction-stepped e cycle-stepped dão o mesmo resultado, e a R2 fica sem teste que a separe do que ela proíbe. Medido, não suposto: contra o esqueleto instruction-stepped, o teste de `NOP` **passou**. Ver [doc da 0013](docs/iterations/0013-cpu-mcycle-loop.md). Os onze opcodes inexistentes travam a CPU (`02-cpu.md` § Moved, Removed, and Added Opcodes); os 243 ainda não decodificados param com `Lockup::UndecodedOpcode`, que é rótulo diferente de propósito.
-- [ ] 1.4 Opcodes: loads 8-bit.
+- [ ] 1.4 Opcodes: loads 8-bit. **Quebrado em quatro na 0014:** o grupo `x8/lsm`
+  da tabela de gbops tem **85** opcodes e cinco modos de endereçamento
+  distintos — passa de longe do "um PR pequeno, um conceito só" do protocolo de
+  iteração. A quebra é por **regra de decodificação**, não por quantidade: cada
+  sub-item é um bloco contíguo da tabela com uma forma de M-cycle própria.
+  85 = 63 + 8 + 8 + 6.
+  - [ ] 1.4a O bloco `LD r8,r8` — `$40`–`$7F` **sem** `$76`: 63 opcodes, uma
+    regra só (`01 ddd sss`, § Block 1 do `02-cpu.md`) e três formas de M-cycle:
+    `LD r,r'` em 1, `LD r,(HL)` e `LD (HL),r` em 2. `$76` é `HALT` — a spec o
+    chama de **exceção** à codificação, e ele é o 2.3, não este item.
+  - [ ] 1.4b Imediatos de 8 bits: `LD r8,u8` (`$06 $0E $16 $1E $26 $2E $3E`) e
+    `LD (HL),u8` (`$36`) — o bloco `00 ddd 110`, em 2 e 3 M-cycles.
+  - [ ] 1.4c Indireto por par de registradores: `LD (BC),A`, `LD A,(BC)`,
+    `LD (DE),A`, `LD A,(DE)` (`$02 $0A $12 $1A`) e as quatro formas com `HL+`/
+    `HL-` (`$22 $2A $32 $3A`) — 8 opcodes, e o efeito colateral sobre `HL`.
+  - [ ] 1.4d Endereço absoluto e a página `$FF00`: `LD (u16),A` / `LD A,(u16)`
+    (`$EA $FA`), `LD (FF00+u8),A` / `LD A,(FF00+u8)` (`$E0 $F0`) e
+    `LD (FF00+C),A` / `LD A,(FF00+C)` (`$E2 $F2`) — 6 opcodes.
+    **É aqui que a tabela de micro-operações se decide**, e não no 1.4a: a
+    0013 previu que o 1.4 traria casos suficientes para generalizar, e traz —
+    mas só com os quatro sub-itens no lugar. Generalizar a partir das três
+    formas do 1.4a seria a nota 8 outra vez, com um terço dos dados.
 - [ ] 1.5 Opcodes: loads 16-bit + stack (PUSH/POP).
 - [ ] 1.6 Opcodes: ALU 8-bit (ADD/ADC/SUB/SBC/AND/OR/XOR/CP/INC/DEC) — **atenção ao half-carry**.
 - [ ] 1.7 Opcodes: ALU 16-bit + `ADD SP,e8` / `LD HL,SP+e8` (flags contraintuitivas).

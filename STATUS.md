@@ -3,10 +3,10 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0027 — `INC`/`DEC r8`, os 16 opcodes `00 ddd 100`/`00 ddd 101` ([doc](docs/iterations/0027-cpu-inc-dec-r8.md)). Fecha o 1.6: primeira ALU que deixa `C` **intocado**, nem calculado (1.6a/1.6b) nem literal (1.6c) — `alu::increment`/`decrement` devolvem o resultado em vez de escrever em `a`, porque o operando é qualquer `r8` ou `(HL)`. **Erro de hardware: nenhum** — a coluna de flags veio pronta da tabela, e `$34`/`$35` (`INC`/`DEC (HL)`) copiaram a estrutura de dois estados com latch do `$36` (1.4b), não a do `(HL)` do 1.6a. **O achado foi de novo da bateria de mutação:** um `C` "calculado por engano" (carry/empréstimo aritmético) só é pego testando os dois lados do estouro (byte inteiro estourando com `C` limpo, e sem estouro nenhum com `C` ligado) — testar um só lado deixa passar o mutante que acerta por acaso nesse lado. Nota 48. Bateria: **12/12 pegos, 2/2 controles verdes**. `cpu_mcycle_loop.rs` trocou o exemplo de opcode "ainda não implementado" de `$04` para `$07` (nota 31 se repetindo — ver nota da 0022).
-**Iteração anterior:** 0026 — consolidar `decoded_elsewhere`/`previously_decoded` num helper único, `tests/support/mod.rs` ([doc](docs/iterations/0026-decoded-elsewhere-single-source.md)). Refatoração de teste. **A bateria de mutação achou que os 12 `sweep`s só verificavam a alegação negativa de `decoded_elsewhere`, não a positiva** — consolidar as 12 cópias tirou a sorte da redundância acidental que escondia isso (nota 29, nota 47). Bateria: **5/5 pegos, 2/2 controles verdes**.
-**Duas iterações atrás:** 0025 — `alu a,imm8`, os 8 opcodes `$C6 $CE $D6 $DE $E6 $EE $F6 $FE` ([doc](docs/iterations/0025-cpu-alu-a-imm8.md)). Mesmas oito operações do 1.6a/b/c, operando do `PC`. **Achado de cobertura, não de spec:** operando de teste que não distinguia `XOR` de `OR`, e controle "`ADD`/`SUB` ignoram o carry" faltando. Nota 46. Bateria: **10/10 pegos, 2/2 controles verdes**.
-**Próxima tarefa:** ROADMAP **1.7** — ALU 16-bit + `ADD SP,e8` / `LD HL,SP+e8`. O ROADMAP já avisa "flags contraintuitivas": `03-opcodes.md` linhas `E8`/`F8` mostram `Z=0 N=0 H C` calculados, mas **não** dizem que `H`/`C` são o carry do **byte baixo** de `SP` somado ao imediato (regra de 8 bits sobre um valor de 16), não do par inteiro — `02-cpu.md` ainda não tem essa seção (R1: buscar no Pan Docs e commitar antes de implementar, nota 19/21 — spec local pode ser omissa ou não decidir o instante, como o `$F9` da 0021). `E8` é **4** M-cycles (`fetch → read(i8) → internal → write`) e `F8` é **3** (`fetch → read(i8) → internal`) — nenhum dos dois é o padrão de dois estados do 1.4b/1.6e. 14 opcodes em quatro semânticas de flag distintas (`INC`/`DEC r16` sem flag nenhuma, `ADD HL,r16` com `H`/`C` calculados e `N=0`, e os dois de cima) — provavelmente quebra em sub-itens como o 1.6, mas isso é decisão de quem começar o item, não deste handoff.
+**Última iteração concluída:** 0028 — `INC`/`DEC r16`, os 8 opcodes `00 rr 0011`/`00 rr 1011` ([doc](docs/iterations/0028-cpu-inc-dec-r16.md)). Abre o 1.7 (quebrado em quatro sub-itens por semântica de flag, ver ROADMAP): primeira ALU que deixa **as quatro** colunas intocadas, não só `C` (1.6e). `fetch` computa o par e escreve a metade baixa, `internal` escreve a alta — 2 M-cycles. **Retomada de sessão morta duas vezes sem relato:** o código órfão (`mcycle.rs`, teste) bateu com a spec em tudo; **erro de hardware: nenhum**, mas a bateria de mutação achou um buraco de cobertura no teste órfão — `DIRTY_F` sujava `F` com um valor só, e esse valor já tinha o bit `Z` ligado, então uma mutação que força `Z=1` no resultado zero não mudava o byte observado. Corrigido testando as duas polaridades (`ALL_FLAGS_SET`/`ALL_FLAGS_CLEAR`). Nota 49. Bateria: **5/5 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0027 — `INC`/`DEC r8`, os 16 opcodes `00 ddd 100`/`00 ddd 101` ([doc](docs/iterations/0027-cpu-inc-dec-r8.md)). Fecha o 1.6: primeira ALU que deixa `C` **intocado**, nem calculado (1.6a/1.6b) nem literal (1.6c). **Erro de hardware: nenhum.** Bateria: **12/12 pegos, 2/2 controles verdes**.
+**Duas iterações atrás:** 0026 — consolidar `decoded_elsewhere`/`previously_decoded` num helper único ([doc](docs/iterations/0026-decoded-elsewhere-single-source.md)). Bateria: **5/5 pegos, 2/2 controles verdes**.
+**Próxima tarefa:** ROADMAP **1.7b** — `ADD HL,r16` (`$09 $19 $29 $39`), 4 opcodes. `N=0` literal, `H`/`C` calculados sobre o par de 16 bits inteiro (carry do bit 11 e do bit 15) — ao contrário do `ADD SP,e8`/`LD HL,SP+e8` do 1.7c/1.7d, que calculam sobre o byte baixo. `Z` não é afetada. Mesma forma de M-cycle do 1.7a (`fetch → internal`, 2 M-cycles) — mas agora o `internal` tem de calcular `H`/`C` antes de escrever, não só a metade alta.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -37,7 +37,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **304** (eram **289** antes da 0027). Este
+Testes do workspace: **314** (eram **304** antes da 0028). Este
 número não é o placar — ele mede o que o projeto afirma sobre si mesmo, não o
 que o hardware cobra.
 
@@ -143,6 +143,7 @@ importar para o item da vez.
 - Os 12 `sweep`s verificam a alegação positiva de `decoded_elsewhere`, não só
 - `INC`/`DEC r8` são a primeira ALU que deixa `C` intocado — nem calculado nem
 - `$34`/`$35` espelham `StoreImmediateToHl` (1.4b), não `AluFromHl` (1.6a).
+- `INC`/`DEC r16` não tocam flag nenhuma, e `fetch` escreve a metade baixa.
 
 ## Bloqueios
 
@@ -205,3 +206,4 @@ Numeração é estável e citada no código: **nunca renumere**.
 46. **O operando de teste tem de distinguir os casos que o teste alega cobrir —
 47. **Redundância acidental (12 cópias do mesmo controle) escondia um buraco
 48. **Uma flag que fica intocada não aparece lendo o `diff` — só testando os
+49. **Um valor de "F sujo" único pode coincidir, por acidente, com o que uma

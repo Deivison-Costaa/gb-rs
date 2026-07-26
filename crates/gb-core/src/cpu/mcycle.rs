@@ -185,6 +185,11 @@ const INC_DEC_R8_MASK: u8 = 0b1100_0111;
 const INC_R8_PATTERN: u8 = 0b0000_0100;
 const DEC_R8_PATTERN: u8 = 0b0000_0101;
 
+// `00 rr 0011`/`00 rr 1011`: as quatro colunas de flag em `-` (1.7a).
+const INC_DEC_R16_MASK: u8 = 0b1100_1111;
+const INC_R16_PATTERN: u8 = 0b0000_0011;
+const DEC_R16_PATTERN: u8 = 0b0000_1011;
+
 const HIGH_PAGE: u16 = 0xFF00;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -261,6 +266,8 @@ enum State {
     AluFromHl(AluOp),
     AluImmediate(AluOp),
     IncDecHl(IncDecOp, IncDecHl),
+    // A metade baixa já foi escrita no fetch; falta o `internal` da metade alta.
+    IncDecR16(R16),
     Locked(Lockup),
 }
 
@@ -312,6 +319,7 @@ impl Cpu {
             State::AluFromHl(op) => self.alu_from_hl(bus, op),
             State::AluImmediate(op) => self.alu_immediate(bus, op),
             State::IncDecHl(op, phase) => self.inc_dec_hl(bus, op, phase),
+            State::IncDecR16(target) => self.finish_inc_dec_r16(target),
             State::Locked(lockup) => State::Locked(lockup),
         };
     }
@@ -338,7 +346,8 @@ impl Cpu {
             | State::StoreStackPointer(_)
             | State::AluFromHl(_)
             | State::AluImmediate(_)
-            | State::IncDecHl(..) => None,
+            | State::IncDecHl(..)
+            | State::IncDecR16(_) => None,
         }
     }
 
@@ -406,6 +415,12 @@ impl Cpu {
             }
             _ if opcode & INC_DEC_R8_MASK == DEC_R8_PATTERN => {
                 self.inc_dec_r8(IncDecOp::Decrement, opcode)
+            }
+            _ if opcode & INC_DEC_R16_MASK == INC_R16_PATTERN => {
+                self.inc_dec_r16(IncDecOp::Increment, opcode)
+            }
+            _ if opcode & INC_DEC_R16_MASK == DEC_R16_PATTERN => {
+                self.inc_dec_r16(IncDecOp::Decrement, opcode)
             }
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
                 State::Locked(Lockup::IllegalOpcode(opcode))
@@ -530,6 +545,15 @@ impl Cpu {
                 self.write_r16_high(target, byte);
                 State::Fetch
             }
+        }
+    }
+
+    const fn read_r16(&self, which: R16) -> u16 {
+        match which {
+            R16::Bc => self.registers.bc(),
+            R16::De => self.registers.de(),
+            R16::Hl => self.registers.hl(),
+            R16::Sp => self.registers.sp,
         }
     }
 
@@ -728,6 +752,31 @@ impl Cpu {
                 State::Fetch
             }
         }
+    }
+
+    // Nenhuma flag: as quatro colunas do grupo são `-`. `fetch` computa o par
+    // inteiro e escreve a metade baixa; `internal` escreve a alta — a coluna
+    // anota "Probably writes to X here" em cada passo, sem seta.
+    fn inc_dec_r16(&mut self, op: IncDecOp, opcode: u8) -> State {
+        let target = R16::from_opcode(opcode);
+        let value = self.read_r16(target);
+        let result = match op {
+            IncDecOp::Increment => value.wrapping_add(1),
+            IncDecOp::Decrement => value.wrapping_sub(1),
+        };
+        self.latch = result;
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "grava só a metade baixa do par calculado"
+        )]
+        self.write_r16_low(target, result as u8);
+        State::IncDecR16(target)
+    }
+
+    fn finish_inc_dec_r16(&mut self, target: R16) -> State {
+        let [high, _] = self.latch.to_be_bytes();
+        self.write_r16_high(target, high);
+        State::Fetch
     }
 
     const fn copy_hl_to_stack_pointer(&mut self) -> State {

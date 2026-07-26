@@ -990,3 +990,27 @@
     nesse lado e erra no outro — a mesma forma da nota 46, agora sobre uma
     flag que devia ficar parada em vez de um operando que devia distinguir
     operações.
+
+
+49. **Um valor de "F sujo" único pode coincidir, por acidente, com o que uma
+    mutação plausível produziria — e aí o controle não controla nada.**
+    `INC`/`DEC r16` (1.7a) chegou como código órfão de duas sessões mortas sem
+    relato; o teste que confere "nenhuma flag muda" sujava `F` com um valor
+    só, `DIRTY_F = 0b1010_0101`, antes de rodar o opcode. Esse byte já tem o
+    bit `Z` (bit 7) ligado. A bateria de mutação obrigatória do passo 6
+    acrescentou `set_flag(Flag::Z, true)` quando o resultado do `INC`/`DEC`
+    dava `0x0000` — o engano mais plausível que existe, porque é exatamente a
+    regra de `Z` que `INC r8` (1.6e) usa, só que ela não vale para o par de
+    16 bits. O mutante **não** derrubou nenhum teste: forçar um bit que já
+    estava em `1` não muda o byte observado, e o `assert_eq!` comparando `F`
+    inteiro contra `DIRTY_F` não tem como perceber a diferença.
+
+    A mesma classe de não-controle da nota 29/47, agora num valor de teste em
+    vez de numa lista de opcodes: um único "sujo" cobre só a metade das
+    mutações possíveis por bit — a metade que força o bit para o lado que ele
+    já não estava. A correção foi trocar o valor único por dois extremos,
+    `ALL_FLAGS_SET = 0b1111_0000` e `ALL_FLAGS_CLEAR = 0b0000_1111`, e rodar
+    o teste inteiro (as quatro flags, INC e DEC, os quatro pares) sob as duas
+    polaridades. Qualquer mutação que force um bit de flag para `0` ou para
+    `1`, em qualquer direção, agora tem uma das duas rodadas partindo do lado
+    oposto — e não tem como se esconder.

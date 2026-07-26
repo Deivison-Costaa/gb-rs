@@ -446,12 +446,15 @@ fn the_block_this_item_decodes_is_exactly_the_eight_opcodes_of_00_ddd_110() {
         cpu.step(&mut bus);
 
         // Os blocos já decodificados: `NOP` e `JP u16` (1.3), o `01 ddd sss`
-        // sem o `$76` (1.4a), o `00 ddd 110` inteiro (este item) e o
-        // `00 mm x010` (`$02 $0A $12 $1A $22 $2A $32 $3A`, o 1.4c).
+        // sem o `$76` (1.4a), o `00 ddd 110` inteiro (este item), o
+        // `00 mm x010` (`$02 $0A $12 $1A $22 $2A $32 $3A`, o 1.4c) e os seis
+        // do 1.4d (`$E0 $E2 $EA $F0 $F2 $FA`) — estes um a um, porque não há
+        // máscara que os pegue sem levar `$E8`/`$F8` (o 1.7) junto.
         let previously_decoded = opcode == 0x00
             || opcode == 0xC3
             || ((0x40..=0x7F).contains(&opcode) && opcode != 0x76)
-            || opcode & 0b1100_0111 == 0b0000_0010;
+            || opcode & 0b1100_0111 == 0b0000_0010
+            || matches!(opcode, 0xE0 | 0xE2 | 0xEA | 0xF0 | 0xF2 | 0xFA);
         let in_block = opcode & 0b1100_0111 == 0b0000_0110;
 
         if in_block {

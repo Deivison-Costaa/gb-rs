@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0016 — o indireto por par de registradores ([doc](docs/iterations/0016-cpu-ld-r16mem.md)). Fecha o **1.4c**: os oito opcodes `r16mem` (`$02 $0A $12 $1A $22 $2A $32 $3A`), 2 M-cycles cada, e o primeiro operando do projeto que **modifica** o registrador que usou como endereço. Um erro de memória, e é a **terceira iteração seguida a errar em qual M-cycle o efeito cai** — desta vez adiantando o `HL±` para o fetch. A nota 30 previu o caso com todas as letras e a suíte escrita a partir dela quase não o honrou: **10 dos 11 testes passam contra a versão errada**. Das três armadilhas que a 0015 anotou, doeu a (b); a (a) estava certa de memória e a **(c) não existe** — `HL` não é memória mapeada, então as duas ordens são indistinguíveis.
-**Próxima tarefa:** ROADMAP 1.4d — endereço absoluto e a página `$FF00`: `LD (u16),A` / `LD A,(u16)` (`$EA $FA`), `LD (FF00+u8),A` / `LD A,(FF00+u8)` (`$E0 $F0`) e `LD (FF00+C),A` / `LD A,(FF00+C)` (`$E2 $F2`) — 6 opcodes, e **é aqui que a tabela de micro-operações se decide** (ver a invariante correspondente: o 1.4c não trouxe forma nova, então a decisão continua adiada até haver as formas do 1.4d). Spec: `docs/reference/03-opcodes.md` (linhas `E0 E2 EA F0 F2 FA`) e `02-cpu.md` § Block 3. **O que já está pronto:** o `fetch` tem três braços com guarda de máscara, `latch` guarda operando de 16 bits entre M-cycles (o `JP u16` monta os dois bytes lá), e `State` cresce por variante. **As três formas, lidas da tabela e não da intuição** (linhas 272–298 do `03-opcodes.md`): `$E2`/`$F2` são 1 byte e **2** M-cycles (`fetch → write(A->(FF00+C))`); `$E0`/`$F0` são 2 bytes e **3** (`fetch → read(u8) → write(A->(FF00+u8))`); `$EA`/`$FA` são 3 bytes e **4** (`fetch → read(u16:lower) → read(u16:upper) → write(A->(u16))`). **Três armadilhas a antecipar:** (a) que `$E2` custe um M-cycle a mais por o endereço ser calculado — não custa, cálculo não aparece na coluna, e as três formas diferem só em quantos bytes de operando leem; (b) `$EA`/`$FA` são o primeiro operando de dois bytes desde o `JP u16` — little-endian, e o `latch` já tem o idioma, mas ali o quarto M-cycle é `internal` e aqui é o **acesso**, o que é exatamente o tipo de diferença que as 0014–0016 erraram três vezes; (c) os seis **não** são um bloco de bits regular como os três sub-itens anteriores — são três pares, e o que separa cada par é o bit 4 (`$Ex` escreve, `$Fx` lê); não há uma máscara só, então o controle negativo muda de desenho.
+**Última iteração concluída:** 0017 — endereço absoluto e a página `$FF00` ([doc](docs/iterations/0017-cpu-ld-absolute-ff00.md)). Fecha o **1.4d** e com ele o grupo `x8/lsm` inteiro (85 opcodes): `$EA $FA` (3 bytes, 4 M-cycles), `$E0 $F0` (2 bytes, 3) e `$E2 $F2` (**1** byte, 2 — `C` é o operando e não há byte a buscar, o que as tabelas antigas erram). **A tabela de micro-operações se decidiu, e a resposta é *não***: `State` cresce por variante de forma, e o que se generalizou foi só o último passo — `Cpu::access`, compartilhado pelas três formas, a primeira função de M-cycle que serve a instruções diferentes. **A iteração sobreviveu ao agente:** a sessão de Claude Code que a começou morreu no meio do RED→GREEN com a árvore suja; uma sessão de Kimi K3 (OpenCode) retomou, e o que a salvou foi os erros #1 e #2 estarem **documentados nos comentários do código**. O único vermelho encontrado era do arnês (laço de 4 passos fixos para instruções de 2/3/4 M-cycles — quarta categoria de erro do projeto, e a primeira que não é de memória: **erro de medição**). Ver nota 33.
+**Próxima tarefa:** ROADMAP 1.5 — loads de 16-bit + stack (`PUSH`/`POP`). Spec: `docs/reference/03-opcodes.md` (o grupo `x16/lsm`) e `02-cpu.md`. **O que muda de forma em relação ao 1.4:** `PUSH`/`POP` fazem **dois** acessos com `SP` modificado **entre** eles — o segundo operando do projeto (depois do `HL±` do 1.4c) que é registrador e endereço ao mesmo tempo, agora decrementado/incrementado **no meio** da instrução. A regra prática da nota 32 vale dobrada: asserção depois de **cada** M-cycle, e um teste que observe `SP` e a memória entre os dois acessos. `POP AF` esbarra na decisão do 1.1 de **não** mascarar o nibble baixo de `F` — a previsão falsificável continua de pé: se a máscara for necessária, quem cobra é a blargg `cpu_instrs/01-special` no 1.13.
 **Marco atual:** M1 — CPU (sem gráficos)
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -35,7 +35,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **177** (eram 166 antes da 0016). Este número não é o placar
+Testes do workspace: **196** (eram 177 antes da 0017). Este número não é o placar
 — ele mede o que o projeto afirma sobre si mesmo, não o que o hardware cobra.
 
 ## Invariantes já estabelecidas
@@ -436,6 +436,20 @@ Testes do workspace: **177** (eram 166 antes da 0016). Este número não é o pl
   usam; o decodificador usa `0b1100_1111` com dois padrões, porque ele precisa
   da **direção**, que mora no bit 3 e que a máscara de 7 bits apaga. Unificar as
   duas colapsaria `LD (BC),A` e `LD A,(BC)` na mesma instrução.
+
+- **Os seis do 1.4d são reconhecidos um a um, sem máscara — e isso fecha o
+  `x8/lsm`.** Não há máscara que pegue `$E0`, `$E2` e `$EA` sem levar `$E8`
+  (`ADD SP,i8`) e `$F8` (`LD HL,SP+i8`), que são o 1.7: os bits constantes dos
+  seis deixariam passar dezesseis opcodes. O `fetch` tem seis braços literais e
+  o controle negativo trava os seis exatos na varredura dos 256. **A "tabela de
+  micro-operações" se decidiu contra si mesma:** quatro sub-itens esperando
+  dados, e o desenho escolhido é `State` por variante de forma + **uma** função
+  compartilhada, `Cpu::access(bus, direction, address)` — o último passo das
+  três formas do 1.4d, e a primeira função de M-cycle do projeto que serve a
+  instruções diferentes. A abstração nasceu onde a repetição existia, não onde
+  se apostava: quatro linhas, e não um `enum MicroOp`. O 1.5 (`PUSH`/`POP`:
+  dois acessos com `SP` modificado no meio) e o 1.6 (ALU: efeito em flags) são
+  os próximos a testar a decisão.
 
 ## Bloqueios
 
@@ -1043,3 +1057,40 @@ contorno previsto no prompt de bootstrap.
     **depois de cada uma**. Se a suíte tem uma asserção por M-cycle, ela mede
     timing; se tem asserções antes e depois, ela mede resultado — e a diferença
     não aparece na contagem de testes nem na cobertura.
+
+33. **Troca de motorista: a partir da 0018, quem itera é o Kimi K3 (OpenCode),
+    e a 0017 foi a transição medida ao vivo.** O `scripts/loop.sh` chamava
+    `claude -p`; passou a chamar `opencode run -m opencode-go/kimi-k3`. O que
+    **não** mudou: `CLAUDE.md` (o OpenCode o lê como fallback nativo — **não
+    criar `AGENTS.md`**, que o sobrescreveria), a skill `.claude/skills/iterate/`
+    (descoberta nativa pelo OpenCode), `gh`, CI, proteção de branch, e cada
+    iteração continua sendo um processo novo com contexto zerado. O que mudou:
+    as métricas vêm de `--format json` (eventos `step_finish`: `cost` é
+    **estimativa** de tabela models.dev × tokens; os **tokens** são a medição
+    real — a janela de 5h do plano é server-side e opaca, o loop detecta o
+    esgotamento pela falha do provider e para), e `logs/metrics.csv` ganhou a
+    coluna `model` para demarcar o regime — **misturar custos claude/kimi sem
+    rótulo envenenaria o gráfico 8.2**. O freio `--max-turns 150` não existe no
+    OpenCode; quem freia é `timeout` por iteração.
+
+    **A 0017 virou o caso de estudo da transição sem ninguém ter planejado:** a
+    sessão de Claude morreu no meio do RED→GREEN, e o que sobreviveu foram os
+    artefatos — código, testes e os erros de memória documentados **nos
+    comentários**. O que morreu: duração, custo, contagem de tentativas e
+    qualquer erro corrigido em silêncio antes dos comentários. É a tese do
+    projeto vista do avesso: o que não vai para o artefato, vai para o ralo.
+    O erro #3 da 0017 é também a **quarta categoria de erro** do projeto —
+    depois de flags, timing e endereçamento de memória, o **erro de medição**:
+    o arnês que reprova o código certo (laço de passo fixo para instruções de
+    durações diferentes; conserto: `m_cycles_of(opcode)`, e o corolário é que
+    laço "genérico" de teste é onde o erro de medição gosta de morar).
+
+    **Revisão cruzada invertida:** o `review.sh` nasceu com o OpenCode de
+    revisor e o Claude de autor. Invertidos os papéis, o padrão passou a ser
+    `opencode run -m opencode-go/deepseek-v4-pro` (outro modelo, mesma cota);
+    `REVIEWER_CMD="claude -p"` devolve a revisão ao Claude se houver cota.
+    Continua desligada no loop (`REVIEW=0`) por decisão do operador. E o
+    motivo histórico registrado no `loop.sh` para não revisar em lote —
+    "revisão suja a árvore" — **estava errado**: `docs/reviews/` está no
+    `.gitignore` desde a 0004 e a guarda de árvore limpa não a vê. O custo de
+    tempo/crédito por iteração é o motivo que resta, e ele é real.

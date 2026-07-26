@@ -479,11 +479,14 @@ fn opcode_76_is_halt_and_not_a_load_from_hl_into_hl() {
 /// - `$00` (`NOP`) e `$C3` (`JP u16`) — 1.3.
 /// - `00 ddd 110` (`$06 $0E $16 $1E $26 $2E $36 $3E`) — 1.4b.
 /// - `00 mm x010` (`$02 $0A $12 $1A $22 $2A $32 $3A`) — 1.4c.
+/// - `$E0 $E2 $EA $F0 $F2 $FA` — 1.4d. Um a um, como no decodificador: não há
+///   máscara que pegue os seis sem levar `$E8`/`$F8` (o 1.7) junto.
 fn decoded_elsewhere(opcode: u8) -> bool {
     opcode == 0x00
         || opcode == 0xC3
         || opcode & 0b1100_0111 == 0b0000_0110
         || opcode & 0b1100_0111 == 0b0000_0010
+        || matches!(opcode, 0xE0 | 0xE2 | 0xEA | 0xF0 | 0xF2 | 0xFA)
 }
 
 #[test]

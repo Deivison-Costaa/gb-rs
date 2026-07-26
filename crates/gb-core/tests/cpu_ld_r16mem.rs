@@ -566,11 +566,14 @@ fn no_load_or_store_through_a_pair_touches_the_flags() {
 /// - `$00` (`NOP`) e `$C3` (`JP u16`) — 1.3.
 /// - `01 ddd sss` sem o `$76` (`$40`–`$7F`) — 1.4a.
 /// - `00 ddd 110` (`$06 $0E $16 $1E $26 $2E $36 $3E`) — 1.4b.
+/// - `$E0 $E2 $EA $F0 $F2 $FA` — 1.4d. Um a um, como no decodificador: não há
+///   máscara que pegue os seis sem levar `$E8`/`$F8` (o 1.7) junto.
 fn decoded_elsewhere(opcode: u8) -> bool {
     opcode == 0x00
         || opcode == 0xC3
         || ((0x40..=0x7F).contains(&opcode) && opcode != 0x76)
         || opcode & 0b1100_0111 == 0b0000_0110
+        || matches!(opcode, 0xE0 | 0xE2 | 0xEA | 0xF0 | 0xF2 | 0xFA)
 }
 
 #[test]

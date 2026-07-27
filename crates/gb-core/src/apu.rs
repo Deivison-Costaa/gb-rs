@@ -48,6 +48,7 @@ struct PulseChannel {
     duty_step: u8,
     envelope_volume: u8,
     envelope_timer: u8,
+    length_timer: u16,
 }
 
 impl PulseChannel {
@@ -58,6 +59,7 @@ impl PulseChannel {
             duty_step: 0,
             envelope_volume: 0,
             envelope_timer: 0,
+            length_timer: 0,
         }
     }
 
@@ -138,6 +140,7 @@ struct Channel3 {
     freq_timer: u16,
     sample_index: u8,
     last_sample_buffer: u8,
+    length_timer: u16,
 }
 
 impl Channel3 {
@@ -147,6 +150,7 @@ impl Channel3 {
             freq_timer: 0,
             sample_index: 1,
             last_sample_buffer: 0,
+            length_timer: 0,
         }
     }
 
@@ -191,6 +195,7 @@ struct Channel4 {
     freq_timer: u16,
     envelope_volume: u8,
     envelope_timer: u8,
+    length_timer: u16,
 }
 
 impl Channel4 {
@@ -201,6 +206,7 @@ impl Channel4 {
             freq_timer: 0,
             envelope_volume: 0,
             envelope_timer: 0,
+            length_timer: 0,
         }
     }
 
@@ -532,22 +538,34 @@ impl Apu {
     pub(crate) fn write(&mut self, addr: u16, value: u8) {
         match addr {
             NR10_ADDR => self.nr10 = value,
-            NR11_ADDR => self.nr11 = value,
+            NR11_ADDR => {
+                self.nr11 = value;
+                self.ch1.pulse.length_timer = 64u16.saturating_sub((value & 0x3F) as u16);
+            }
             NR12_ADDR => self.nr12 = value,
             NR13_ADDR => self.nr13 = value,
             NR14_ADDR => {
                 self.nr14 = value;
                 if value & NRX4_TRIGGER_BIT != 0 {
+                    if self.ch1.pulse.length_timer == 0 {
+                        self.ch1.pulse.length_timer = 64;
+                    }
                     self.ch1.pulse.trigger(self.nr12, self.nr13, self.nr14);
                     self.trigger_ch1_sweep();
                 }
             }
-            NR21_ADDR => self.nr21 = value,
+            NR21_ADDR => {
+                self.nr21 = value;
+                self.ch2.length_timer = 64u16.saturating_sub((value & 0x3F) as u16);
+            }
             NR22_ADDR => self.nr22 = value,
             NR23_ADDR => self.nr23 = value,
             NR24_ADDR => {
                 self.nr24 = value;
                 if value & NRX4_TRIGGER_BIT != 0 {
+                    if self.ch2.length_timer == 0 {
+                        self.ch2.length_timer = 64;
+                    }
                     self.ch2.trigger(self.nr22, self.nr23, self.nr24);
                 }
             }
@@ -557,21 +575,33 @@ impl Apu {
                     self.ch3.enabled = false;
                 }
             }
-            NR31_ADDR => self.nr31 = value,
+            NR31_ADDR => {
+                self.nr31 = value;
+                self.ch3.length_timer = 256u16.saturating_sub(value as u16);
+            }
             NR32_ADDR => self.nr32 = value,
             NR33_ADDR => self.nr33 = value,
             NR34_ADDR => {
                 self.nr34 = value;
                 if value & NRX4_TRIGGER_BIT != 0 {
+                    if self.ch3.length_timer == 0 {
+                        self.ch3.length_timer = 256;
+                    }
                     self.trigger_ch3();
                 }
             }
-            NR41_ADDR => self.nr41 = value,
+            NR41_ADDR => {
+                self.nr41 = value;
+                self.ch4.length_timer = 64u16.saturating_sub((value & 0x3F) as u16);
+            }
             NR42_ADDR => self.nr42 = value,
             NR43_ADDR => self.nr43 = value,
             NR44_ADDR => {
                 self.nr44 = value;
                 if value & NRX4_TRIGGER_BIT != 0 {
+                    if self.ch4.length_timer == 0 {
+                        self.ch4.length_timer = 64;
+                    }
                     self.ch4.trigger(self.nr42);
                 }
             }
@@ -692,6 +722,33 @@ impl Apu {
         }
     }
 
+    fn tick_length_timers(&mut self) {
+        if self.ch1.pulse.length_timer > 0 && self.nr14 & 0x40 != 0 {
+            self.ch1.pulse.length_timer -= 1;
+            if self.ch1.pulse.length_timer == 0 {
+                self.ch1.pulse.enabled = false;
+            }
+        }
+        if self.ch2.length_timer > 0 && self.nr24 & 0x40 != 0 {
+            self.ch2.length_timer -= 1;
+            if self.ch2.length_timer == 0 {
+                self.ch2.enabled = false;
+            }
+        }
+        if self.ch3.length_timer > 0 && self.nr34 & 0x40 != 0 {
+            self.ch3.length_timer -= 1;
+            if self.ch3.length_timer == 0 {
+                self.ch3.enabled = false;
+            }
+        }
+        if self.ch4.length_timer > 0 && self.nr44 & 0x40 != 0 {
+            self.ch4.length_timer -= 1;
+            if self.ch4.length_timer == 0 {
+                self.ch4.enabled = false;
+            }
+        }
+    }
+
     pub(crate) fn tick(&mut self) {
         self.div_apu = self.div_apu.wrapping_add(4);
 
@@ -720,6 +777,9 @@ impl Apu {
 
             if powered {
                 let step = self.frame_sequencer_step;
+                if step == 0 || step == 2 || step == 4 || step == 6 {
+                    self.tick_length_timers();
+                }
                 if step == 2 || step == 6 {
                     if self.ch1.pulse.enabled {
                         self.ch1.pulse.tick_envelope(self.nr12);
@@ -824,6 +884,10 @@ impl Apu {
         self.ch1.pulse.enabled
     }
 
+    pub(crate) const fn ch1_length_timer_internal(&self) -> u16 {
+        self.ch1.pulse.length_timer
+    }
+
     pub(crate) const fn ch1_sweep_pace(&self) -> u8 {
         (self.nr10 >> 4) & 0x07
     }
@@ -884,6 +948,10 @@ impl Apu {
         self.ch2.enabled
     }
 
+    pub(crate) const fn ch2_length_timer_internal(&self) -> u16 {
+        self.ch2.length_timer
+    }
+
     pub(crate) const fn ch2_duty_pattern(&self) -> u8 {
         self.nr21 >> 6
     }
@@ -920,6 +988,10 @@ impl Apu {
         self.ch3.enabled
     }
 
+    pub(crate) const fn ch3_length_timer_internal(&self) -> u16 {
+        self.ch3.length_timer
+    }
+
     pub(crate) const fn ch3_dac_enabled(&self) -> bool {
         self.nr30 & 0x80 != 0
     }
@@ -946,6 +1018,10 @@ impl Apu {
 
     pub(crate) const fn ch4_enabled(&self) -> bool {
         self.ch4.enabled
+    }
+
+    pub(crate) const fn ch4_length_timer_internal(&self) -> u16 {
+        self.ch4.length_timer
     }
 
     pub(crate) const fn ch4_dac_enabled(&self) -> bool {

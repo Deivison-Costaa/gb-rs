@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0079 — Saída de áudio via cpal no gb-desktop ([doc](docs/iterations/0079-cpal-audio-output.md)). `open_audio_stream()` cria `cpal::Stream` com callback que consome de um `Arc<Mutex<VecDeque<(f32, f32)>>>`. `drain_bus_audio()` drena amostras do `Bus` para o buffer compartilhado ao fim de cada frame (~803 amostras/frame). Sem dispositivo de áudio, roda sem som (não é erro fatal). 5 testes novos (886 total). Bateria: **3/3 pegos**, 1/1 controles verdes.
-**Próxima tarefa:** ROADMAP **6.8** (blargg `dmg_sound` 01 a 12). As ROMs de som da blargg já estão em `tests/roms/dmg_sound/`. O `gb-cli run` precisa ser capaz de rodá-las e reportar o resultado pela porta serial. Verificar se as ROMs passam ou se há bugs nos canais de áudio revelados pelos testes. Notas relevantes: nenhuma nova — as ROMs de som testam canais individuais (01-registers, 02-len ctr, 03-trigger, etc.) e a agregada. O `scoreboard.sh` já as executa (todas `crash` atualmente).
+**Última iteração concluída:** 0080 — APU length counter (6.8a) ([doc](docs/iterations/0080-apu-length-counter.md)). Implementa carregamento via NRx1 (`64 - (v & 0x3F)` para CH1/2/4, `256 - v` para CH3), recarga por trigger quando expirado, decremento a 256 Hz (passos 0/2/4/6 do frame sequencer), e desligamento do canal ao chegar a zero. 13 testes novos (899 total). Bateria: **4/4 pegos**, 1/1 controles verdes. As 13 ROMs dmg_sound continuam crash (precisam de DAC-off trigger protection e envelope timing).
+**Próxima tarefa:** ROADMAP **6.8b** (extra length clocking + obscure behavior). O spec (`07-apu.md` § Obscure Behavior) descreve dois casos: (1) escrever NRx4 quando o próximo passo do DIV-APU não é um passo de length clock, com length timer previamente desabilitado e agora habilitado e não-zero, decrementa o contador imediatamente; (2) trigger quando o próximo passo não é de length clock e o contador estava em zero, carrega com 63 (não 64) ou 255 (não 256). O caso (1) quebra Prehistorik Man. Notas relevantes: nenhuma nova.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **886** (eram 881 na 0078 — 5 novos em `gb-desktop`).
+Testes do workspace: **899** (eram 886 na 0079 — 13 novos em `gb-core`).
 
 ## Invariantes
 

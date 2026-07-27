@@ -322,6 +322,11 @@ impl Bus {
     }
 
     #[must_use]
+    pub fn ch1_length_timer_internal(&self) -> u16 {
+        self.apu.ch1_length_timer_internal()
+    }
+
+    #[must_use]
     pub fn ch1_sweep_pace(&self) -> u8 {
         self.apu.ch1_sweep_pace()
     }
@@ -397,6 +402,11 @@ impl Bus {
     }
 
     #[must_use]
+    pub fn ch2_length_timer_internal(&self) -> u16 {
+        self.apu.ch2_length_timer_internal()
+    }
+
+    #[must_use]
     pub fn ch2_duty_pattern(&self) -> u8 {
         self.apu.ch2_duty_pattern()
     }
@@ -442,6 +452,11 @@ impl Bus {
     }
 
     #[must_use]
+    pub fn ch3_length_timer_internal(&self) -> u16 {
+        self.apu.ch3_length_timer_internal()
+    }
+
+    #[must_use]
     pub fn ch3_dac_enabled(&self) -> bool {
         self.apu.ch3_dac_enabled()
     }
@@ -474,6 +489,11 @@ impl Bus {
     #[must_use]
     pub fn ch4_enabled(&self) -> bool {
         self.apu.ch4_enabled()
+    }
+
+    #[must_use]
+    pub fn ch4_length_timer_internal(&self) -> u16 {
+        self.apu.ch4_length_timer_internal()
     }
 
     #[must_use]

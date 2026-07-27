@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0081 — APU obscure behavior (6.8b) ([doc](docs/iterations/0081-apu-obscure-behavior.md)). Implementa extra length clocking no NRx4 (decremento imediato quando bit6 transiciona 0→1 com next=NON-length step e length≠0; desliga canal se chegar a 0 sem trigger) e trigger obscure (recarga com 63/255 em vez de 64/256 quando next=NON-length). 16 testes novos (915 total). Bateria: **4/4 pegos**, 2/2 controles verdes. As 13 ROMs dmg_sound continuam crash.
-**Próxima tarefa:** ROADMAP **6.8c** (fix envelope timing: 64 Hz, step 7 only, not 128 Hz steps 2,6). Notas relevantes: nenhuma nova. Atenção: o init NRx4=0xBF (bit6=0) faz a primeira escrita com bit6=1 disparar o Case 1 — testes que usam trigger direto com bit6=1 devem posicionar o frame sequencer em step ímpar (next par = IS length clock) para evitar o obscure behavior.
+**Última iteração concluída:** 0082 — envelope timing (6.8c) ([doc](docs/iterations/0082-envelope-timing.md)). Move o envelope de 128 Hz (passos 2 e 6) para 64 Hz (passo 7 somente), conforme a tabela § DIV-APU (rate 8). Separa o bloco `if` do envelope do bloco do sweep (que permanece em 128 Hz, rate 4). 929 testes (14 atualizados). Bateria: **3/3 pegos**, 2/2 controles verdes. Scoreboard sem regressão.
+**Próxima tarefa:** ROADMAP **6.8d** (DAC-off trigger protection: NRx4 MSB não deve ligar o canal quando DAC está desligado). Notas relevantes: nenhuma nova. Atenção: o DAC está desligado quando `[NRx2] & $F8 == 0` (CH1/CH2/CH4) ou `NR30 bit 7 == 0` (CH3). A spec (§ DACs em `07-apu.md` linha 769) diz que se o DAC está desligado, o canal não liga — mesmo com trigger via NRx4 bit 7. Hoje o trigger liga o canal sem verificar o estado do DAC (campos `enabled = true` são setados incondicionalmente no `write_nrx4`).
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **915** (eram 899 na 0080 — 16 novos em `gb-core`).
+Testes do workspace: **929** (eram 915 na 0081 — 14 atualizados em `gb-core`).
 
 ## Invariantes
 

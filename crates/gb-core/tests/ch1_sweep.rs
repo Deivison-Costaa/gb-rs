@@ -377,7 +377,7 @@ fn freq_timer_do_ch1_avanca_4_por_m_cycle_e_sofre_overflow() {
 }
 
 #[test]
-fn envelope_do_ch1_carrega_volume_do_trigger_e_diminui_no_passo_2() {
+fn envelope_do_ch1_carrega_volume_do_trigger_e_diminui_no_passo_7() {
     let (mut cpu, mut bus) = machine(&[]);
 
     bus.write(NR12, 0xF1);
@@ -386,8 +386,8 @@ fn envelope_do_ch1_carrega_volume_do_trigger_e_diminui_no_passo_2() {
 
     assert_eq!(bus.ch1_envelope_volume(), 15);
 
-    step_n(&mut cpu, &mut bus, 4096);
-    assert_eq!(bus.apu_frame_sequencer_step(), 2);
+    step_n(&mut cpu, &mut bus, 14336);
+    assert_eq!(bus.apu_frame_sequencer_step(), 7);
     assert_eq!(bus.ch1_envelope_volume(), 14);
 }
 

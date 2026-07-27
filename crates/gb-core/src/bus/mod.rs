@@ -112,7 +112,7 @@ impl Bus {
             Region::IoRegisters => match addr {
                 DIV_ADDR => (self.sys_counter >> 8) as u8,
                 SB_ADDR | SC_ADDR => self.serial.read(addr),
-                0xFF40 | 0xFF41 | 0xFF44 | 0xFF45 => self.ppu.read(addr),
+                0xFF40..=0xFF4B => self.ppu.read(addr),
                 _ => {
                     let index = io_index(addr);
                     if boot::IO_HAS_OWNER[index] {
@@ -165,7 +165,7 @@ impl Bus {
                     self.prev_and_result = new_and;
                 }
                 SB_ADDR | SC_ADDR => self.serial.write(addr, value),
-                0xFF40 | 0xFF41 | 0xFF44 | 0xFF45 => self.ppu.write(addr, value),
+                0xFF40..=0xFF4B => self.ppu.write(addr, value),
                 _ => {
                     let index = io_index(addr);
                     if boot::IO_HAS_OWNER[index] {

@@ -57,8 +57,8 @@ fn apu_registers_tem_os_valores_do_hand_off_da_boot_rom() {
     );
     assert_eq!(
         bus.read(NR52),
-        0xF1,
-        "NR52 ($FF26) = $F1 no hand-off da boot ROM"
+        0xF0,
+        "NR52 ($FF26) bits 3-0 refletem estado real dos canais — sem trigger, todos 0"
     );
 }
 

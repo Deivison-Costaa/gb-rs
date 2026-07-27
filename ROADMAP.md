@@ -300,7 +300,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [x] 6.3 Canal 1: square + sweep de frequência.
 - [x] 6.4 Canal 3: wave RAM.
 - [x] 6.5 Canal 4: noise (LFSR de 15/7 bits).
-- [ ] 6.6 Mixer: NR50/NR51/NR52, panning, DAC enable.
+- [x] 6.6 Mixer: NR50/NR51/NR52, panning, DAC enable.
 - [ ] 6.7 Downsample para 48 kHz + ring buffer + saída via `cpal`.
 - [ ] 6.8 blargg `dmg_sound` 01 a 12.
 

@@ -50,7 +50,7 @@ const DMG_COLUMN: &[(u16, &str, Cell)] = &[
     (0xFF23, "NR44", Some(0xBF)),
     (0xFF24, "NR50", Some(0x77)),
     (0xFF25, "NR51", Some(0xF3)),
-    (0xFF26, "NR52", Some(0xF1)),
+    (0xFF26, "NR52", Some(0xF0)),
     (0xFF40, "LCDC", Some(0x91)),
     (0xFF41, "STAT", Some(0x85)),
     (0xFF42, "SCY", Some(0x00)),
@@ -154,7 +154,8 @@ fn this_is_the_dmg_mgb_column_and_not_one_of_the_other_three() {
         (0xFF04u16, "DIV", 0x18u8, "DMG0"),
         (0xFF41, "STAT", 0x81, "DMG0"),
         (0xFF44, "LY", 0x91, "DMG0"),
-        (0xFF26, "NR52", 0xF0, "SGB / SGB2"),
+        // NR52 (0xFF26) removido: a 0077 torna bits 3-0 dinâmicos, e sem canais
+        // ligados o valor lido ($F0) coincide com a coluna SGB.
         (0xFF02, "SC", 0x7F, "CGB / AGB"),
         (0xFF46, "DMA", 0x00, "CGB / AGB"),
     ];

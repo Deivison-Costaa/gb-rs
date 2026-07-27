@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0076 — APU: Canal 4 (noise) ([doc](docs/iterations/0076-ch4-noise.md)). `Channel4` com LFSR de 15/7 bits (NR43 bit 3), feedback = NOT(XOR) dos bits 0 e 1. NR41 (length timer 6 bits), NR42 (volume + envelope, igual CH1/CH2), NR43 (clock shift 7-4, LFSR width bit 3, divider 2-0 com divider=0 → 0.5), NR44 (trigger + length enable). Trigger reseta LFSR para 0. Envelope copiado de `PulseChannel::tick_envelope`. Shift ≥ 14 congela o canal. Frequência = 262144 / (divider × 2^shift) Hz, modelada com threshold no `tick_freq` que consome múltiplos clocks por M-cycle via `while`. 19 testes novos (847 total). Bateria: **4/4 pegos**, 1/1 controles verdes. Sem saída de áudio — só a máquina de estados.
-**Próxima tarefa:** ROADMAP **6.6** (Mixer: NR50/NR51/NR52, panning, DAC enable). Abrir `docs/reference/07-apu.md` § Audio Registers — NR50 (master volume left/right + VIN), NR51 (panning, 4 bits left + 4 bits right), NR52 (master on/off + status bits CH1-4 read-only). Os 4 canais já produzem output digital (volume) — o mixer soma e escala. NR50 bits 6-4 e 2-0: volume 0 → escala 1 (não mute), volume 7 → escala 8 (sem redução). NR51: 1 ativo, 0 inativo. A saída é estéreo (left/right), mas o ring buffer final é mono por ora. NR52 bit 7: power on/off (zera todos os registradores ao desligar, exceto wave RAM). Bits 3-0 são read-only e espelham `chX.enabled`. DAC enable: CH1/CH2 `NRx2 & $F8 != 0`, CH3 `NR30 bit 7`, CH4 `NR42 & $F8 != 0`. Canal com DAC desligado não emite som. Sem saída de áudio real — só a soma digital nos registradores.
+**Última iteração concluída:** 0077 — APU: Mixer (NR50/NR51/NR52) ([doc](docs/iterations/0077-mixer.md)). `mixer_sample()` retorna `(u16, u16)` — soma digital dos 4 canais com panning NR51 e master volume NR50 (volume `V` → escala `V+1`, nunca muta). `digital_output()` em PulseChannel (duty cycle × envelope), Channel3 (wave RAM nibble × output level 0/100/50/25%), Channel4 (LFSR bit 0 × envelope). NR52 bits 3-0 dinâmicos (refletem `chX.enabled`); power-off (`bit 7 = 0`) zera NR10–NR51 e recria canais, preservando wave RAM. 24 testes novos (871 total). Bateria: **4/4 pegos**, 2 sobreviventes analisados (DAC check inobservável via mixer), 1/1 controles verdes. Sem saída de áudio — só a soma digital.
+**Próxima tarefa:** ROADMAP **6.7** (Downsample para 48 kHz + ring buffer + saída via cpal). Abrir `docs/reference/07-apu.md` § Audio Details — a saída do mixer (`(left, right)` como `u16`) precisa ser convertida em amostras `f32` ou `i16` a 48 kHz. O APU roda a ~1 MHz (cada M-cycle = 4 T-cycles do master clock de ~4 MHz), então o downsample é ~87× (4.194.304 / 48.000). A abordagem comum: acumulador que soma as amostras do mixer a cada M-cycle e divide pelo número de M-cycles por amostra de saída. Ring buffer com `cpal` para output no `gb-desktop`. `gb-core` expõe o buffer; `gb-desktop` consome. O ring buffer deve ter tamanho fixo (~4096 amostras) e o consumidor (cpal) lê em bloco. Nota nova: o mixer_sample atual retorna `(u16, u16)` — o 6.7 vai consumir isso, possivelmente mudando a assinatura ou adicionando um acumulador.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **847** (eram 828 na 0075 — 19 novos em `ch4_noise.rs`).
+Testes do workspace: **871** (eram 847 na 0076 — 24 novos em `apu_mixer.rs`).
 
 ## Invariantes
 

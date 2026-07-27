@@ -285,7 +285,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 
 ## M5 — Mappers
 
-- [ ] 5.1 MBC2 (RAM embutida de 4 bits).
+- [x] 5.1 MBC2 (RAM embutida de 4 bits).
 - [ ] 5.2 MBC3 + RTC.
 - [ ] 5.3 MBC5.
 

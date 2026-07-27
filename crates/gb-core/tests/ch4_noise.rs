@@ -186,6 +186,7 @@ fn lfsr_avanca_com_clock_divider_1_e_shift_0() {
 fn lfsr_nao_avanca_com_shift_14() {
     let (mut cpu, mut bus) = machine(&[]);
 
+    bus.write(NR42, 0xF1);
     bus.write(NR43, 0xE0);
     bus.write(NR44, 0x80);
 
@@ -208,6 +209,7 @@ fn lfsr_nao_avanca_com_shift_14() {
 fn lfsr_nao_avanca_com_shift_15() {
     let (mut cpu, mut bus) = machine(&[]);
 
+    bus.write(NR42, 0xF1);
     bus.write(NR43, 0xF0);
     bus.write(NR44, 0x80);
 
@@ -385,15 +387,22 @@ fn lfsr_em_modo_15_bits_produz_sequencia_pseudoaleatoria() {
 
 #[test]
 fn trigger_define_freq_timer_em_zero() {
-    let (_cpu, bus) = machine(&[]);
-    let mut bus = bus;
+    let (mut cpu, mut bus) = machine(&[]);
 
-    bus.write(NR43, 0x01);
+    bus.write(NR42, 0xF1);
+    bus.write(NR43, 0x03);
     bus.write(NR44, 0x80);
 
+    step_n(&mut cpu, &mut bus, 100);
+    assert!(
+        bus.ch4_frequency_timer() > 0,
+        "freq_timer avança após o trigger com threshold=12 (400 mod 12 = 4)"
+    );
+
+    bus.write(NR44, 0x80);
     assert_eq!(
         bus.ch4_frequency_timer(),
         0,
-        "freq_timer começa em 0 após o trigger"
+        "freq_timer é resetado para 0 no re-trigger"
     );
 }

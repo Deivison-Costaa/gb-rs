@@ -3,9 +3,9 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0062 — Bloqueio VRAM/OAM por modo ([doc](docs/iterations/0062-vram-oam-blocking.md)). 11 testes novos em `bus_vram_oam_blocking.rs`. `Ppu::is_vram_accessible()`/`is_oam_accessible()` consultados por `Bus::read`/`write`: VRAM bloqueada em Mode 3, OAM bloqueada em Mode 2 e 3; leitura devolve OPEN_BUS ($FF), escrita é ignorada; PPU desligado (LCDC.7=0) libera ambos. Testes `bus_oam.rs` e `ppu_sprites.rs` adaptados para setup com PPU desligado. Bateria: **6/7 pegos, 1/1 controle verde** (M7 sobreviveu — guarda `lcdc & 0x80` é redundante com `current_mode()`). Placar de ROMs inalterado (17/121).
-**Iteração anterior:** 0061 — Sprites por scanline.
-**Próxima tarefa:** ROADMAP **3.7** — `dmg-acid2` passando + comparação de hash do framebuffer na CI. O M3 fecha com VRAM/OAM bloqueados e sprites. A ROM `dmg-acid2` testa renderização de precisão (BG, window, sprites, paletas, scrolling). Se o framebuffer coincidir com o hash de referência, o PPU está correto o bastante para o M4 (jogável). `2.4b` (`halt_bug` e `mem_timing-2`) pode ser reavaliado com o M3 completo.
+**Última iteração concluída:** 0063 — dmg-acid2 + comparação de hash do framebuffer na CI ([doc](docs/iterations/0063-dmg-acid2-hash.md)). Flag `--check-fb-hash` no `gb-cli run`: calcula SHA-256 do framebuffer (usando crate `sha2` em `gb-cli`, não em `gb-core`) e compara com hash esperado. Hash de referência extraído do PNG oficial (`dmg-acid2-dmg.png`, 160×144, modo L): `f844ea76...a32a458`. `scoreboard.sh` passa `--check-fb-hash` para ROMs da suíte `dmg-acid2`. 4 testes novos em `run_command.rs`. PPU passou de primeira — sem correções de renderização. Bateria: **3/3 pegos, 1/1 controle verde**. Placar: 18/121 (dmg-acid2 de 0/1 para 1/1).
+**Iteração anterior:** 0062 — Bloqueio VRAM/OAM por modo.
+**Próxima tarefa:** ROADMAP **4.1** — Joypad (P1/JOYP + interrupção). O M4 começa com input, e o joypad é o primeiro periférico de entrada. A spec está em `docs/reference/01-memory-map.md` (§ FF00 — P1/JOYP). O `Bus::read`/`write` do endereço `$FF00` precisa selecionar entre as linhas de direção (bits 5–4 de P1) e retornar os bits 3–0 conforme as teclas pressionadas. `2.4b` (`halt_bug` e `mem_timing-2`) pode ser reavaliado agora que o M3 está fechado — ver nota 54.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -31,11 +31,11 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | blargg oam_bug | 0 | 9 |
 | blargg interrupt_time | 0 | 1 |
 | blargg dmg_sound | 0 | 13 |
-| dmg-acid2 | 0 | 1 |
+| dmg-acid2 | 1 | 1 |
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **736** (eram 717 na 0061 — 11 novos em `bus_vram_oam_blocking.rs`).
+Testes do workspace: **740** (eram 736 na 0062 — 4 novos em `run_command.rs`).
 
 ## Invariantes
 

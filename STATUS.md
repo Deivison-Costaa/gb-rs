@@ -3,8 +3,24 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0084 — remaining fixes + final verification (6.8e) ([doc](docs/iterations/0084-remaining-fixes.md)). Corrige 3 testes falsos positivos do CH4 (`lfsr_nao_avanca_com_shift_14`, `lfsr_nao_avanca_com_shift_15`, `trigger_define_freq_timer_em_zero`) que passavam sem DAC ligado e nunca exercitavam a funcionalidade que alegavam testar. O teste `trigger_define_freq_timer_em_zero` foi fortalecido: agora avança o freq_timer, re-trigger e verifica reset para 0. Bateria: **2/3 pegos**, 2/2 controles verdes. Suíte `dmg_sound` em 0/13 — todas as 13 ROMs estouram 250M ciclos sem output. O placar não mudou (mudanças são só nos testes unitários).
-**Próxima tarefa:** ROADMAP **2.4b** (`halt_bug` e `mem_timing-2`). O item foi reavaliado em 26/07 e permaneceu bloqueado; o M3 fechou no 3.7, então o bloqueio expirou (ver linha 261 do ROADMAP). Notas relevantes: a ROM `halt_bug` estourou 250M ciclos na última execução do scoreboard (crash), e `mem_timing-2` (4 ROMs) também. Investigar se o bug do HALT está implementado corretamente — a ROM `halt_bug` testa o comportamento de borda do HALT com IME=0 e interrupção pendente. A `mem_timing-2` testa timing de acesso a memória durante PUSH/POP/CALL/RET — possível divergência no número de M-cycles ou na ordem de leitura/escrita.
+**Última iteração concluída:** 0085 — halt bug: rollback do PC no dispatch
+([doc](docs/iterations/0085-halt-bug-pc-rollback.md)). Corrige o halt bug:
+quando `check_interrupt` dispara com `halt_bug` ativo (cenário `ei`; `halt`),
+o PC é revertido ao endereço do HALT antes do dispatch empurrá-lo na pilha.
+O rollback fica em `check_interrupt` (não no handler do HALT) para não quebrar
+o caso sem interrupção (RST/pulo após HALT). 2 testes novos, 2 testes
+existentes com asserções atualizadas. Bateria: **2/2 pegos, 2/2 controles**.
+Placar inalterado: `halt_bug` e `mem_timing-2` continuam em 0.
+**Próxima tarefa:** ROADMAP **2.4b** continua — `halt_bug.gb` e `mem_timing-2`
+ainda estouram 100M ciclos sem saída serial. O halt bug está corrigido (erro #1
+desta iteração), mas as ROMs precisam de mais investigação. Notas relevantes:
+57 (RST/halt bug: o rollback no dispatch garante que RST empurre o próprio
+endereço, não o do HALT). A ROM `halt_bug` é MBC1+RAM e copia código de ROM
+para WRAM antes de executar — pode estar testando o caso `halt` seguido de
+`rst` ou algo no timer que a impede de acordar do HALT. O `mem_timing-2`
+testa timing de PUSH/POP/CALL/RET: os M-cycles conferem com a spec, mas a
+ordem exata de leitura/escrita ou acessos fantasmas em ciclos `internal`
+podem divergir.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -146,6 +162,9 @@ importar para o item da vez.
 - O overflow de TIMA tem atraso de 1 M-cycle: TIMA=$00 no ciclo A, reload de TMA + IF bit 2 no ciclo B.
 - Escrita em TIMA durante o ciclo A (state=Overflowed) cancela o reload; escrita durante o ciclo B (state=Reloading) é ignorada.
 - Escritas em DIV e TAC também disparam falling-edge detection (antes e depois da alteração de estado).
+- `halt_bug` reverte o PC em `check_interrupt`, não no handler do HALT — o
+  rollback só ocorre se a interrupção disparar (RST/pulo após HALT precisam
+  do PC no endereço do byte seguinte).
 
 ## Bloqueios
 
@@ -248,3 +267,10 @@ Numeração é estável e citada no código: **nunca renumere**.
 56. **MBC5: banco 0 é banco 0, não 1 — divergência de todos os MBCs anteriores.**
     MBC1, MBC2 e MBC3 traduzem `rom_bank=0` para banco 1. O MBC5 não: escrever
     `$00` seleciona o banco 0 de fato. Ver corpo em `docs/notas.md`.
+57. **O rollback do PC do halt bug em `check_interrupt` resolve o caso `ei`; `halt`
+    mas preserva o caso sem interrupção.** Se o rollback fosse no handler do HALT,
+    um RST após HALT empurraria o endereço do HALT em vez do próprio RST — quebrando
+    o contrato de que RST empurra o endereço da instrução seguinte. Movendo o
+    rollback para `check_interrupt`, o dispatch de interrupção recebe o PC correto
+    (HALT) mas a execução normal continua do byte seguinte. Ver corpo em
+    `docs/notas.md`.

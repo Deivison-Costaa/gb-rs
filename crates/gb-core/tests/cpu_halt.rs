@@ -11,8 +11,11 @@ use support::decoded_elsewhere;
 const ENTRY: usize = 0x0100;
 const HALT: u8 = 0x76;
 const NOP: u8 = 0x00;
+const EI: u8 = 0xFB;
 const IE: u16 = 0xFFFF;
 const IF: u16 = 0xFF0F;
+
+const VBLANK_VECTOR: u16 = 0x40;
 
 fn machine(program: &[u8]) -> (Cpu, Bus) {
     let mut rom = vec![0x00; NoMbc::MAX_ROM_LEN];
@@ -169,7 +172,7 @@ fn halt_bug_does_not_halt_when_ime_0_and_pending() {
     bus.write(IF, 0x01);
 
     cpu.step(&mut bus);
-    assert_eq!(cpu.registers.pc, 0x0101, "PC avança sobre HALT");
+    assert_eq!(cpu.registers.pc, 0x0101, "PC avança sobre o byte do HALT");
 
     cpu.step(&mut bus);
     assert_eq!(
@@ -230,6 +233,44 @@ fn halt_bug_does_not_lock_cpu() {
     cpu.step(&mut bus);
 
     assert_eq!(cpu.lockup(), None, "halt bug não trava a CPU");
+}
+
+// ── halt bug com EI delay: dispatch empurra endereço do HALT ──────────
+
+#[test]
+fn halt_bug_after_ei_pushes_halt_address_on_interrupt_dispatch() {
+    // spec: docs/reference/05-interrupts.md § halt bug + § IME delay
+    // SameSuite interrupt/ei_delay_halt.asm: após `EI`; `HALT` com interrupção
+    // pendente e IME=0 (EI ainda não fez efeito), o dispatch empurra o
+    // endereço do HALT, não do byte seguinte.
+    let (mut cpu, mut bus) = machine(&[EI, HALT, NOP]);
+    cpu.ime = false;
+    bus.write(IE, 0x01);
+    bus.write(IF, 0x01);
+
+    cpu.step(&mut bus);
+
+    cpu.step(&mut bus);
+    assert_eq!(
+        cpu.registers.pc, 0x0102,
+        "PC avança após HALT — rollback só ocorre no check_interrupt"
+    );
+
+    cpu.step(&mut bus);
+    assert!(!cpu.ime, "IME zerado — dispatch iniciado");
+
+    for _ in 0..4 {
+        cpu.step(&mut bus);
+    }
+    assert_eq!(cpu.registers.pc, VBLANK_VECTOR, "PC = vetor VBlank ($0040)");
+
+    let pushed_low = bus.read(cpu.registers.sp);
+    let pushed_high = bus.read(cpu.registers.sp.wrapping_add(1));
+    let pushed_pc = u16::from(pushed_low) | (u16::from(pushed_high) << 8);
+    assert_eq!(
+        pushed_pc, 0x0101,
+        "dispatch empurrou endereço do HALT (0x0101), não do byte seguinte (0x0102)"
+    );
 }
 
 // ── Controle negativo ──────────────────────────────────────────────────

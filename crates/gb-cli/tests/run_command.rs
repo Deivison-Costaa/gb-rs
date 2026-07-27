@@ -394,6 +394,106 @@ fn run_stops_when_cpu_encounters_lockup() {
     );
 }
 
+// ---------------------------------------------------------------------------
+// --check-fb-hash
+// ---------------------------------------------------------------------------
+
+// SHA-256 do framebuffer esperado do dmg-acid2 (extraído do PNG de referência
+// dmg-acid2-dmg.png: 160×144, modo L de 4 tons, mapeado para índices 0–3).
+const DMG_ACID2_HASH: &str = "f844ea760a6f1fe137f7f992c7ab1c72d34c7fcd3a807b4174a78eb04a32a458";
+
+fn dmg_acid2_path() -> PathBuf {
+    workspace_root().join("tests/roms/dmg-acid2/dmg-acid2.gb")
+}
+
+#[test]
+fn check_fb_hash_without_argument_exits_with_usage() {
+    let out = gb_cli(&[
+        "run",
+        dmg_acid2_path().to_str().unwrap(),
+        "--headless",
+        "--max-cycles",
+        "100",
+        "--check-fb-hash",
+    ]);
+
+    assert_eq!(code(&out), Some(64), "{}", describe(&out));
+    assert!(
+        stderr(&out).contains("check-fb-hash"),
+        "a mensagem tem de mencionar --check-fb-hash\n{}",
+        describe(&out)
+    );
+}
+
+#[test]
+fn check_fb_hash_with_correct_hash_exits_zero() {
+    let out = gb_cli(&[
+        "run",
+        dmg_acid2_path().to_str().unwrap(),
+        "--headless",
+        "--max-cycles",
+        "200000",
+        "--check-fb-hash",
+        DMG_ACID2_HASH,
+    ]);
+
+    assert_eq!(code(&out), Some(0), "{}", describe(&out));
+    let text = stdout(&out);
+    assert!(
+        text.contains("fb-hash="),
+        "a saída tem de conter fb-hash=\n{}",
+        describe(&out)
+    );
+    assert!(
+        text.contains("cycles="),
+        "a saída tem de conter cycles=\n{}",
+        describe(&out)
+    );
+}
+
+#[test]
+fn check_fb_hash_with_wrong_hash_exits_one() {
+    let out = gb_cli(&[
+        "run",
+        dmg_acid2_path().to_str().unwrap(),
+        "--headless",
+        "--max-cycles",
+        "200000",
+        "--check-fb-hash",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+    ]);
+
+    assert_eq!(code(&out), Some(1), "{}", describe(&out));
+    let text = stdout(&out);
+    assert!(
+        text.contains("fb-hash="),
+        "hash errado ainda tem de mostrar o hash calculado\n{}",
+        describe(&out)
+    );
+}
+
+#[test]
+fn check_fb_hash_prints_hash_before_cycles() {
+    let out = gb_cli(&[
+        "run",
+        dmg_acid2_path().to_str().unwrap(),
+        "--headless",
+        "--max-cycles",
+        "200000",
+        "--check-fb-hash",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+    ]);
+
+    let text = stdout(&out);
+    let fb_pos = text.find("fb-hash=").expect("fb-hash= ausente");
+    let cycles_pos = text.find("cycles=").expect("cycles= ausente");
+    assert!(
+        fb_pos < cycles_pos,
+        "fb-hash= tem de vir antes de cycles=\n{}",
+        describe(&out)
+    );
+}
+
 #[test]
 fn run_stops_when_cpu_is_stopped() {
     let dir = sandbox("run-para-no-stop");

@@ -16,6 +16,12 @@ pub fn execute_with_fb_hash(path: &Path, max_cycles: u64, expected_hash: &str) -
     execute_inner(path, max_cycles, Some(expected_hash))
 }
 
+const SERIAL_POLL_CYCLES: u64 = 1 << 16;
+
+fn has_verdict(text: &str) -> bool {
+    text.contains("Passed") || text.contains("Failed")
+}
+
 fn execute_inner(path: &Path, max_cycles: u64, expected_fb_hash: Option<&str>) -> ExitCode {
     let rom = match std::fs::read(path) {
         Ok(rom) => rom,
@@ -51,6 +57,8 @@ fn execute_inner(path: &Path, max_cycles: u64, expected_fb_hash: Option<&str>) -
     let mut bus = Bus::new(cartridge);
     let mut cpu = Cpu::after_boot_rom(checksum);
 
+    let by_serial = expected_fb_hash.is_none();
+    let mut serial = Vec::new();
     let mut cycle_count: u64 = 0;
     while cycle_count < max_cycles {
         if cpu.lockup().is_some() || cpu.is_stopped() {
@@ -58,6 +66,15 @@ fn execute_inner(path: &Path, max_cycles: u64, expected_fb_hash: Option<&str>) -
         }
         cpu.step(&mut bus);
         cycle_count = cycle_count.saturating_add(1);
+
+        // Sem esta parada toda ROM gasta o teto: 22 G ciclos por corrida do
+        // placar, 11 min de CI (ver docs/iterations/0077b).
+        if by_serial && cycle_count % SERIAL_POLL_CYCLES == 0 {
+            serial.extend(bus.take_serial_output());
+            if has_verdict(&String::from_utf8_lossy(&serial)) {
+                break;
+            }
+        }
     }
 
     let result = if let Some(expected) = expected_fb_hash {
@@ -75,8 +92,8 @@ fn execute_inner(path: &Path, max_cycles: u64, expected_fb_hash: Option<&str>) -
             ExitCode::from(1)
         }
     } else {
-        let serial_output = bus.take_serial_output();
-        let serial_text = String::from_utf8_lossy(&serial_output);
+        serial.extend(bus.take_serial_output());
+        let serial_text = String::from_utf8_lossy(&serial);
 
         print!("{serial_text}");
         println!("cycles={cycle_count}");

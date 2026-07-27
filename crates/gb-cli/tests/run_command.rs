@@ -227,6 +227,76 @@ fn run_executes_a_valid_rom_and_prints_cycle_count() {
 }
 
 #[test]
+fn run_stops_as_soon_as_the_serial_verdict_arrives() {
+    let dir = sandbox("run-parada-antecipada");
+
+    // Escreve "Passed" no serial, byte a byte, e entra em laço infinito.
+    let mut program: Vec<u8> = Vec::new();
+    for byte in b"Passed" {
+        program.extend_from_slice(&[0x3E, *byte, 0xE0, 0x01, 0x3E, 0x81, 0xE0, 0x02]);
+    }
+    program.extend_from_slice(&[0x18, 0xFE]);
+
+    let rom_bytes = rom(b"TEST", &program);
+    let path = write_rom(&dir, "teste.gb", &rom_bytes);
+    let out = gb_cli(&[
+        "run",
+        path.to_str().unwrap(),
+        "--headless",
+        "--max-cycles",
+        "20000000",
+    ]);
+
+    assert_eq!(code(&out), Some(0), "{}", describe(&out));
+
+    // `print!` do serial não quebra linha: a saída vira `Passedcycles=<n>`.
+    let text = stdout(&out);
+    let n: u64 = text
+        .rsplit_once("cycles=")
+        .and_then(|(_, v)| v.trim().parse().ok())
+        .expect("a saída tem de trazer cycles=<n>");
+    assert!(
+        n < 1_000_000,
+        "o veredito chega em milhares de ciclos; gastar {n} de 20000000 é rodar o teto inteiro\n{}",
+        describe(&out)
+    );
+}
+
+#[test]
+fn run_stops_early_on_a_failed_verdict_too() {
+    let dir = sandbox("run-parada-antecipada-failed");
+
+    let mut program: Vec<u8> = Vec::new();
+    for byte in b"Failed" {
+        program.extend_from_slice(&[0x3E, *byte, 0xE0, 0x01, 0x3E, 0x81, 0xE0, 0x02]);
+    }
+    program.extend_from_slice(&[0x18, 0xFE]);
+
+    let rom_bytes = rom(b"TEST", &program);
+    let path = write_rom(&dir, "teste.gb", &rom_bytes);
+    let out = gb_cli(&[
+        "run",
+        path.to_str().unwrap(),
+        "--headless",
+        "--max-cycles",
+        "20000000",
+    ]);
+
+    assert_eq!(code(&out), Some(1), "{}", describe(&out));
+
+    let text = stdout(&out);
+    let n: u64 = text
+        .rsplit_once("cycles=")
+        .and_then(|(_, v)| v.trim().parse().ok())
+        .expect("a saída tem de trazer cycles=<n>");
+    assert!(
+        n < 1_000_000,
+        "reprovar cedo vale tanto quanto aprovar cedo; gastou {n} de 20000000\n{}",
+        describe(&out)
+    );
+}
+
+#[test]
 fn run_exits_2_when_rom_produces_no_serial_result() {
     let dir = sandbox("run-sem-resultado");
     let rom_bytes = rom(b"TEST", &[0x18, 0xFE]);

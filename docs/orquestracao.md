@@ -537,3 +537,41 @@ ninguém tinha mapeado. Os três — `--fill`, `--subject`, `(#N)` — são o me
 campo disputado por três mecanismos diferentes do `gh`. Vale a regra: depois de
 consertar formatação de histórico, **olhar o commit resultante em `main`**, não
 o PR.
+
+## 2026-07-26 — Bloqueio envelhece sem avisar
+
+O 1.14b (`cpu_instrs.gb` agregado) foi marcado como dependente do 2.2. O 2.2
+entrou às 20:41. A caixa continuou aberta, com o texto antigo, e **três
+iterações seguidas passaram ao lado dela** — 0053, 0054 e 0055 — porque a linha
+ainda anunciava um bloqueio que não existia mais.
+
+Só apareceu porque o usuário perguntou "o 1.14b não pode ser feito?". Rodei a
+ROM: `Passed all tests`, 11 sub-testes, 22 segundos. Estava pronta havia uma hora.
+
+**E a razão do bloqueio estava errada desde o começo.** Não foi o 2.2 que
+destravou: foi o **#66**, que consertou o `rom_addr` do MBC1. O agregado usa
+banking e os individuais não — por isso os onze passavam e ele não. Quem
+escreveu a linha inferiu a causa a partir de quais sub-testes falhavam, sem
+medir, e a inferência ficou no plano como se fosse fato.
+
+O mesmo vale para o vizinho: o 2.4b dizia "precisam de LY". O `LY` chegou no
+3.1a, e medi as duas ROMs — seguem sem dar veredito. A previsão era curta e
+teria mandado a próxima iteração tentar em vão.
+
+**Três defeitos distintos numa linha só de ROADMAP:**
+
+1. o bloqueio não é reavaliado quando o bloqueador fecha;
+2. a razão do bloqueio é escrita por inferência e não por medição;
+3. quem pula a caixa não registra que pulou, então o custo é invisível.
+
+**Correção no passo 1:** convenção `**BLOQUEADO por X**`, com ordem explícita de
+reavaliar as bloqueadas cujo X já fechou **antes** de escolher a tarefa, e de
+corrigir o texto quando a razão se mostrar errada.
+
+**O padrão de fundo, e é o mesmo da manhã inteira:** o parágrafo `Próxima
+tarefa` do `STATUS.md` vem sistematicamente ganhando da regra formal do passo 1.
+Nas quatro vezes anteriores isso salvou o processo — pré-anunciou a armadilha
+`SLL`×`SWAP`, cobriu a caixa-pai, carregou a dívida do `gb-cli`. Aqui ele ganhou
+**errado**, e o resultado foi trabalho concluído que não constava como concluído.
+Handoff informal mais confiável que checklist formal é uma vantagem enquanto
+acerta; é um ponto único de falha quando erra.

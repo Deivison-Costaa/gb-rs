@@ -30,6 +30,16 @@ Se ela for grande demais para um PR pequeno (mais de ~300 linhas de diff ou
 mais de um conceito), quebre-a em sub-itens no `ROADMAP.md`, commite essa
 quebra, e faça só o primeiro sub-item.
 
+**Caixa bloqueada.** Item que depende de marco posterior leva `**BLOQUEADO por
+X**` na própria linha. Pule-o e pegue o seguinte — mas antes de escolher,
+**reavalie as bloqueadas cujo X já fechou**: se alguma passou a ser possível,
+ela é a sua tarefa, e fechá-la costuma custar minutos. Bloqueio envelhece sem
+avisar: o 1.14b ficou uma hora pronto e não marcado, e três iterações passaram
+ao lado porque a linha dizia que ele dependia de algo já entregue.
+
+Descobriu que a razão do bloqueio estava errada? Corrija o texto da linha antes
+de seguir. Bloqueio mal descrito custa mais que caixa aberta.
+
 ## Passo 2 — Branch
 
 ```

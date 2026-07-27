@@ -3,9 +3,9 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0056 — VRAM ($8000–$9FFF) acessível pelo barramento ([doc](docs/iterations/0056-ppu-vram.md)). 5 testes novos em `bus_vram.rs`. Placar: inalterado (16/121). `Bus` ganhou array `vram: [u8; 8 * 1024]` indexado por `addr - 0x8000`. Inicialização em `$00` (escolha; hardware real é aleatório). VRAM removido da lista `pending` do teste `the_regions_without_an_owner`. Bateria: **5/5 pegos, 2/2 controles verdes** (com correção de step no teste de range).
-**Iteração anterior:** 0055 — registradores SCY/SCX/DMA/BGP/OBP0/OBP1/WY/WX ($FF42–$FF4B).
-**Próxima tarefa:** ROADMAP **3.1d** — OAM ($FE00–$FE9F)
+**Última iteração concluída:** 0057 — OAM ($FE00–$FE9F) acessível pelo barramento ([doc](docs/iterations/0057-ppu-oam.md)). 5 testes novos em `bus_oam.rs`. Placar: inalterado (16/121). `Bus` ganhou array `oam: [u8; 40 * 4]` indexado por `addr - 0xFE00`. Inicialização em `$00` por escolha. Lista `pending` de `the_regions_without_an_owner` esvaziou — as 12 regiões agora têm dono no `Bus`. Bateria: **5/5 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0056 — VRAM ($8000–$9FFF).
+**Próxima tarefa:** ROADMAP **3.2** — Máquina de modos (OAM scan 80 / draw / hblank / vblank) + interrupções STAT e VBlank. Esta é a primeira iteração que mexe na estrutura de operação da PPU depois dos registradores. Armadilhas: o timing dos modos não é estático — mode 3 tem duração variável (172–289 dots, dependendo de quantos sprites a linha tem); mode 0 dura entre 376 − mode 3's duration e 376 dots; o OAM scan tem janela fixa de 80 dots. A transição mode 2→3 é onde a PPU monta a lista de sprites da linha (até 10) varrendo a OAM ($FE00–$FE9F). A interrupção STAT é disparada nas bordas de modo (LYC=LY, mode 0, mode 1, mode 2) conforme os bits de seleção em STAT ($FF41 bits 6-3), mas só quando o bit relevante transita de 0 para 1 — e o bit 6 (LYC=LY) é o único que não é modo. O STAT ($FF41 bits 1-0) é read-only para os bits de modo, e o bit 2 (coincidence) atualiza a cada scanline. As definições de duração de cada modo e o comportamento do STAT mode flag estão em `docs/reference/06-ppu.md` § PPU modes e § STAT. Nota: `2.4b` (`halt_bug` e `mem_timing-2`) continua bloqueado por M3 — reavalie quando esta iteração fechar.
 **Marco atual:** M3 — PPU
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -36,7 +36,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **687** (eram 682 na 0055 — 5 novos em `bus_vram.rs`).
+Testes do workspace: **692** (eram 687 na 0056 — 5 novos em `bus_oam.rs`).
 
 ## Invariantes
 

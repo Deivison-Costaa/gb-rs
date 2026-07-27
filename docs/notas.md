@@ -1082,4 +1082,17 @@
     Ver `docs/reference/08-cartridges-mbc.md` § MBC5 — "writing 0 will indeed give
     bank 0 on MBC5, unlike other MBCs".
 
+57. **O rollback do PC do halt bug em `check_interrupt` resolve o caso `ei`; `halt`
+    mas preserva o caso sem interrupção.** A primeira implementação (pré-0085)
+    só suprimia o incremento do próximo fetch — o dispatch de interrupção
+    empurrava o endereço do byte seguinte, não o do HALT. A segunda tentativa
+    (rollback no handler do HALT) quebrou o caso RST/pulo após HALT: o RST
+    empurrava o endereço do HALT em vez do próprio. A terceira (rollback em
+    `check_interrupt`) acerta os dois: se a interrupção dispara, o PC é
+    decrementado antes do push; se o halt_bug é consumido por `read_at_pc`, o
+    PC permanece no byte seguinte e o RST/JP funciona normalmente. O SameSuite
+    (`interrupt/ei_delay_halt.asm`) foi o árbitro: a pilha esperada confirma
+    que VBlank e STAT voltam ao HALT, e Timer volta ao byte seguinte. Ver
+    [doc da 0085](docs/iterations/0085-halt-bug-pc-rollback.md).
+
 

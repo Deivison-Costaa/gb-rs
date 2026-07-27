@@ -601,6 +601,8 @@ impl Cpu {
     // spec: docs/reference/05-interrupts.md § Interrupt handling.
     // Verifica IME && (IE & IF) != 0, escolhe a prioridade mais alta, limpa o bit
     // de IF e o IME, e devolve o vetor.
+    //
+    // HALT bug: rollback do PC para o endereço do HALT (nota 57).
     fn check_interrupt(&mut self, bus: &mut Bus) -> Option<u16> {
         if !self.ime {
             return None;
@@ -613,6 +615,10 @@ impl Cpu {
         self.ime = false;
         let if_reg = bus.read(IF_ADDR);
         bus.write(IF_ADDR, if_reg & !(1 << bit));
+        if self.halt_bug {
+            self.halt_bug = false;
+            self.registers.pc = self.registers.pc.wrapping_sub(1);
+        }
         let vector = match bit {
             INTERRUPT_VBLANK_BIT => 0x0040,
             INTERRUPT_LCD_BIT => 0x0048,

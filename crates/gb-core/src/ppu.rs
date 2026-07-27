@@ -54,6 +54,8 @@ pub(crate) struct Ppu {
     wy: u8,
     wx: u8,
     stat_writable: u8,
+    window_line: u8,
+    window_y_condition: bool,
     framebuffer: [u8; SCREEN_W * SCREEN_H],
 }
 
@@ -73,6 +75,8 @@ impl Ppu {
             wy: 0x00,
             wx: 0x00,
             stat_writable: STAT_BOOT_WRITABLE,
+            window_line: 0,
+            window_y_condition: false,
             framebuffer: [0x00; SCREEN_W * SCREEN_H],
         }
     }
@@ -88,6 +92,10 @@ impl Ppu {
             return PpuSignals::default();
         }
 
+        if self.dots == 0 && self.ly == self.wy && self.ly < VBLANK_START_LY {
+            self.window_y_condition = true;
+        }
+
         let old_stat_line = self.compute_stat_line();
         let old_ly = self.ly;
 
@@ -101,6 +109,8 @@ impl Ppu {
             let new_ly = (self.ly + 1) % TOTAL_LINES;
             if old_ly == VBLANK_START_LY - 1 && new_ly == VBLANK_START_LY {
                 vblank_fired = true;
+                self.window_y_condition = false;
+                self.window_line = 0;
             }
             self.ly = new_ly;
         }
@@ -119,6 +129,7 @@ impl Ppu {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn render_background_scanline(&mut self, vram: &[u8]) {
         let ly = self.ly as usize;
         if ly >= SCREEN_H {
@@ -135,21 +146,72 @@ impl Ppu {
             return;
         }
 
-        let tilemap_base = if self.lcdc & 0x08 != 0 {
+        let bg_tilemap_base = if self.lcdc & 0x08 != 0 {
+            0x9C00
+        } else {
+            0x9800
+        };
+        let win_tilemap_base = if self.lcdc & 0x40 != 0 {
             0x9C00
         } else {
             0x9800
         };
         let unsigned = self.lcdc & 0x10 != 0;
 
+        let win_left = self.window_left();
+
+        let wx166_bug = win_left.is_some() && self.wx == 166;
+        let wx0_special = win_left.is_some() && self.wx == 0;
+
+        let mut window_rendered = false;
+
         for pixel_x in 0..SCREEN_W {
+            if let Some(left) = win_left {
+                if (pixel_x as i16) >= left {
+                    window_rendered = true;
+                    let mut win_x = (pixel_x as i16).wrapping_sub(left) as u16;
+
+                    if wx0_special {
+                        win_x = win_x.wrapping_add((self.scx & 7) as u16);
+                    }
+
+                    let tile_col = win_x / 8;
+                    let tile_row_base = if wx166_bug {
+                        self.window_line.wrapping_add(1) as u16
+                    } else {
+                        self.window_line as u16
+                    };
+                    let tile_row = tile_row_base / 8;
+                    let tilemap_addr = win_tilemap_base + tile_row * 32 + tile_col;
+                    let tile_index = vram[tilemap_addr as usize - 0x8000];
+
+                    let tile_addr = if unsigned {
+                        0x8000u16 + tile_index as u16 * 16
+                    } else {
+                        0x9000u16.wrapping_add_signed(tile_index as i8 as i16 * 16)
+                    };
+
+                    let line_in_tile = (tile_row_base as usize) & 7;
+                    let pixel_in_tile = 7usize.wrapping_sub((win_x & 7) as usize);
+                    let byte0_addr = tile_addr as usize - 0x8000 + line_in_tile * 2;
+                    let byte0 = vram[byte0_addr];
+                    let byte1 = vram[byte0_addr + 1];
+
+                    let color_idx =
+                        ((byte1 >> pixel_in_tile) & 1) << 1 | ((byte0 >> pixel_in_tile) & 1);
+                    let shade = (self.bgp >> (color_idx * 2)) & 0x03;
+                    self.framebuffer[row_offset + pixel_x] = shade;
+                    continue;
+                }
+            }
+
             let bg_x = (pixel_x as u16).wrapping_add(self.scx as u16) & 0xFF;
             let bg_y = (ly as u16).wrapping_add(self.scy as u16) & 0xFF;
 
             let tile_col = bg_x / 8;
             let tile_row = bg_y / 8;
 
-            let tilemap_addr = tilemap_base + tile_row * 32 + tile_col;
+            let tilemap_addr = bg_tilemap_base + tile_row * 32 + tile_col;
             let tile_index = vram[tilemap_addr as usize - 0x8000];
 
             let tile_addr = if unsigned {
@@ -169,6 +231,23 @@ impl Ppu {
             let shade = (self.bgp >> (color_idx * 2)) & 0x03;
             self.framebuffer[row_offset + pixel_x] = shade;
         }
+
+        if window_rendered {
+            self.window_line = self.window_line.wrapping_add(1);
+        }
+    }
+
+    fn window_left(&self) -> Option<i16> {
+        if (self.lcdc & 0x20) == 0 || !self.window_y_condition {
+            return None;
+        }
+        if self.wx > 166 {
+            return None;
+        }
+        if self.wx == 0 || self.wx == 166 {
+            return Some(0);
+        }
+        Some((self.wx as i16) - 7)
     }
 
     pub(crate) fn read(&self, addr: u16) -> u8 {

@@ -257,6 +257,8 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [x] 2.2 Interrupções: IE/IF/IME, vetores, timing de despacho, `EI` com delay de 1 instrução.
 - [x] 2.3 `HALT` + o bug do HALT.
 - [ ] 2.4 blargg `instr_timing`, `mem_timing`, `mem_timing-2`, `halt_bug`.
+  - [x] 2.4a `instr_timing` e `mem_timing` passando (não dependem de PPU).
+  - [ ] 2.4b `halt_bug` e `mem_timing-2` passando (precisam de LY — aguardam M3).
 
 ## M3 — PPU
 

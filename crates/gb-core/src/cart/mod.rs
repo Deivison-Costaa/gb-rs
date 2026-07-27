@@ -84,10 +84,24 @@ pub fn load(rom: Vec<u8>) -> Result<Box<dyn Cartridge>, CartridgeError> {
     let cartridge_type = header.cartridge_type();
     let rom_banks = rom_bank_count(header.rom_size(), rom.len());
 
+    let ram_bytes = mbc1_ram_bytes(cartridge_type.code(), header.ram_size());
+
     match cartridge_type.code() {
         ROM_ONLY => Ok(Box::new(NoMbc::new(rom)?)),
-        MBC1 | MBC1_RAM | MBC1_RAM_BATTERY => Ok(Box::new(Mbc1::new(rom, rom_banks)?)),
+        MBC1 | MBC1_RAM | MBC1_RAM_BATTERY => Ok(Box::new(Mbc1::new(rom, rom_banks, ram_bytes)?)),
         _ => Err(CartridgeError::UnsupportedType { cartridge_type }),
+    }
+}
+
+const RAM_BANK_LEN: u32 = 8 * 1024;
+
+fn mbc1_ram_bytes(cart_type: u8, ram_size: RamSize) -> usize {
+    if cart_type != MBC1_RAM && cart_type != MBC1_RAM_BATTERY {
+        return 0;
+    }
+    match ram_size.code() {
+        0x00 => RAM_BANK_LEN as usize,
+        _ => ram_size.bytes().unwrap_or(0) as usize,
     }
 }
 

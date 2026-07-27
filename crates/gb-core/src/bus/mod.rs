@@ -195,7 +195,13 @@ impl Bus {
     }
 
     pub fn tick_ppu(&mut self) {
-        self.ppu.tick();
+        let signals = self.ppu.tick();
+        if signals.vblank_interrupt {
+            self.io[IF_IDX] |= 0x01;
+        }
+        if signals.stat_interrupt {
+            self.io[IF_IDX] |= 0x02;
+        }
     }
 
     pub fn tick_timer(&mut self) {

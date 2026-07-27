@@ -1,4 +1,4 @@
-//! spec: `docs/reference/06-ppu.md`. ROADMAP 3.1a + 3.1b — registradores da PPU.
+//! spec: `docs/reference/06-ppu.md`. ROADMAP 3.1a + 3.1b + 3.2 — registradores, modos e interrupções.
 
 use crate::bus::boot::STAT_BOOT_WRITABLE;
 
@@ -29,6 +29,12 @@ const MODE_3_BASE: u32 = 172;
 const VBLANK_START_LY: u8 = 144;
 
 const TOTAL_LINES: u8 = 154;
+
+#[derive(Debug, Default)]
+pub(crate) struct PpuSignals {
+    pub vblank_interrupt: bool,
+    pub stat_interrupt: bool,
+}
 
 pub(crate) struct Ppu {
     dots: u32,
@@ -65,18 +71,34 @@ impl Ppu {
         }
     }
 
-    pub(crate) fn tick(&mut self) {
+    pub(crate) fn tick(&mut self) -> PpuSignals {
         if self.lcdc & 0x80 == 0 {
             self.dots = 0;
             self.ly = 0;
-            return;
+            return PpuSignals::default();
         }
+
+        let old_stat_line = self.compute_stat_line();
+        let old_ly = self.ly;
 
         self.dots += 4;
 
+        let mut vblank_fired = false;
         if self.dots >= DOTS_PER_SCANLINE {
             self.dots = 0;
-            self.ly = (self.ly + 1) % TOTAL_LINES;
+            let new_ly = (self.ly + 1) % TOTAL_LINES;
+            if old_ly == VBLANK_START_LY - 1 && new_ly == VBLANK_START_LY {
+                vblank_fired = true;
+            }
+            self.ly = new_ly;
+        }
+
+        let new_stat_line = self.compute_stat_line();
+        let stat_interrupt = new_stat_line && !old_stat_line;
+
+        PpuSignals {
+            vblank_interrupt: vblank_fired,
+            stat_interrupt,
         }
     }
 
@@ -145,5 +167,28 @@ impl Ppu {
             return MODE_DRAW;
         }
         MODE_HBLANK
+    }
+
+    fn lyc_eq_ly(&self) -> bool {
+        self.lcdc & 0x80 != 0 && self.ly == self.lyc
+    }
+
+    fn compute_stat_line(&self) -> bool {
+        if self.lcdc & 0x80 == 0 {
+            return false;
+        }
+        let mode = self.current_mode();
+        let lyc_match = self.lyc_eq_ly();
+
+        let stat = self.stat_writable;
+        let sel_mode0 = (stat >> 3) & 1 != 0;
+        let sel_mode1 = (stat >> 4) & 1 != 0;
+        let sel_mode2 = (stat >> 5) & 1 != 0;
+        let sel_lyc = (stat >> 6) & 1 != 0;
+
+        (mode == MODE_HBLANK && sel_mode0)
+            || (mode == MODE_VBLANK && sel_mode1)
+            || (mode == MODE_OAM_SCAN && sel_mode2)
+            || (lyc_match && sel_lyc)
     }
 }

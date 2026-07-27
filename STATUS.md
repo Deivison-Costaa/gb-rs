@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0078 — APU: Downsample + ring buffer ([doc](docs/iterations/0078-apu-downsample-ring-buffer.md)). `Apu::tick()` chama `mixer_sample()` a cada M-cycle e acumula via `Downsampler` com phase accumulator exato (375/8192 → ~21.85 M-cycles por amostra). `normalize_mixer_value(u16) → f32` mapeia 0..480 para [-1, 1]. `RingBuffer` circular de 4096 `(f32, f32)` exposto por `Apu` → `Bus`: `audio_samples_available()`, `audio_samples()`, `consume_audio_samples(n)`. Power-off reseta acumulador e ring buffer. 10 testes novos (881 total). Bateria: **4/4 pegos**, 1/1 controles verdes. Sem saída de áudio — só o buffer exposto.
-**Próxima tarefa:** ROADMAP **6.7b** (Saída de áudio via cpal no gb-desktop). O `Bus` já expõe `audio_samples() → &[(f32, f32)]` e `consume_audio_samples(n)`. O `gb-desktop` precisa criar um `cpal::Stream` cujo callback lê do buffer do `Apu` (via `Bus`) e entrega ao dispositivo de áudio. O `Cargo.toml` do `gb-desktop` já deve ter `cpal` como dependência ou precisa ser adicionado. O callback do cpal roda em thread separada — o `Bus` é `&mut` no loop principal, então o acesso ao ring buffer precisa de sincronização (`Mutex<Bus>` ou extrair o buffer para um `Arc<Mutex<RingBuffer>>`). Alternativa: no `gb-desktop`, após cada frame, drenar o buffer de áudio e passá-lo para um canal (`mpsc`) que alimenta o callback do cpal. Nota nova: o loop do `gb-desktop` roda um frame por vez (17556 M-cycles), produzindo ~803 amostras de áudio por frame — drenar o buffer no fim do frame e enviar por canal é suficiente para evitar underrun.
+**Última iteração concluída:** 0079 — Saída de áudio via cpal no gb-desktop ([doc](docs/iterations/0079-cpal-audio-output.md)). `open_audio_stream()` cria `cpal::Stream` com callback que consome de um `Arc<Mutex<VecDeque<(f32, f32)>>>`. `drain_bus_audio()` drena amostras do `Bus` para o buffer compartilhado ao fim de cada frame (~803 amostras/frame). Sem dispositivo de áudio, roda sem som (não é erro fatal). 5 testes novos (886 total). Bateria: **3/3 pegos**, 1/1 controles verdes.
+**Próxima tarefa:** ROADMAP **6.8** (blargg `dmg_sound` 01 a 12). As ROMs de som da blargg já estão em `tests/roms/dmg_sound/`. O `gb-cli run` precisa ser capaz de rodá-las e reportar o resultado pela porta serial. Verificar se as ROMs passam ou se há bugs nos canais de áudio revelados pelos testes. Notas relevantes: nenhuma nova — as ROMs de som testam canais individuais (01-registers, 02-len ctr, 03-trigger, etc.) e a agregada. O `scoreboard.sh` já as executa (todas `crash` atualmente).
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **881** (eram 871 na 0077 — 10 novos em `apu_downsample.rs`).
+Testes do workspace: **886** (eram 881 na 0078 — 5 novos em `gb-desktop`).
 
 ## Invariantes
 

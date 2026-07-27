@@ -1,5 +1,8 @@
+use std::collections::VecDeque;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use gb_core::bus::Bus;
 use gb_core::cart::{self, CartridgeHeader};
 use gb_core::cpu::Cpu;
@@ -22,6 +25,77 @@ const FRAMEBUFFER_PALETTE: [[u8; 4]; 4] = [
     [0x34, 0x68, 0x56, 0xFF],
     [0x08, 0x18, 0x20, 0xFF],
 ];
+
+type AudioBuffer = Arc<Mutex<VecDeque<(f32, f32)>>>;
+
+fn create_audio_buffer() -> AudioBuffer {
+    Arc::new(Mutex::new(VecDeque::with_capacity(16384)))
+}
+
+fn drain_bus_audio(bus: &mut Bus, buffer: &AudioBuffer) {
+    let available = bus.audio_samples_available();
+    if available == 0 {
+        return;
+    }
+    let samples: Vec<(f32, f32)> = bus.audio_samples()[..available].to_vec();
+    bus.consume_audio_samples(available);
+    let mut buf = buffer.lock().expect("audio buffer mutex poisoned");
+    for sample in samples {
+        buf.push_back(sample);
+    }
+}
+
+fn open_audio_stream(buffer: AudioBuffer) -> Option<cpal::Stream> {
+    let host = cpal::default_host();
+    let device = host.default_output_device()?;
+    let config = match device.default_output_config() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("configuração de áudio indisponível: {e}");
+            return None;
+        }
+    };
+    let channels = config.channels() as usize;
+    let stream = match device.build_output_stream(
+        &config.into(),
+        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+            let mut buf = buffer.lock().expect("audio buffer mutex poisoned");
+            for frame in data.chunks_mut(channels) {
+                match buf.pop_front() {
+                    Some((left, right)) => {
+                        if !frame.is_empty() {
+                            frame[0] = left;
+                        }
+                        if frame.len() >= 2 {
+                            frame[1] = right;
+                        }
+                        for sample in frame.iter_mut().skip(2) {
+                            *sample = (left + right) * 0.5;
+                        }
+                    }
+                    None => {
+                        for sample in frame.iter_mut() {
+                            *sample = 0.0;
+                        }
+                    }
+                }
+            }
+        },
+        |err| eprintln!("erro na stream de áudio: {err}"),
+        None,
+    ) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("não consegui abrir stream de áudio: {e}");
+            return None;
+        }
+    };
+    if stream.play().is_err() {
+        eprintln!("não consegui iniciar stream de áudio");
+        return None;
+    }
+    Some(stream)
+}
 
 pub fn execute(path: &Path) {
     let rom = match std::fs::read(path) {
@@ -57,6 +131,10 @@ pub fn execute(path: &Path) {
 
     let mut bus = Bus::new(cartridge);
     let mut cpu = Cpu::after_boot_rom(checksum);
+
+    let audio_buffer = create_audio_buffer();
+    let stream = open_audio_stream(audio_buffer.clone());
+    let has_audio = stream.is_some();
 
     let event_loop: EventLoop<()> = EventLoop::new();
 
@@ -116,6 +194,10 @@ pub fn execute(path: &Path) {
                         break;
                     }
                     cpu.step(&mut bus);
+                }
+
+                if has_audio {
+                    drain_bus_audio(&mut bus, &audio_buffer);
                 }
 
                 let frame = pixels.frame_mut();
@@ -263,5 +345,103 @@ mod tests {
             &output[12..16],
             "cor 2 e 3 deveriam ser diferentes"
         );
+    }
+
+    #[test]
+    fn audio_buffer_vazio_retorna_silencio() {
+        let buf = create_audio_buffer();
+        let mut frames = Vec::new();
+        {
+            let mut inner = buf.lock().expect("mutex válido");
+            for _ in 0..4 {
+                match inner.pop_front() {
+                    Some(s) => frames.push(s),
+                    None => frames.push((0.0, 0.0)),
+                }
+            }
+        }
+        assert_eq!(frames, vec![(0.0, 0.0); 4]);
+    }
+
+    #[test]
+    fn audio_buffer_mantem_amostras_em_ordem() {
+        let buf = create_audio_buffer();
+        {
+            let mut inner = buf.lock().expect("mutex válido");
+            inner.push_back((1.0, -1.0));
+            inner.push_back((0.5, 0.5));
+        }
+        {
+            let mut inner = buf.lock().expect("mutex válido");
+            assert_eq!(inner.pop_front(), Some((1.0, -1.0)));
+            assert_eq!(inner.pop_front(), Some((0.5, 0.5)));
+            assert_eq!(inner.pop_front(), None);
+        }
+    }
+
+    #[test]
+    fn drain_bus_audio_sem_amostras_nao_altera_buffer() {
+        let rom = vec![0u8; 32 * 1024];
+        let header = CartridgeHeader::parse(&rom).expect("header válido");
+        let checksum = header.checksum();
+        let cartridge = cart::load(rom).expect("cartucho válido");
+        let mut bus = Bus::new(cartridge);
+        let _cpu = Cpu::after_boot_rom(checksum);
+
+        let buffer = create_audio_buffer();
+        assert_eq!(bus.audio_samples_available(), 0);
+        drain_bus_audio(&mut bus, &buffer);
+
+        let inner = buffer.lock().expect("mutex válido");
+        assert!(inner.is_empty());
+    }
+
+    #[test]
+    fn drain_bus_audio_transfere_amostras_para_o_buffer() {
+        let rom = vec![0u8; 32 * 1024];
+        let header = CartridgeHeader::parse(&rom).expect("header válido");
+        let checksum = header.checksum();
+        let cartridge = cart::load(rom).expect("cartucho válido");
+        let mut bus = Bus::new(cartridge);
+        let mut cpu = Cpu::after_boot_rom(checksum);
+
+        bus.write(0xFF26, 0x80);
+
+        for _ in 0..100 {
+            cpu.step(&mut bus);
+        }
+
+        let available = bus.audio_samples_available();
+        assert!(available > 0, "deveria ter amostras de áudio após ciclos");
+
+        let buffer = create_audio_buffer();
+        drain_bus_audio(&mut bus, &buffer);
+
+        let inner = buffer.lock().expect("mutex válido");
+        assert_eq!(inner.len(), available);
+    }
+
+    #[test]
+    fn consumir_amostras_zera_disponiveis_no_bus() {
+        let rom = vec![0u8; 32 * 1024];
+        let header = CartridgeHeader::parse(&rom).expect("header válido");
+        let checksum = header.checksum();
+        let cartridge = cart::load(rom).expect("cartucho válido");
+        let mut bus = Bus::new(cartridge);
+        let mut cpu = Cpu::after_boot_rom(checksum);
+
+        bus.write(0xFF26, 0x80);
+
+        for _ in 0..100 {
+            cpu.step(&mut bus);
+        }
+
+        let available = bus.audio_samples_available();
+        assert!(available > 0);
+
+        let buffer = create_audio_buffer();
+        drain_bus_audio(&mut bus, &buffer);
+
+        assert_eq!(bus.audio_samples_available(), 0);
     }
 }

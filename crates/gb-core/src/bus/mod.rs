@@ -197,7 +197,7 @@ impl Bus {
     pub fn tick_ppu(&mut self) {
         let signals = self.ppu.tick();
         if signals.begin_mode3 {
-            self.ppu.render_background_scanline(&self.vram);
+            self.ppu.render_scanline(&self.vram, &self.oam);
         }
         if signals.vblank_interrupt {
             self.io[IF_IDX] |= 0x01;

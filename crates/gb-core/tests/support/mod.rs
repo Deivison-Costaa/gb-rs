@@ -3,7 +3,7 @@
 pub fn decoded_elsewhere(opcode: u8) -> bool {
     opcode == 0x00
         || opcode == 0xC3
-        || ((0x40..=0x7F).contains(&opcode) && opcode != 0x76)
+        || (0x40..=0x7F).contains(&opcode)
         || opcode & 0b1100_0111 == 0b0000_0110
         || opcode & 0b1100_0111 == 0b0000_0010
         || opcode & 0b1100_1111 == 0b0000_0001

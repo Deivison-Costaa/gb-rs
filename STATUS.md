@@ -3,13 +3,13 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0051 — Interrupções: IE/IF/IME, dispatch de 5 M-cycles, EI/RETI com delay ([doc](docs/iterations/0051-interrupts.md)). `check_interrupt` lê IE e IF, escolhe o bit mais prioritário (trailing_zeros em `IE & IF & 0x1F` — VBlank > LCD > Timer > Serial > Joypad), limpa o bit de IF e zera IME, então injeta 5 M-cycles de dispatch (2 wait + 2 push PC + jump ao vetor). `EI` e `RETI` usam `ei_pending`/`ei_wait` com delay de 1 instrução (`ei_wait` suprime a verificação no ciclo seguinte, `ei_pending` vira `IME=1` no próximo fetch). `DI` zera `ei_pending`/`ei_wait`. Bateria: **7/7 pegos, 2/2 controles verdes** — o M2 (DI não limpa pending EI) sobreviveu na primeira rodada e foi pego após reescrever `di_clears_pending_ei` para medir IF em vez de IME.
+**Última iteração concluída:** 0052 — HALT + o bug do HALT ([doc](docs/iterations/0052-halt-bug.md)). `HALT` ($76) agora pausa a CPU: flag `halted: bool` no `Cpu`, checado no início de `step()` antes do dispatch. Wake-up com `IE & IF != 0` sem atraso (cai para `check_interrupt` no mesmo M-cycle). Bug do HALT: `halt_bug: bool` suprime um incremento de PC em `read_at_pc` quando `IME=0 && IE & IF != 0` no momento do HALT, causando re-leitura do byte seguinte. `decoded_elsewhere` perdeu a exclusão de `$76`; todos os 256 opcodes agora são decodificados ou illegal. Bateria: **7/7 pegos, 2/2 controles verdes** — M2 e M4 sobreviveram na primeira rodada e exigiram um teste novo (`after_wake_up_cpu_is_no_longer_halted`) e PC checks em `halt_bug_byte_after_halt_executed_twice`.
+**Iteração anterior:** 0051 — interrupções (IE/IF/IME, dispatch).
 **Iteração anterior:** 0050 — timer completo.
 **Iteração anterior:** 0049 — registrador DIV ($FF04).
 **Iteração anterior:** 0048 — correção do DAA ($27).
-**Iteração anterior:** 0047 — máscara do nibble baixo de F no POP AF.
-**Próxima tarefa:** ROADMAP **2.3** — `HALT` + o bug do HALT. `HALT` ($76) hoje é `Lockup::UndecodedOpcode`; precisa pausar a CPU e acordar quando `IE & IF != 0`. O bug ocorre com `IME=0` e interrupção pendente: PC falha em incrementar, causando re-leitura do byte seguinte ao `HALT`. O mecanismo de wake-up compartilha o `check_interrupt` do 2.2 (já lê IE e IF) mas não deve disparar o dispatch se `IME=0` — só acordar. A spec está em `docs/reference/05-interrupts.md` § halt. **Notas relevantes:** a nota 53 (check_interrupt faz RMW de IF — com PPU futura, a ordem importa), a nota 14 (cache de build). A nota 51 perdeu relevância (o DAA saiu na 0048, e o 2.2 não adiciona opcodes novos).
-**Marco atual:** M2 — interrupções completas, iniciando HALT
+**Próxima tarefa:** ROADMAP **2.4** — blargg `instr_timing`, `mem_timing`, `mem_timing-2`, `halt_bug`. Executar as 4 ROMs de timing + halt_bug via `gb-cli` com o M1+M2 completo e verificar a saída serial para cada uma. A ROM de halt_bug depende de timer funcional (que já está ok desde a 0050) e de interrupções (0051) mais o HALT (esta iteração) — se travar, `check_interrupt` e `halted` precisam ser depurados juntos. As ROMs de timing testam a exatidão dos M-cycles de cada instrução: o maior risco são instruções com timing condicional (JR/JC/JCALL/RET) implementadas antes do timer estar no ar, e o `ADD SP,e8` que tem 4 M-cycles e o instante do write final já foi fonte de erro (0017). A nota 14 (cache de build) continua relevante; a nota 53 (RMW de IF) não deve doer aqui porque as ROMs não têm PPU. O placar do scoreboard deve subir de 0 para alguma contagem em `halt_bug`, `instr_timing`, `mem_timing` e `mem_timing-2`.
+**Marco atual:** M2 — HALT completo, iniciando ROMs de timing
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -39,7 +39,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **633** (eram **650** na 0050 — 19 novos em `cpu_interrupts.rs`, 3 reescritos em `cpu_misc.rs` [±0 líquido de quantidade], 2 atualizados em `cpu_ret.rs` [sem alteração de quantidade]; a diferença de -17 é provável variância de contagem entre `cargo test --all` e a contagem anterior).
+Testes do workspace: **643** (eram **633** na 0051 — 10 novos em `cpu_halt.rs`, incluindo `after_wake_up_cpu_is_no_longer_halted` que fechou o buraco do M2 na bateria de mutação; 3 testes existentes atualizados em `cpu_mcycle_loop.rs` [1 reescrito], `cpu_ld_r8_block.rs` [1 reescrito com verificações novas] e `cpu_halt.rs` [1 com PC checks adicionais]; ajuste em `decoded_elsewhere` removeu a exclusão de `$76`).
 
 ## Invariantes
 

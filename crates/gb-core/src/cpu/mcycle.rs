@@ -443,6 +443,8 @@ pub struct Cpu {
     pub ime: bool,
     ei_pending: bool,
     ei_wait: bool,
+    halted: bool,
+    halt_bug: bool,
 }
 
 impl Cpu {
@@ -455,12 +457,24 @@ impl Cpu {
             ime: false,
             ei_pending: false,
             ei_wait: false,
+            halted: false,
+            halt_bug: false,
         }
     }
 
     // Avança um M-cycle (R2). No máximo um acesso ao barramento.
     pub fn step(&mut self, bus: &mut Bus) {
         bus.tick_timer();
+
+        if self.halted {
+            let ie = bus.read(IE_ADDR);
+            let if_reg = bus.read(IF_ADDR);
+            if ie & if_reg & INTERRUPT_MASK != 0 {
+                self.halted = false;
+            } else {
+                return;
+            }
+        }
 
         if matches!(self.state, State::Fetch) {
             let just_delayed = self.apply_ei_delay();
@@ -719,7 +733,16 @@ impl Cpu {
                 self.latch = u16::from((opcode >> 3) & 7) * 8;
                 State::CallImmediate(Condition::Always, CallImmediate::Internal)
             }
-            HALT => State::Locked(Lockup::UndecodedOpcode(opcode)),
+            HALT => {
+                let ie = bus.read(IE_ADDR);
+                let if_reg = bus.read(IF_ADDR);
+                if !self.ime && ie & if_reg & INTERRUPT_MASK != 0 {
+                    self.halt_bug = true;
+                } else {
+                    self.halted = true;
+                }
+                State::Fetch
+            }
             LD_R8_R8_FIRST..=LD_R8_R8_LAST => self.load_r8_r8(opcode),
             _ if opcode & LD_R8_U8_MASK == LD_R8_U8_PATTERN => Self::load_r8_u8(opcode),
             _ if opcode & LD_R16MEM_MASK == STORE_R16MEM_PATTERN => {
@@ -1620,7 +1643,11 @@ impl Cpu {
     // wrapping_add: PC dá a volta — instrução em $FFFF segue em $0000.
     fn read_at_pc(&mut self, bus: &Bus) -> u8 {
         let byte = bus.read(self.registers.pc);
-        self.registers.pc = self.registers.pc.wrapping_add(1);
+        if self.halt_bug {
+            self.halt_bug = false;
+        } else {
+            self.registers.pc = self.registers.pc.wrapping_add(1);
+        }
         byte
     }
 }

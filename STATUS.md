@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0083 — DAC-off trigger protection (6.8d) ([doc](docs/iterations/0083-dac-off-trigger.md)). Adiciona guarda de DAC em `PulseChannel::trigger()` e `Channel4::trigger()`: se `[NRx2] & $F8 == 0`, o trigger não liga o canal. CH3 já tinha essa proteção. 6 testes existentes atualizados (3 CH2, 3 CH4) que disparam sem NR22/NR42 e precisaram de DAC explícito; 3 novos testes de controle negativo. Bateria: **3/3 pegos**, 2/2 controles verdes.
-**Próxima tarefa:** ROADMAP **6.8e** (remaining fixes + final verification run). Notas relevantes: ver doc da 0083 — três testes do CH4 (`lfsr_nao_avanca_com_shift_14`, `lfsr_nao_avanca_com_shift_15`, `trigger_define_freq_timer_em_zero`) são falsos positivos após esta iteração (passam porque DAC está off por default, não porque a funcionalidade que testam funciona; os valores default coincidem com o resultado desejado). Atenção: o próximo item consolida as correções dos sub-itens 6.8a–d e roda a suíte `dmg_sound` completa; verificar se há regressão no scoreboard. É provável que as 12 ROMs de áudio do blargg ainda não passem — o item é sobre fechar os últimos bugs e medir.
+**Última iteração concluída:** 0084 — remaining fixes + final verification (6.8e) ([doc](docs/iterations/0084-remaining-fixes.md)). Corrige 3 testes falsos positivos do CH4 (`lfsr_nao_avanca_com_shift_14`, `lfsr_nao_avanca_com_shift_15`, `trigger_define_freq_timer_em_zero`) que passavam sem DAC ligado e nunca exercitavam a funcionalidade que alegavam testar. O teste `trigger_define_freq_timer_em_zero` foi fortalecido: agora avança o freq_timer, re-trigger e verifica reset para 0. Bateria: **2/3 pegos**, 2/2 controles verdes. Suíte `dmg_sound` em 0/13 — todas as 13 ROMs estouram 250M ciclos sem output. O placar não mudou (mudanças são só nos testes unitários).
+**Próxima tarefa:** ROADMAP **2.4b** (`halt_bug` e `mem_timing-2`). O item foi reavaliado em 26/07 e permaneceu bloqueado; o M3 fechou no 3.7, então o bloqueio expirou (ver linha 261 do ROADMAP). Notas relevantes: a ROM `halt_bug` estourou 250M ciclos na última execução do scoreboard (crash), e `mem_timing-2` (4 ROMs) também. Investigar se o bug do HALT está implementado corretamente — a ROM `halt_bug` testa o comportamento de borda do HALT com IME=0 e interrupção pendente. A `mem_timing-2` testa timing de acesso a memória durante PUSH/POP/CALL/RET — possível divergência no número de M-cycles ou na ordem de leitura/escrita.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **929** (eram 915 na 0081 — 14 atualizados em `gb-core`).
+Testes do workspace: **938** (sem alteração — 3 testes do CH4 modificados, nenhum novo).
 
 ## Invariantes
 

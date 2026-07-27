@@ -289,7 +289,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [x] 5.2 MBC3 + RTC.
   - [x] 5.2a MBC3: ROM banking (2MB, 7 bits) + RAM banking (32KB, 4 bancos) + seleção RAM/RTC no registrador $4000–$5FFF. Os slots RTC ($08–$0C) ficam como unmapped por ora — o banking da RAM é o primeiro conceito.
   - [x] 5.2b MBC3: RTC (registradores de clock, latch via $6000–$7FFF, halt flag).
-- [ ] 5.3 MBC5.
+- [x] 5.3 MBC5.
 
 **Marco M5: Pokémon Red boota, salva e recarrega o save.**
 

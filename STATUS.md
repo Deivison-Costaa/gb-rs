@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0070 — MBC3: RTC (registradores de clock, latch, halt flag) ([doc](docs/iterations/0070-mbc3-rtc.md)). 5 registradores (`$08`–`$0C`) acessíveis via janela RAM sob `ram_enabled`, latch via `$6000`–`$7FFF` (sequência `$00`→`$01`, sem efeito observável pois timer não avança — nota 54), halt flag (bit 6 de `$0C`), `with_rtc()` setado para tipos `$0F`/`$10` no `load()`. 12 testes novos (867 total). Bateria: **6/6 pegos**, 2/2 controles verdes. O latch sobrevive como no-op (C2) porque sem ticking não há divergência live/latched — corrigível quando o timer avançar. `Mbc3` em `crates/gb-core/src/cart/mbc3.rs` (171 linhas, +35).
-**Próxima tarefa:** ROADMAP **5.3** (MBC5). O MBC5 é o último mapper do marco M5: até 8 MiB de ROM (9 bits, dois registradores separados em `$2000`–`$2FFF` para os 8 bits baixos e `$3000`–`$3FFF` para o bit 9), até 128 KiB de RAM externa (16 bancos de 8 KiB, seleção via `$4000`–`$5FFF` com 4 bits), sem 00→01 translation no banco ROM (banco 0 é banco 0). Rumble em bit 3 do registrador RAM (tipos `$1C`–`$1E`) pode ser ignorado — não há hardware físico para vibrar. Ver `docs/reference/08-cartridges-mbc.md` § MBC5. Nota nova: 56 (MBC5 banco 0 é banco 0, não 1 — divergência de todos os MBCs anteriores). O dispatch em `load()` precisa aceitar os 6 códigos (`$19`–`$1E`).
+**Última iteração concluída:** 0071 — MBC5: ROM banking (9 bits, dois registradores), RAM banking (4 bits, 16 bancos), 6 tipos ($19–$1E) ([doc](docs/iterations/0071-mbc5.md)). Banco 0 é banco 0 (divergência de todos os MBCs anteriores — nota 56), sem 00→01 translation. ROM bank low em `$2000`–`$2FFF` (8 bits), nono bit em `$3000`–`$3FFF` (1 bit mascarado de 8), RAM bank em `$4000`–`$5FFF` (4 bits). Rumble ignorado (bit 3 tratado como parte do registrador de RAM). 33 testes novos (900 total). Bateria: **6/6 pegos**, 2/2 controles verdes. `Mbc5` em `crates/gb-core/src/cart/mbc5.rs` (145 linhas). Marco M5 fechado.
+**Próxima tarefa:** ROADMAP **6.1** (APU — Frame sequencer 512 Hz). Abrir `docs/reference/` para a APU; se não houver arquivo, buscar no Pan Docs (gbdev.io/pandocs/Audio) e commitar antes de implementar. O frame sequencer gera os clocks de 512 Hz que controlam length counter (256 Hz), volume envelope (64 Hz) e sweep (128 Hz). A APU avança junto com a CPU por M-cycle: `div_apu` interno incrementa a cada M-cycle e gera um tick do frame sequencer a cada 8192 M-cycles (512 Hz = 4.194304 MHz / 8192). Quatro canais: dois square waves (1 e 2), wave (3) e noise (4). A ordem sugerida no ROADMAP é canal 2 primeiro (o mais simples), depois 1, 3, 4, mixer, downsample. **Esta é a primeira vez que o emulador produz áudio — comece com a estrutura do módulo APU, o `div_apu`, o frame sequencer e os registradores de enable/volume.**
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **867** (eram 855 na 0069 — 12 novos em `cart_mbc3.rs`).
+Testes do workspace: **900** (eram 867 na 0070 — 33 novos em `cart_mbc5.rs`).
 
 ## Invariantes
 

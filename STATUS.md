@@ -3,9 +3,9 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0055 — PPU registradores SCY/SCX/DMA/BGP/OBP0/OBP1/WY/WX ($FF42–$FF4B) roteados pelo PPU no `Bus` ([doc](docs/iterations/0055-ppu-registers-rest.md)). 12 testes novos em `ppu_registers_3_1b.rs`. Placar: inalterado (16/121). Range do PPU no `match` do `Bus` agora é `0xFF40..=0xFF4B` (12 endereços contíguos). DMA é stub: armazena o valor escrito. Bateria: **3/3 pegos, 2/2 controles verdes**.
-**Iteração anterior:** 0054 — módulo PPU: LY ($FF44) e STAT ($FF41) modo.
-**Próxima tarefa:** ROADMAP **3.1c** — VRAM ($8000–$9FFF)
+**Última iteração concluída:** 0056 — VRAM ($8000–$9FFF) acessível pelo barramento ([doc](docs/iterations/0056-ppu-vram.md)). 5 testes novos em `bus_vram.rs`. Placar: inalterado (16/121). `Bus` ganhou array `vram: [u8; 8 * 1024]` indexado por `addr - 0x8000`. Inicialização em `$00` (escolha; hardware real é aleatório). VRAM removido da lista `pending` do teste `the_regions_without_an_owner`. Bateria: **5/5 pegos, 2/2 controles verdes** (com correção de step no teste de range).
+**Iteração anterior:** 0055 — registradores SCY/SCX/DMA/BGP/OBP0/OBP1/WY/WX ($FF42–$FF4B).
+**Próxima tarefa:** ROADMAP **3.1d** — OAM ($FE00–$FE9F)
 **Marco atual:** M3 — PPU
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -36,7 +36,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **682** (eram 670 na 0054 — 12 novos em `ppu_registers_3_1b.rs`).
+Testes do workspace: **687** (eram 682 na 0055 — 5 novos em `bus_vram.rs`).
 
 ## Invariantes
 

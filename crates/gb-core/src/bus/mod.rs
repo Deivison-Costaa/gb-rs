@@ -22,6 +22,8 @@ const IF_IDX: usize = 0x0F;
 
 const WRAM_LEN: usize = 8 * 1024;
 
+const VRAM_LEN: usize = 8 * 1024;
+
 // Só os 13 bits baixos do endereço chegam à WRAM (§ Echo RAM descrevendo a fiação).
 const WRAM_ADDRESS_MASK: usize = 0x1FFF;
 
@@ -74,6 +76,7 @@ enum TimerOverflow {
 
 pub struct Bus {
     cartridge: Box<dyn Cartridge>,
+    vram: [u8; VRAM_LEN],
     wram: [u8; WRAM_LEN],
     hram: [u8; HRAM_LEN],
     io: [u8; boot::IO_LEN],
@@ -90,6 +93,7 @@ impl Bus {
     pub fn new(cartridge: Box<dyn Cartridge>) -> Self {
         Self {
             cartridge,
+            vram: [0x00; VRAM_LEN],
             wram: [0x00; WRAM_LEN],
             hram: [0x00; HRAM_LEN],
             io: boot::IO,
@@ -123,7 +127,8 @@ impl Bus {
                 }
             },
             Region::InterruptEnable => self.ie,
-            Region::VideoRam | Region::ObjectAttributeMemory => OPEN_BUS,
+            Region::VideoRam => self.vram[vram_index(addr)],
+            Region::ObjectAttributeMemory => OPEN_BUS,
         }
     }
 
@@ -174,7 +179,8 @@ impl Bus {
                 }
             },
             Region::InterruptEnable => self.ie = value,
-            Region::NotUsable | Region::VideoRam | Region::ObjectAttributeMemory => {}
+            Region::VideoRam => self.vram[vram_index(addr)] = value,
+            Region::NotUsable | Region::ObjectAttributeMemory => {}
         }
     }
 
@@ -240,6 +246,10 @@ const fn clock_bit(select: u8) -> u32 {
 
 const fn wram_index(addr: u16) -> usize {
     (addr as usize) & WRAM_ADDRESS_MASK
+}
+
+const fn vram_index(addr: u16) -> usize {
+    (addr as usize) - 0x8000
 }
 
 const fn hram_index(addr: u16) -> usize {

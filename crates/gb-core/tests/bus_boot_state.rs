@@ -92,8 +92,16 @@ fn unnamed_io_addresses() -> Vec<u16> {
         .collect();
 
     (0xFF00..=0xFF7Fu16)
-        .filter(|addr| !named.contains(addr))
+        .filter(|addr| !named.contains(addr) && !is_wave_ram(*addr))
         .collect()
+}
+
+const fn is_wave_ram(addr: u16) -> bool {
+    addr >= 0xFF30 && addr <= 0xFF3F
+}
+
+fn wave_ram_addresses() -> Vec<u16> {
+    (0xFF30..=0xFF3F).collect()
 }
 
 #[test]
@@ -103,6 +111,7 @@ fn the_transcribed_column_partitions_the_io_range_exactly_once() {
         .map(|&(addr, _, _)| addr)
         .filter(|&addr| addr != 0xFFFF)
         .chain(CGB_ONLY.iter().map(|&(addr, _)| addr))
+        .chain(wave_ram_addresses())
         .chain(unnamed_io_addresses())
         .collect();
 
@@ -212,9 +221,9 @@ fn the_addresses_the_table_never_mentions_have_no_owner_yet() {
 
     assert_eq!(
         unnamed.len(),
-        72,
+        56,
         "dos 128 endereços de I/O a tabela dá valor a 41 e marca 15 como `---`; \
-         sobre os outros 72 ela não diz nada"
+         sobre os 56 restantes ela não diz nada (os 16 da wave RAM são da APU desde o 6.4)"
     );
 
     for addr in unnamed {

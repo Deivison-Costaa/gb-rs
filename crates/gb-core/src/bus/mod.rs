@@ -130,6 +130,7 @@ impl Bus {
                 DIV_ADDR => (self.sys_counter >> 8) as u8,
                 SB_ADDR | SC_ADDR => self.serial.read(addr),
                 0xFF10..=0xFF26 => self.apu.read(addr),
+                0xFF30..=0xFF3F => self.apu.read(addr),
                 0xFF40..=0xFF4B => self.ppu.read(addr),
                 _ => {
                     let index = io_index(addr);
@@ -198,6 +199,7 @@ impl Bus {
                 }
                 SB_ADDR | SC_ADDR => self.serial.write(addr, value),
                 0xFF10..=0xFF26 => self.apu.write(addr, value),
+                0xFF30..=0xFF3F => self.apu.write(addr, value),
                 0xFF40..=0xFF4B => self.ppu.write(addr, value),
                 _ => {
                     let index = io_index(addr);
@@ -413,6 +415,41 @@ impl Bus {
     #[must_use]
     pub fn ch2_envelope_volume(&self) -> u8 {
         self.apu.ch2_envelope_volume()
+    }
+
+    #[must_use]
+    pub fn ch3_enabled(&self) -> bool {
+        self.apu.ch3_enabled()
+    }
+
+    #[must_use]
+    pub fn ch3_dac_enabled(&self) -> bool {
+        self.apu.ch3_dac_enabled()
+    }
+
+    #[must_use]
+    pub fn ch3_output_level(&self) -> u8 {
+        self.apu.ch3_output_level()
+    }
+
+    #[must_use]
+    pub fn ch3_period(&self) -> u16 {
+        self.apu.ch3_period()
+    }
+
+    #[must_use]
+    pub fn ch3_frequency_timer(&self) -> u16 {
+        self.apu.ch3_frequency_timer()
+    }
+
+    #[must_use]
+    pub fn ch3_sample_index(&self) -> u8 {
+        self.apu.ch3_sample_index()
+    }
+
+    #[must_use]
+    pub fn ch3_last_sample_buffer(&self) -> u8 {
+        self.apu.ch3_last_sample_buffer()
     }
 
     fn and_result(&self) -> bool {

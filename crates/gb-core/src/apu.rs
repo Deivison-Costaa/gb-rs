@@ -1,4 +1,4 @@
-//! spec: docs/reference/07-apu.md. ROADMAP 6.3 — CH1 sweep.
+//! spec: docs/reference/07-apu.md. ROADMAP 6.4 — CH3 wave.
 
 use crate::cart::OPEN_BUS;
 
@@ -118,6 +118,25 @@ impl Channel1 {
     }
 }
 
+#[derive(Debug, Clone)]
+struct Channel3 {
+    enabled: bool,
+    freq_timer: u16,
+    sample_index: u8,
+    last_sample_buffer: u8,
+}
+
+impl Channel3 {
+    const fn new() -> Self {
+        Self {
+            enabled: false,
+            freq_timer: 0,
+            sample_index: 1,
+            last_sample_buffer: 0,
+        }
+    }
+}
+
 const fn period(nrx3: u8, nrx4: u8) -> u16 {
     u16::from_le_bytes([nrx3, nrx4 & 0x07])
 }
@@ -166,6 +185,7 @@ pub(crate) struct Apu {
     prev_frame_sequencer_step: u8,
     ch1: Channel1,
     ch2: PulseChannel,
+    ch3: Channel3,
 }
 
 impl Apu {
@@ -198,6 +218,7 @@ impl Apu {
             prev_frame_sequencer_step: 0,
             ch1: Channel1::new(),
             ch2: PulseChannel::new(),
+            ch3: Channel3::new(),
         }
     }
 
@@ -224,7 +245,13 @@ impl Apu {
             NR50_ADDR => self.nr50,
             NR51_ADDR => self.nr51,
             NR52_ADDR => self.nr52,
-            WAVE_RAM_BASE..=WAVE_RAM_END => self.wave_ram[(addr - WAVE_RAM_BASE) as usize],
+            WAVE_RAM_BASE..=WAVE_RAM_END => {
+                if self.ch3.enabled {
+                    OPEN_BUS
+                } else {
+                    self.wave_ram[(addr - WAVE_RAM_BASE) as usize]
+                }
+            }
             _ => OPEN_BUS,
         }
     }
@@ -252,11 +279,21 @@ impl Apu {
                     self.ch2.trigger(self.nr22, self.nr23, self.nr24);
                 }
             }
-            NR30_ADDR => self.nr30 = value,
+            NR30_ADDR => {
+                self.nr30 = value;
+                if value & 0x80 == 0 {
+                    self.ch3.enabled = false;
+                }
+            }
             NR31_ADDR => self.nr31 = value,
             NR32_ADDR => self.nr32 = value,
             NR33_ADDR => self.nr33 = value,
-            NR34_ADDR => self.nr34 = value,
+            NR34_ADDR => {
+                self.nr34 = value;
+                if value & NRX4_TRIGGER_BIT != 0 {
+                    self.trigger_ch3();
+                }
+            }
             NR41_ADDR => self.nr41 = value,
             NR42_ADDR => self.nr42 = value,
             NR43_ADDR => self.nr43 = value,
@@ -266,7 +303,7 @@ impl Apu {
             NR52_ADDR => {
                 self.nr52 = (self.nr52 & !NR52_POWER_BIT) | (value & NR52_POWER_BIT);
             }
-            WAVE_RAM_BASE..=WAVE_RAM_END => {
+            WAVE_RAM_BASE..=WAVE_RAM_END if !self.ch3.enabled => {
                 self.wave_ram[(addr - WAVE_RAM_BASE) as usize] = value;
             }
             _ => {}
@@ -322,6 +359,30 @@ impl Apu {
         }
     }
 
+    fn trigger_ch3(&mut self) {
+        if self.nr30 & 0x80 == 0 {
+            return;
+        }
+        self.ch3.enabled = true;
+        self.ch3.freq_timer = period(self.nr33, self.nr34);
+        self.ch3.sample_index = 1;
+    }
+
+    fn tick_ch3_freq(&mut self) {
+        self.ch3.freq_timer = self.ch3.freq_timer.wrapping_add(8);
+        if self.ch3.freq_timer >= FREQ_MAX {
+            self.ch3.freq_timer = period(self.nr33, self.nr34);
+            let byte_idx = (self.ch3.sample_index as usize) >> 1;
+            let nibble = if self.ch3.sample_index & 1 == 0 {
+                self.wave_ram[byte_idx] >> 4
+            } else {
+                self.wave_ram[byte_idx] & 0x0F
+            };
+            self.ch3.last_sample_buffer = nibble;
+            self.ch3.sample_index = (self.ch3.sample_index + 1) & 0x1F;
+        }
+    }
+
     pub(crate) fn tick(&mut self) {
         self.div_apu = self.div_apu.wrapping_add(4);
 
@@ -333,6 +394,10 @@ impl Apu {
 
         if powered && self.ch2.enabled {
             self.ch2.tick_freq(self.nr23, self.nr24);
+        }
+
+        if powered && self.ch3.enabled {
+            self.tick_ch3_freq();
         }
 
         if self.div_apu >= T_CYCLES_PER_FRAME_SEQUENCER_TICK {
@@ -455,5 +520,33 @@ impl Apu {
 
     pub(crate) const fn ch2_envelope_volume(&self) -> u8 {
         self.ch2.envelope_volume
+    }
+
+    pub(crate) const fn ch3_enabled(&self) -> bool {
+        self.ch3.enabled
+    }
+
+    pub(crate) const fn ch3_dac_enabled(&self) -> bool {
+        self.nr30 & 0x80 != 0
+    }
+
+    pub(crate) const fn ch3_output_level(&self) -> u8 {
+        (self.nr32 >> 5) & 0x03
+    }
+
+    pub(crate) const fn ch3_period(&self) -> u16 {
+        period(self.nr33, self.nr34)
+    }
+
+    pub(crate) const fn ch3_frequency_timer(&self) -> u16 {
+        self.ch3.freq_timer
+    }
+
+    pub(crate) const fn ch3_sample_index(&self) -> u8 {
+        self.ch3.sample_index
+    }
+
+    pub(crate) const fn ch3_last_sample_buffer(&self) -> u8 {
+        self.ch3.last_sample_buffer
     }
 }

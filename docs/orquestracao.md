@@ -598,3 +598,136 @@ apontar** — o `--subject` apagou o `(#N)`, o #46 esvaziou o campo do doc sem
 alimentar o destino. A regra que sai daí: quando um conserto **move** informação
 de um lugar para outro, o destino precisa de dono e de cadência, senão o que se
 fez foi apagar, não mover.
+
+## 2026-07-27 — A regra da caixa bloqueada funcionou pela metade na primeira prova
+
+A convenção escrita no PR #68 manda duas coisas no passo 1: reavaliar caixa
+bloqueada cujo bloqueador já fechou, e — se a razão do bloqueio se revelar
+errada — **corrigir o texto da linha antes de seguir**.
+
+O `2.4b` dizia "Reavalie quando a máquina de modos do 3.2 fechar", e o 3.2
+fechou na iteração anterior. A 0059 foi a primeira vez que a regra teve o que
+fazer.
+
+**Fez a primeira metade.** O `scoreboard.csv` registra medição nova em `4df6da1`
+às 02:57:23Z: `halt_bug` e as quatro de `mem_timing-2` em `crash`, rodando até o
+teto de 250 M ciclos sem veredito.
+
+**Não fez a segunda — e a correção só veio oito iterações depois.** A linha saiu
+intocada da 0059, ainda mandando reavaliar quando o 3.2 fechasse: condição já
+satisfeita, portanto morta. O conhecimento novo foi para o `Próxima tarefa` do
+`STATUS.md` ("continua bloqueado — reavalie quando o rendering estiver mais
+completo"). Quem consertou a linha foi a **0067**, a iteração do `gb-desktop`,
+que não tinha nada a ver com o `2.4b`.
+
+É a quinta vez que aquele parágrafo vence a regra formal, e a primeira em que os
+dois **se contradizem dentro do mesmo commit**, com o parágrafo certo e o
+ROADMAP errado. Há explicação mecânica: o parágrafo o agente escreve de qualquer
+jeito, é o passo 9; corrigir a linha do ROADMAP é trabalho que só a regra pede.
+Entre o lugar que ele já visita e o que só a regra manda visitar, a informação
+fresca vai para o primeiro.
+
+O prejuízo prático é zero — o `scoreboard.sh` roda as duas ROMs toda iteração de
+qualquer forma. Medido o saldo da regra do #68: a caixa **é** reavaliada e a
+linha **é** corrigida, mas as duas coisas se separaram no tempo e caíram em
+iterações diferentes. O modo de falha original não voltou; no lugar dele
+apareceu latência de oito iterações entre descobrir que o texto mentia e
+reescrevê-lo.
+
+E um efeito que a regra não cobre: **desbloquear não é agendar**. O `2.4b` está
+aberto e desbloqueado desde a 0067, fica antes do M6 na ordem do arquivo, e
+mesmo assim as oito iterações seguintes foram todas para M5 e M6 — porque o
+`Próxima tarefa` do `STATUS.md` apontava para lá. O parágrafo informal decide a
+fila; o passo 1 formal, não.
+
+## 2026-07-27 — O teto de tempo é função do tamanho do placar, e ninguém tinha reparado
+
+A iteração 0063 morreu no teto de 45 min do `oc-iter.sh` com a última linha do
+log dizendo `All tests pass. Now run the scoreboard.` Tinha terminado o trabalho
+e foi morta rodando a verificação.
+
+O teto era fixo desde que o runner existe. O que não é fixo é o placar: começou
+com poucas ROMs e passou de 200 por execução, e `halt_bug` e `mem_timing-2`
+queimam 250 M ciclos **cada uma** sem dar veredito. Medindo a série da noite,
+duas iterações chegaram a menos de um minuto do limite antes de uma estourar —
+2668 s e 2510 s contra 2700. Não era margem; era uma corrida que se vinha
+ganhando por pouco.
+
+Subiu para 4200 s, com a justificativa dentro do arquivo. E fica o padrão, que é
+mais geral que este caso: **um limite fixo sobre um custo que cresce a cada
+marco é uma bomba-relógio silenciosa** — ele não avisa que está apertando, só
+falha um dia, e falha na etapa mais cara (depois de todo o trabalho feito).
+
+Registro do conserto, porque também é dado: a árvore ficou suja com trabalho bom
+e quase pronto. Foi salva num commit da branch `iter/0063-dmg-acid2-hash`,
+publicada, e a árvore devolvida limpa — o supervisor, que se recusa a agir sobre
+árvore suja, relançou sozinho 4 min depois. A refeita passou de primeira, em
+2510 s: o contexto limpo custou menos que o contexto que já tinha explorado.
+
+## 2026-07-27 — O M4 passou de verificado pela CI a observado por um humano
+
+O marco M4 declara "Tetris e Super Mario Land jogáveis" e fechou às 05:19 com o
+`gb-desktop` (winit + pixels). Durante quatro horas o único atestado de que havia
+imagem na tela era o `check` verde do PR #83 — ou seja, que compilava e passava
+nos testes.
+
+Às 09:50 o binário foi compilado (29,7 s) e executado com `dmg-acid2.gb`, e o
+usuário confirmou o rosto desenhado na janela. Não mudou uma linha de código;
+mudou o tipo de evidência.
+
+Vale porque o projeto já commitou essa distinção antes — o PR #6 foi "a
+publicação da série passou de inferida a observada". Duas vezes agora o que
+parecia estabelecido era, na verdade, inferido de um proxy. **Verde de CI é
+evidência sobre o processo, não sobre o artefato**, e a diferença custa segundos
+para eliminar e não se elimina sozinha.
+
+Nota do que ainda não é observado: não há ROM de jogo no repositório, então o
+mapeamento de teclado entregue no 4.4 segue verificado só por teste. "Tetris
+jogável" continua sendo inferência até alguém pôr um `.gb` no disco.
+
+## 2026-07-27 — O placar estava errado sobre quatro ROMs, e só um olho humano viu
+
+O `2.4b` (`halt_bug` e `mem_timing-2`) figurava como bloqueado havia dias, com o
+placar marcando `crash` nas cinco linhas — rodam até o teto de 250 M ciclos sem
+veredito. A leitura óbvia, e a que o ROADMAP registrava, era "o emulador ainda
+não dá conta".
+
+Com o `gb-desktop` pronto (4.4, entregue às 05:19), bastou abrir as duas ROMs
+numa janela e olhar:
+
+| ROM | placar dizia | tela diz |
+|---|---|---|
+| `mem_timing-2` (4 linhas) | `crash` | **`Passed`** — `01:ok 02:ok 03:ok` |
+| `halt_bug` | `crash` | **`Failed`**, com tabela e checksum `A54D802E` |
+
+As duas ROMs **reportam na tela e não pela porta serial**. O `gb-cli` julga lendo
+o serial, então nunca receberia veredito de nenhuma das duas, por mais correto
+que o emulador estivesse. `crash` ali nunca significou "travou": significava "o
+juiz estava ouvindo o canal errado". A pista estava à vista o tempo todo — há um
+`mem_timing-dmg-cgb.png` ao lado da ROM, que é a imagem de referência do
+resultado — e ninguém a leu.
+
+Consequências, em ordem de importância:
+
+1. **Quatro linhas do placar viram verdes sem tocar em `gb-core`.** O emulador
+   está mais correto do que o instrumento afirmava.
+2. O `2.4b` é na verdade duas caixas: ensinar o `gb-cli` a julgar por
+   framebuffer (barato — `execute_with_fb_hash()` existe desde o 3.7) e corrigir
+   o bug do HALT (trabalho real, R1 obriga a ler a spec). Sem a primeira, a
+   segunda não é mensurável.
+3. A razão do bloqueio estava errada de um jeito específico: o ROADMAP dizia que
+   faltava PPU para as ROMs **passarem**. Faltava PPU para elas serem **lidas**.
+
+**O padrão, que é o que interessa para a apresentação.** Cada camada de
+verificação deste projeto foi corrigida pela camada de fora dela, e nunca por si
+mesma:
+
+- 591 testes internos + bateria de mutação: verdes, com `POP AF` e `DAA` errados.
+- As ROMs da blargg pegaram os dois — o juiz externo corrigiu o interno.
+- O juiz externo estava **mal ligado** em cinco ROMs, e nada a jusante podia
+  perceber, porque tudo confiava nele.
+- Quem viu foi uma pessoa olhando para uma janela.
+
+O `gb-desktop` foi entregue como "o marco que torna jogável". A primeira coisa
+que ele realmente pagou, cinco horas depois, foi servir de instrumento de medição
+para um item de **timing de CPU**, que não tem nada a ver com gráficos.

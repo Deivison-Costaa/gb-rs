@@ -80,6 +80,21 @@ fn trigger_do_ch1_liga_o_canal_e_carrega_freq_timer() {
 }
 
 #[test]
+fn trigger_com_dac_desligado_nao_liga_o_canal() {
+    let (_cpu, bus) = machine(&[]);
+    let mut bus = bus;
+
+    bus.write(NR12, 0x00);
+    bus.write(NR13, 0x00);
+    bus.write(NR14, 0x85);
+
+    assert!(
+        !bus.ch1_enabled(),
+        "trigger não liga o canal 1 se o DAC (NR12) está desligado"
+    );
+}
+
+#[test]
 fn trigger_copia_periodo_para_shadow_register() {
     let (_cpu, bus) = machine(&[]);
     let mut bus = bus;

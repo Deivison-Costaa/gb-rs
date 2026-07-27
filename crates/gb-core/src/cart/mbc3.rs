@@ -1,5 +1,5 @@
 //! spec: `docs/reference/08-cartridges-mbc.md` § MBC3.
-//! ROADMAP 5.2a — ROM/RAM banking (RTC vem em 5.2b).
+//! ROADMAP 5.2a–5.2b — ROM/RAM banking + RTC.
 
 use std::fmt;
 use std::ops::RangeInclusive;
@@ -18,6 +18,9 @@ pub struct Mbc3 {
     ram_enabled: bool,
     ram_rtc_select: u8,
     has_battery: bool,
+    has_rtc: bool,
+    rtc_registers: [u8; 5],
+    latch_previous: u8,
 }
 
 impl Mbc3 {
@@ -39,6 +42,9 @@ impl Mbc3 {
             ram_enabled: false,
             ram_rtc_select: 0x00,
             has_battery: false,
+            has_rtc: false,
+            rtc_registers: [0; 5],
+            latch_previous: 0xFF,
         })
     }
 
@@ -46,6 +52,14 @@ impl Mbc3 {
     pub fn with_battery(self) -> Self {
         Self {
             has_battery: true,
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn with_rtc(self) -> Self {
+        Self {
+            has_rtc: true,
             ..self
         }
     }
@@ -74,6 +88,10 @@ impl Mbc3 {
         };
         effective_bank * RAM_BANK_LEN + offset % RAM_BANK_LEN
     }
+
+    fn rtc_select_active(&self) -> bool {
+        self.has_rtc && (0x08..=0x0C).contains(&self.ram_rtc_select)
+    }
 }
 
 impl Cartridge for Mbc3 {
@@ -81,9 +99,15 @@ impl Cartridge for Mbc3 {
         if ROM_WINDOW.contains(&addr) {
             let offset = self.rom_offset(addr);
             self.rom.get(offset).copied().unwrap_or(OPEN_BUS)
-        } else if RAM_WINDOW.contains(&addr) && self.ram_enabled && !self.ram.is_empty() {
-            let offset = self.ram_offset(addr);
-            self.ram.get(offset).copied().unwrap_or(OPEN_BUS)
+        } else if RAM_WINDOW.contains(&addr) && self.ram_enabled {
+            if self.rtc_select_active() {
+                self.rtc_registers[(self.ram_rtc_select - 8) as usize]
+            } else if !self.ram.is_empty() {
+                let offset = self.ram_offset(addr);
+                self.ram.get(offset).copied().unwrap_or(OPEN_BUS)
+            } else {
+                OPEN_BUS
+            }
         } else {
             OPEN_BUS
         }
@@ -100,12 +124,18 @@ impl Cartridge for Mbc3 {
             0x4000..=0x5FFF => {
                 self.ram_rtc_select = value & 0x0F;
             }
-            0x6000..=0x7FFF => {}
+            0x6000..=0x7FFF => {
+                self.latch_previous = value;
+            }
             _ => {
-                if RAM_WINDOW.contains(&addr) && self.ram_enabled && !self.ram.is_empty() {
-                    let offset = self.ram_offset(addr);
-                    if let Some(slot) = self.ram.get_mut(offset) {
-                        *slot = value;
+                if RAM_WINDOW.contains(&addr) && self.ram_enabled {
+                    if self.rtc_select_active() {
+                        self.rtc_registers[(self.ram_rtc_select - 8) as usize] = value;
+                    } else if !self.ram.is_empty() {
+                        let offset = self.ram_offset(addr);
+                        if let Some(slot) = self.ram.get_mut(offset) {
+                            *slot = value;
+                        }
                     }
                 }
             }

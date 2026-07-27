@@ -32,6 +32,16 @@ fn rom_byte(bank: usize, addr: u16) -> u8 {
     ((bank as u8) << 4) | (addr as u8 & 0x0F)
 }
 
+fn rom_with_rtc(num_banks: usize) -> Mbc3 {
+    let mbc = rom_with_banks(num_banks);
+    mbc.with_rtc()
+}
+
+fn rom_with_rtc_and_ram(num_banks: usize, ram_banks: usize) -> Mbc3 {
+    let mbc = rom_with_ram(num_banks, ram_banks);
+    mbc.with_rtc()
+}
+
 // ── ROM ───────────────────────────────────────────────────────────────
 
 #[test]
@@ -357,4 +367,176 @@ fn load_mbc3_timer_ram_battery_has_ram() {
 
     let cart = gb_core::cart::load(rom).expect("MBC3+TIMER+RAM+BATTERY devia carregar");
     assert!(cart.ram_data().is_some());
+}
+
+// ── RTC ────────────────────────────────────────────────────────────────
+
+#[test]
+fn rtc_registers_require_ram_enabled() {
+    let mbc = rom_with_rtc(2);
+    assert_eq!(mbc.read(0xA000), OPEN_BUS);
+}
+
+#[test]
+fn rtc_select_08_reads_and_writes_seconds() {
+    let mut mbc = rom_with_rtc(2);
+
+    mbc.write(0x0000, 0x0A);
+    mbc.write(0x4000, 0x08);
+
+    mbc.write(0xA000, 0x2A);
+    assert_eq!(mbc.read(0xA000), 0x2A);
+}
+
+#[test]
+fn rtc_all_five_registers_08_to_0c_are_accessible() {
+    let mut mbc = rom_with_rtc(2);
+
+    mbc.write(0x0000, 0x0A);
+
+    for reg in 0x08..=0x0C {
+        mbc.write(0x4000, reg);
+        let value = reg.wrapping_mul(7);
+        mbc.write(0xA000, value);
+    }
+
+    for reg in 0x08..=0x0C {
+        mbc.write(0x4000, reg);
+        assert_eq!(mbc.read(0xA000), reg.wrapping_mul(7));
+    }
+}
+
+#[test]
+fn rtc_values_persist_when_select_changes() {
+    let mut mbc = rom_with_rtc(2);
+
+    mbc.write(0x0000, 0x0A);
+
+    mbc.write(0x4000, 0x08);
+    mbc.write(0xA000, 0x3B);
+
+    mbc.write(0x4000, 0x09);
+    mbc.write(0xA000, 0x17);
+
+    mbc.write(0x4000, 0x08);
+    assert_eq!(mbc.read(0xA000), 0x3B);
+}
+
+#[test]
+fn rtc_day_high_bit_6_is_halt() {
+    let mut mbc = rom_with_rtc(2);
+
+    mbc.write(0x0000, 0x0A);
+    mbc.write(0x4000, 0x0C);
+
+    mbc.write(0xA000, 0x40);
+    assert_eq!(mbc.read(0xA000), 0x40);
+
+    mbc.write(0xA000, 0x00);
+    assert_eq!(mbc.read(0xA000), 0x00);
+}
+
+#[test]
+fn rtc_day_high_bit_7_is_day_carry() {
+    let mut mbc = rom_with_rtc(2);
+
+    mbc.write(0x0000, 0x0A);
+    mbc.write(0x4000, 0x0C);
+
+    mbc.write(0xA000, 0x80);
+    assert_eq!(mbc.read(0xA000), 0x80);
+
+    mbc.write(0xA000, 0x00);
+    assert_eq!(mbc.read(0xA000), 0x00);
+}
+
+#[test]
+fn rtc_day_high_bit_0_is_day_bit_8() {
+    let mut mbc = rom_with_rtc(2);
+
+    mbc.write(0x0000, 0x0A);
+    mbc.write(0x4000, 0x0C);
+
+    mbc.write(0xA000, 0x01);
+    assert_eq!(mbc.read(0xA000), 0x01);
+}
+
+#[test]
+fn rtc_writes_are_ignored_when_ram_disabled() {
+    let mut mbc = rom_with_rtc(2);
+
+    mbc.write(0x4000, 0x08);
+    mbc.write(0xA000, 0x2A);
+
+    mbc.write(0x0000, 0x0A);
+    assert_eq!(mbc.read(0xA000), 0x00);
+}
+
+#[test]
+fn rtc_accessible_even_without_external_ram() {
+    let mut mbc = rom_with_rtc(2);
+
+    mbc.write(0x0000, 0x0A);
+    mbc.write(0x4000, 0x08);
+
+    mbc.write(0xA000, 0x17);
+    assert_eq!(mbc.read(0xA000), 0x17);
+}
+
+#[test]
+fn rtc_ram_and_rtc_registers_are_independent() {
+    let mut mbc = rom_with_rtc_and_ram(2, 4);
+
+    mbc.write(0x0000, 0x0A);
+
+    mbc.write(0x4000, 0x08);
+    mbc.write(0xA000, 0x08);
+
+    mbc.write(0x4000, 0x00);
+    mbc.write(0xA000, 0x00);
+
+    mbc.write(0x4000, 0x08);
+    assert_eq!(mbc.read(0xA000), 0x08);
+
+    mbc.write(0x4000, 0x00);
+    assert_eq!(mbc.read(0xA000), 0x00);
+}
+
+#[test]
+fn latch_writing_00_then_01_to_6000_is_accepted() {
+    let mut mbc = rom_with_rtc(2);
+
+    mbc.write(0x6000, 0x00);
+    mbc.write(0x6000, 0x01);
+
+    mbc.write(0x0000, 0x0A);
+    mbc.write(0x4000, 0x08);
+    assert_eq!(mbc.read(0xA000), 0x00);
+}
+
+#[test]
+fn rtc_registers_not_mapped_for_non_rtc_types() {
+    let mut mbc = rom_with_banks(2);
+
+    mbc.write(0x0000, 0x0A);
+    mbc.write(0x4000, 0x08);
+
+    mbc.write(0xA000, 0x42);
+    assert_eq!(mbc.read(0xA000), OPEN_BUS);
+}
+
+#[test]
+fn writing_to_latch_range_does_not_corrupt_rtc_values() {
+    let mut mbc = rom_with_rtc(2);
+
+    mbc.write(0x0000, 0x0A);
+    mbc.write(0x4000, 0x08);
+    mbc.write(0xA000, 0x55);
+
+    mbc.write(0x6000, 0x00);
+    mbc.write(0x6000, 0x01);
+    mbc.write(0x6000, 0xFF);
+
+    mbc.write(0x4000, 0x08);
+    assert_eq!(mbc.read(0xA000), 0x55);
 }

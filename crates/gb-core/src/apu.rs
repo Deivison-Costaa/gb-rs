@@ -39,6 +39,8 @@ const NRX4_TRIGGER_BIT: u8 = 0x80;
 
 const FREQ_MAX: u16 = 2048;
 
+const DUTY_WAVEFORMS: [u8; 4] = [0b00000001, 0b10000001, 0b10000111, 0b01111110];
+
 #[derive(Debug, Clone)]
 struct PulseChannel {
     enabled: bool,
@@ -97,6 +99,18 @@ impl PulseChannel {
             }
         }
     }
+
+    fn digital_output(&self, duty_pattern: u8) -> u8 {
+        if !self.enabled {
+            return 0;
+        }
+        let waveform = DUTY_WAVEFORMS[(duty_pattern & 0x03) as usize];
+        if (waveform >> self.duty_step) & 1 != 0 {
+            self.envelope_volume
+        } else {
+            0
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -133,6 +147,19 @@ impl Channel3 {
             freq_timer: 0,
             sample_index: 1,
             last_sample_buffer: 0,
+        }
+    }
+
+    fn digital_output(&self, nr32: u8) -> u8 {
+        if !self.enabled {
+            return 0;
+        }
+        let level = (nr32 >> 5) & 0x03;
+        match level {
+            0 => 0,
+            1 => self.last_sample_buffer,
+            2 => self.last_sample_buffer >> 1,
+            _ => self.last_sample_buffer >> 2,
         }
     }
 }
@@ -226,6 +253,17 @@ impl Channel4 {
                 self.lfsr = (self.lfsr & 0xFF7F) | (feedback >> 8);
             }
             self.lfsr >>= 1;
+        }
+    }
+
+    fn digital_output(&self) -> u8 {
+        if !self.enabled {
+            return 0;
+        }
+        if self.lfsr & 1 != 0 {
+            self.envelope_volume
+        } else {
+            0
         }
     }
 }
@@ -332,7 +370,13 @@ impl Apu {
             NR44_ADDR => self.nr44,
             NR50_ADDR => self.nr50,
             NR51_ADDR => self.nr51,
-            NR52_ADDR => self.nr52,
+            NR52_ADDR => {
+                let status = if self.ch1.pulse.enabled { 0x01 } else { 0 }
+                    | if self.ch2.enabled { 0x02 } else { 0 }
+                    | if self.ch3.enabled { 0x04 } else { 0 }
+                    | if self.ch4.enabled { 0x08 } else { 0 };
+                (self.nr52 & 0xF0) | status
+            }
             WAVE_RAM_BASE..=WAVE_RAM_END => {
                 if self.ch3.enabled {
                     OPEN_BUS
@@ -394,13 +438,44 @@ impl Apu {
             NR50_ADDR => self.nr50 = value,
             NR51_ADDR => self.nr51 = value,
             NR52_ADDR => {
+                let was_powered = self.nr52 & NR52_POWER_BIT != 0;
                 self.nr52 = (self.nr52 & !NR52_POWER_BIT) | (value & NR52_POWER_BIT);
+                if was_powered && value & NR52_POWER_BIT == 0 {
+                    self.power_off();
+                }
             }
             WAVE_RAM_BASE..=WAVE_RAM_END if !self.ch3.enabled => {
                 self.wave_ram[(addr - WAVE_RAM_BASE) as usize] = value;
             }
             _ => {}
         }
+    }
+
+    fn power_off(&mut self) {
+        self.nr10 = 0x80;
+        self.nr11 = 0xBF;
+        self.nr12 = 0xF3;
+        self.nr13 = 0xFF;
+        self.nr14 = 0xBF;
+        self.nr21 = 0x3F;
+        self.nr22 = 0x00;
+        self.nr23 = 0xFF;
+        self.nr24 = 0xBF;
+        self.nr30 = 0x7F;
+        self.nr31 = 0xFF;
+        self.nr32 = 0x9F;
+        self.nr33 = 0xFF;
+        self.nr34 = 0xBF;
+        self.nr41 = 0xFF;
+        self.nr42 = 0x00;
+        self.nr43 = 0x00;
+        self.nr44 = 0xBF;
+        self.nr50 = 0x77;
+        self.nr51 = 0xF3;
+        self.ch1 = Channel1::new();
+        self.ch2 = PulseChannel::new();
+        self.ch3 = Channel3::new();
+        self.ch4 = Channel4::new();
     }
 
     fn trigger_ch1_sweep(&mut self) {
@@ -520,6 +595,80 @@ impl Apu {
                 }
             }
         }
+    }
+
+    pub(crate) fn mixer_sample(&self) -> (u16, u16) {
+        let powered = self.nr52 & NR52_POWER_BIT != 0;
+        if !powered {
+            return (0, 0);
+        }
+
+        let ch1 = self.ch1_digital_output();
+        let ch2 = self.ch2_digital_output();
+        let ch3 = self.ch3_digital_output();
+        let ch4 = self.ch4_digital_output();
+
+        let mut left: u16 = 0;
+        let mut right: u16 = 0;
+
+        if self.nr51 & 0x10 != 0 {
+            left += ch1 as u16;
+        }
+        if self.nr51 & 0x20 != 0 {
+            left += ch2 as u16;
+        }
+        if self.nr51 & 0x40 != 0 {
+            left += ch3 as u16;
+        }
+        if self.nr51 & 0x80 != 0 {
+            left += ch4 as u16;
+        }
+
+        if self.nr51 & 0x01 != 0 {
+            right += ch1 as u16;
+        }
+        if self.nr51 & 0x02 != 0 {
+            right += ch2 as u16;
+        }
+        if self.nr51 & 0x04 != 0 {
+            right += ch3 as u16;
+        }
+        if self.nr51 & 0x08 != 0 {
+            right += ch4 as u16;
+        }
+
+        let left_vol = ((self.nr50 >> 4) & 0x07) as u16 + 1;
+        let right_vol = (self.nr50 & 0x07) as u16 + 1;
+
+        (left * left_vol, right * right_vol)
+    }
+
+    fn ch1_digital_output(&self) -> u8 {
+        if !self.ch1_dac_enabled() || !self.ch1.pulse.enabled {
+            return 0;
+        }
+        self.ch1.pulse.digital_output(self.nr11 >> 6)
+    }
+
+    fn ch2_digital_output(&self) -> u8 {
+        if !self.ch2_dac_enabled() || !self.ch2.enabled {
+            return 0;
+        }
+        self.ch2.digital_output(self.nr21 >> 6)
+    }
+
+    fn ch3_digital_output(&self) -> u8 {
+        if !self.ch3_dac_enabled() || !self.ch3.enabled {
+            return 0;
+        }
+        self.ch3.digital_output(self.nr32)
+    }
+
+    fn ch4_digital_output(&self) -> u8 {
+        if !self.ch4_dac_enabled() || !self.ch4.enabled {
+            return 0;
+        }
+        self.ch4.digital_output()
     }
 
     pub(crate) const fn frame_sequencer_step(&self) -> u8 {

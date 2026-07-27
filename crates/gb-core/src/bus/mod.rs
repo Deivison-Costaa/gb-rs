@@ -293,6 +293,11 @@ impl Bus {
     }
 
     #[must_use]
+    pub fn mixer_sample(&self) -> (u16, u16) {
+        self.apu.mixer_sample()
+    }
+
+    #[must_use]
     pub fn apu_frame_sequencer_step(&self) -> u8 {
         self.apu.frame_sequencer_step()
     }

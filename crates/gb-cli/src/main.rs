@@ -33,6 +33,7 @@ fn main() -> ExitCode {
             let mut rom_path: Option<PathBuf> = None;
             let mut headless = false;
             let mut max_cycles: Option<u64> = None;
+            let mut check_fb_hash: Option<String> = None;
 
             while let Some(arg) = args.next() {
                 let s = arg.to_string_lossy();
@@ -51,6 +52,12 @@ fn main() -> ExitCode {
                                 ));
                             }
                         };
+                    }
+                    "--check-fb-hash" => {
+                        let Some(val) = args.next() else {
+                            return usage("`--check-fb-hash` precisa de um hash SHA-256 em hex");
+                        };
+                        check_fb_hash = Some(val.to_string_lossy().into_owned());
                     }
                     other if other.starts_with('-') => {
                         return usage(&format!("flag desconhecida: `{other}`"));
@@ -76,7 +83,11 @@ fn main() -> ExitCode {
                 return usage("`run` exige `--max-cycles <n>`");
             };
 
-            run::execute(&path, cycles)
+            if let Some(expected_hash) = check_fb_hash {
+                run::execute_with_fb_hash(&path, cycles, &expected_hash)
+            } else {
+                run::execute(&path, cycles)
+            }
         }
         _ => usage(&format!(
             "subcomando desconhecido: {}",

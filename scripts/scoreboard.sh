@@ -58,6 +58,10 @@ readonly CSV_HEADER="timestamp,commit,suite,rom,status,ciclos"
 readonly ROM_TIMEOUT="${ROM_TIMEOUT:-30}"
 readonly MAX_CYCLES="${MAX_CYCLES:-250000000}"
 
+# SHA-256 do framebuffer esperado do dmg-acid2 — extraído de
+# tests/roms/dmg-acid2/dmg-acid2-dmg.png (160×144, modo L, 4 tons).
+readonly DMG_ACID2_HASH='f844ea760a6f1fe137f7f992c7ab1c72d34c7fcd3a807b4174a78eb04a32a458'
+
 # Sufixos de modelo da mooneye que NÃO são DMG-B (o alvo deste emulador).
 # Elas continuam sendo executadas — o enunciado pede "todas as ROMs baixadas" —
 # mas vão para uma suíte própria, para não parecerem regressão no gráfico.
@@ -131,11 +135,17 @@ csv_data_lines() {
 
 run_one() {
   local gb_cli="$1" rom="$2"
-  local out rc cycles
+  local fb_hash="${3:-}"
+  local out rc cycles extra_args=()
+
+  if [[ -n "$fb_hash" ]]; then
+    extra_args=(--check-fb-hash "$fb_hash")
+  fi
 
   set +e
   out="$(timeout --signal=KILL "$ROM_TIMEOUT" \
-         "$gb_cli" run "$rom" --headless --max-cycles "$MAX_CYCLES" 2>&1)"
+         "$gb_cli" run "$rom" --headless --max-cycles "$MAX_CYCLES" \
+         "${extra_args[@]}" 2>&1)"
   rc=$?
   set -e
 
@@ -198,7 +208,11 @@ main() {
     suite="$(suite_of "$rel")"
 
     if [[ "$mode" == run ]]; then
-      result="$(run_one "$gb_cli" "$rom")"
+      if [[ "$suite" == dmg-acid2 ]]; then
+        result="$(run_one "$gb_cli" "$rom" "$DMG_ACID2_HASH")"
+      else
+        result="$(run_one "$gb_cli" "$rom")"
+      fi
       status="${result%% *}"
       cycles="${result##* }"
     else

@@ -575,3 +575,26 @@ Nas quatro vezes anteriores isso salvou o processo — pré-anunciou a armadilha
 **errado**, e o resultado foi trabalho concluído que não constava como concluído.
 Handoff informal mais confiável que checklist formal é uma vantagem enquanto
 acerta; é um ponto único de falha quando erra.
+
+## 2026-07-26 — O arquivo de métricas congelou no dia em que foi criado
+
+O PR #46 tirou `PR`, `Duração`, `Custo` e `Turnos` do cabeçalho do doc de
+iteração, com o argumento de que a medição passaria a morar em
+`docs/metricas.csv`. O argumento estava certo e **a execução ficou pela metade**:
+o arquivo foi commitado uma vez e nada o mantinha vivo. Entre o #46 e o #72
+ficaram 23 execuções e US$ 2,63 fora do repositório.
+
+Quem reparou foi o usuário, perguntando "métricas.csv parou de atualizar?".
+
+A causa é estrutural e não some sozinha: a medição é feita pelo processo que
+hospeda o agente, cai em `logs/` (gitignorado), e commitar de dentro de uma
+iteração sujaria a árvore no meio da cadeia — que é justamente o que a guarda de
+entrada proíbe. Por isso agora existe `scripts/metricas.sh`, que **regenera** o
+arquivo inteiro a partir das fontes brutas (rodar duas vezes não duplica linha),
+para ser executado entre séries, com a árvore limpa.
+
+**É o terceiro conserto do dia que abre buraco no lugar que ele mesmo passou a
+apontar** — o `--subject` apagou o `(#N)`, o #46 esvaziou o campo do doc sem
+alimentar o destino. A regra que sai daí: quando um conserto **move** informação
+de um lugar para outro, o destino precisa de dono e de cadência, senão o que se
+fez foi apagar, não mover.

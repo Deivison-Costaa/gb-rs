@@ -340,10 +340,7 @@ fn only_the_two_cartridge_windows_reach_the_cartridge_on_writes() {
 fn the_regions_without_an_owner_are_open_bus_and_swallow_writes() {
     let mut bus = bus();
 
-    let pending = [
-        (0xFE00u16, "OAM", "ROADMAP 3.1"),
-        (0xFE9F, "OAM", "ROADMAP 3.1"),
-    ];
+    let pending: [(u16, &str, &str); 0] = [];
 
     for (addr, name, item) in pending {
         assert_eq!(

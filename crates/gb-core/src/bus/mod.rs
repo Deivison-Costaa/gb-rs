@@ -295,6 +295,51 @@ impl Bus {
         self.apu.frame_sequencer_step()
     }
 
+    #[must_use]
+    pub fn ch2_enabled(&self) -> bool {
+        self.apu.ch2_enabled()
+    }
+
+    #[must_use]
+    pub fn ch2_duty_pattern(&self) -> u8 {
+        self.apu.ch2_duty_pattern()
+    }
+
+    #[must_use]
+    pub fn ch2_initial_volume(&self) -> u8 {
+        self.apu.ch2_initial_volume()
+    }
+
+    #[must_use]
+    pub fn ch2_envelope_pace(&self) -> u8 {
+        self.apu.ch2_envelope_pace()
+    }
+
+    #[must_use]
+    pub fn ch2_dac_enabled(&self) -> bool {
+        self.apu.ch2_dac_enabled()
+    }
+
+    #[must_use]
+    pub fn ch2_period(&self) -> u16 {
+        self.apu.ch2_period()
+    }
+
+    #[must_use]
+    pub fn ch2_frequency_timer(&self) -> u16 {
+        self.apu.ch2_frequency_timer()
+    }
+
+    #[must_use]
+    pub fn ch2_duty_step(&self) -> u8 {
+        self.apu.ch2_duty_step()
+    }
+
+    #[must_use]
+    pub fn ch2_envelope_volume(&self) -> u8 {
+        self.apu.ch2_envelope_volume()
+    }
+
     fn and_result(&self) -> bool {
         let tac = self.io[TAC_IDX];
         let enable = (tac & 0x04) != 0;

@@ -684,3 +684,50 @@ para eliminar e não se elimina sozinha.
 Nota do que ainda não é observado: não há ROM de jogo no repositório, então o
 mapeamento de teclado entregue no 4.4 segue verificado só por teste. "Tetris
 jogável" continua sendo inferência até alguém pôr um `.gb` no disco.
+
+## 2026-07-27 — O placar estava errado sobre quatro ROMs, e só um olho humano viu
+
+O `2.4b` (`halt_bug` e `mem_timing-2`) figurava como bloqueado havia dias, com o
+placar marcando `crash` nas cinco linhas — rodam até o teto de 250 M ciclos sem
+veredito. A leitura óbvia, e a que o ROADMAP registrava, era "o emulador ainda
+não dá conta".
+
+Com o `gb-desktop` pronto (4.4, entregue às 05:19), bastou abrir as duas ROMs
+numa janela e olhar:
+
+| ROM | placar dizia | tela diz |
+|---|---|---|
+| `mem_timing-2` (4 linhas) | `crash` | **`Passed`** — `01:ok 02:ok 03:ok` |
+| `halt_bug` | `crash` | **`Failed`**, com tabela e checksum `A54D802E` |
+
+As duas ROMs **reportam na tela e não pela porta serial**. O `gb-cli` julga lendo
+o serial, então nunca receberia veredito de nenhuma das duas, por mais correto
+que o emulador estivesse. `crash` ali nunca significou "travou": significava "o
+juiz estava ouvindo o canal errado". A pista estava à vista o tempo todo — há um
+`mem_timing-dmg-cgb.png` ao lado da ROM, que é a imagem de referência do
+resultado — e ninguém a leu.
+
+Consequências, em ordem de importância:
+
+1. **Quatro linhas do placar viram verdes sem tocar em `gb-core`.** O emulador
+   está mais correto do que o instrumento afirmava.
+2. O `2.4b` é na verdade duas caixas: ensinar o `gb-cli` a julgar por
+   framebuffer (barato — `execute_with_fb_hash()` existe desde o 3.7) e corrigir
+   o bug do HALT (trabalho real, R1 obriga a ler a spec). Sem a primeira, a
+   segunda não é mensurável.
+3. A razão do bloqueio estava errada de um jeito específico: o ROADMAP dizia que
+   faltava PPU para as ROMs **passarem**. Faltava PPU para elas serem **lidas**.
+
+**O padrão, que é o que interessa para a apresentação.** Cada camada de
+verificação deste projeto foi corrigida pela camada de fora dela, e nunca por si
+mesma:
+
+- 591 testes internos + bateria de mutação: verdes, com `POP AF` e `DAA` errados.
+- As ROMs da blargg pegaram os dois — o juiz externo corrigiu o interno.
+- O juiz externo estava **mal ligado** em cinco ROMs, e nada a jusante podia
+  perceber, porque tudo confiava nele.
+- Quem viu foi uma pessoa olhando para uma janela.
+
+O `gb-desktop` foi entregue como "o marco que torna jogável". A primeira coisa
+que ele realmente pagou, cinco horas depois, foi servir de instrumento de medição
+para um item de **timing de CPU**, que não tem nada a ver com gráficos.

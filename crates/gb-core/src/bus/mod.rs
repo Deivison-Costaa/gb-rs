@@ -298,6 +298,20 @@ impl Bus {
     }
 
     #[must_use]
+    pub fn audio_samples_available(&self) -> usize {
+        self.apu.audio_samples_available()
+    }
+
+    #[must_use]
+    pub fn audio_samples(&self) -> &[(f32, f32)] {
+        self.apu.audio_samples()
+    }
+
+    pub fn consume_audio_samples(&mut self, count: usize) {
+        self.apu.consume_audio_samples(count);
+    }
+
+    #[must_use]
     pub fn apu_frame_sequencer_step(&self) -> u8 {
         self.apu.frame_sequencer_step()
     }

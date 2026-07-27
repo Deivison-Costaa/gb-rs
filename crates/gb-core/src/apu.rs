@@ -1,4 +1,4 @@
-//! spec: docs/reference/07-apu.md. ROADMAP 6.5 — CH4 noise.
+//! spec: docs/reference/07-apu.md.
 
 use crate::cart::OPEN_BUS;
 
@@ -281,6 +281,140 @@ const fn noise_threshold(nr43: u8) -> u16 {
     }
 }
 
+const RING_BUFFER_CAPACITY: usize = 4096;
+const DOWNSAMPLE_PHASE_INC: u32 = 375;
+const DOWNSAMPLE_PHASE_THRESH: u32 = 8192;
+
+#[derive(Debug, Clone)]
+struct RingBuffer {
+    buffer: Vec<(f32, f32)>,
+    write_pos: usize,
+    read_pos: usize,
+    count: usize,
+}
+
+impl RingBuffer {
+    fn new() -> Self {
+        Self {
+            buffer: vec![(0.0, 0.0); RING_BUFFER_CAPACITY],
+            write_pos: 0,
+            read_pos: 0,
+            count: 0,
+        }
+    }
+
+    fn push(&mut self, left: f32, right: f32) {
+        self.buffer[self.write_pos] = (left, right);
+        self.write_pos = (self.write_pos + 1) % RING_BUFFER_CAPACITY;
+        if self.count < RING_BUFFER_CAPACITY {
+            self.count += 1;
+        } else {
+            self.read_pos = (self.read_pos + 1) % RING_BUFFER_CAPACITY;
+        }
+    }
+
+    fn available(&self) -> usize {
+        self.count
+    }
+
+    fn slice(&self) -> &[(f32, f32)] {
+        let end = if self.read_pos + self.count <= RING_BUFFER_CAPACITY {
+            self.read_pos + self.count
+        } else {
+            RING_BUFFER_CAPACITY
+        };
+        &self.buffer[self.read_pos..end]
+    }
+
+    fn consume(&mut self, n: usize) {
+        let n = n.min(self.count);
+        self.read_pos = (self.read_pos + n) % RING_BUFFER_CAPACITY;
+        self.count -= n;
+    }
+
+    fn clear(&mut self) {
+        self.write_pos = 0;
+        self.read_pos = 0;
+        self.count = 0;
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Downsampler {
+    acc_left: f64,
+    acc_right: f64,
+    sample_count: u32,
+    phase: u32,
+    ring: RingBuffer,
+}
+
+impl Downsampler {
+    fn new() -> Self {
+        Self {
+            acc_left: 0.0,
+            acc_right: 0.0,
+            sample_count: 0,
+            phase: 0,
+            ring: RingBuffer::new(),
+        }
+    }
+
+    fn accumulate(&mut self, left: u16, right: u16, powered: bool) {
+        if !powered {
+            self.acc_left += 0.0;
+            self.acc_right += 0.0;
+        } else {
+            let l = normalize_mixer_value(left);
+            let r = normalize_mixer_value(right);
+            self.acc_left += l as f64;
+            self.acc_right += r as f64;
+        }
+        self.sample_count += 1;
+
+        self.phase += DOWNSAMPLE_PHASE_INC;
+        if self.phase >= DOWNSAMPLE_PHASE_THRESH {
+            self.phase -= DOWNSAMPLE_PHASE_THRESH;
+
+            if self.sample_count == 0 || !powered {
+                self.ring.push(0.0, 0.0);
+            } else {
+                let count = self.sample_count as f64;
+                let left_avg = self.acc_left / count;
+                let right_avg = self.acc_right / count;
+                self.ring.push(left_avg as f32, right_avg as f32);
+            }
+
+            self.acc_left = 0.0;
+            self.acc_right = 0.0;
+            self.sample_count = 0;
+        }
+    }
+
+    fn available(&self) -> usize {
+        self.ring.available()
+    }
+
+    fn slice(&self) -> &[(f32, f32)] {
+        self.ring.slice()
+    }
+
+    fn consume(&mut self, n: usize) {
+        self.ring.consume(n);
+    }
+
+    fn reset(&mut self) {
+        self.acc_left = 0.0;
+        self.acc_right = 0.0;
+        self.sample_count = 0;
+        self.phase = 0;
+        self.ring.clear();
+    }
+}
+
+fn normalize_mixer_value(raw: u16) -> f32 {
+    raw as f32 / 240.0 - 1.0
+}
+
 pub(crate) struct Apu {
     nr10: u8,
     nr11: u8,
@@ -311,6 +445,7 @@ pub(crate) struct Apu {
     ch2: PulseChannel,
     ch3: Channel3,
     ch4: Channel4,
+    downsampler: Downsampler,
 }
 
 impl Apu {
@@ -345,6 +480,7 @@ impl Apu {
             ch2: PulseChannel::new(),
             ch3: Channel3::new(),
             ch4: Channel4::new(),
+            downsampler: Downsampler::new(),
         }
     }
 
@@ -476,6 +612,7 @@ impl Apu {
         self.ch2 = PulseChannel::new();
         self.ch3 = Channel3::new();
         self.ch4 = Channel4::new();
+        self.downsampler.reset();
     }
 
     fn trigger_ch1_sweep(&mut self) {
@@ -595,6 +732,10 @@ impl Apu {
                 }
             }
         }
+
+        let powered = self.nr52 & NR52_POWER_BIT != 0;
+        let (mixer_l, mixer_r) = self.mixer_sample();
+        self.downsampler.accumulate(mixer_l, mixer_r, powered);
     }
 
     pub(crate) fn mixer_sample(&self) -> (u16, u16) {
@@ -845,5 +986,17 @@ impl Apu {
 
     pub(crate) const fn ch4_frequency_timer(&self) -> u16 {
         self.ch4.freq_timer
+    }
+
+    pub(crate) fn audio_samples_available(&self) -> usize {
+        self.downsampler.available()
+    }
+
+    pub(crate) fn audio_samples(&self) -> &[(f32, f32)] {
+        self.downsampler.slice()
+    }
+
+    pub(crate) fn consume_audio_samples(&mut self, count: usize) {
+        self.downsampler.consume(count);
     }
 }

@@ -406,11 +406,29 @@ fn dmg_acid2_path() -> PathBuf {
     workspace_root().join("tests/roms/dmg-acid2/dmg-acid2.gb")
 }
 
+fn skip_if_no_dmg_acid2() -> Option<PathBuf> {
+    let path = dmg_acid2_path();
+    if path.exists() {
+        Some(path)
+    } else {
+        eprintln!(
+            "pulando teste: ROM ausente em {} — rode ./scripts/fetch-test-roms.sh",
+            path.display()
+        );
+        None
+    }
+}
+
 #[test]
 fn check_fb_hash_without_argument_exits_with_usage() {
+    let path = match skip_if_no_dmg_acid2() {
+        Some(p) => p,
+        None => return,
+    };
+
     let out = gb_cli(&[
         "run",
-        dmg_acid2_path().to_str().unwrap(),
+        path.to_str().unwrap(),
         "--headless",
         "--max-cycles",
         "100",
@@ -427,9 +445,14 @@ fn check_fb_hash_without_argument_exits_with_usage() {
 
 #[test]
 fn check_fb_hash_with_correct_hash_exits_zero() {
+    let path = match skip_if_no_dmg_acid2() {
+        Some(p) => p,
+        None => return,
+    };
+
     let out = gb_cli(&[
         "run",
-        dmg_acid2_path().to_str().unwrap(),
+        path.to_str().unwrap(),
         "--headless",
         "--max-cycles",
         "200000",
@@ -453,9 +476,14 @@ fn check_fb_hash_with_correct_hash_exits_zero() {
 
 #[test]
 fn check_fb_hash_with_wrong_hash_exits_one() {
+    let path = match skip_if_no_dmg_acid2() {
+        Some(p) => p,
+        None => return,
+    };
+
     let out = gb_cli(&[
         "run",
-        dmg_acid2_path().to_str().unwrap(),
+        path.to_str().unwrap(),
         "--headless",
         "--max-cycles",
         "200000",
@@ -474,9 +502,14 @@ fn check_fb_hash_with_wrong_hash_exits_one() {
 
 #[test]
 fn check_fb_hash_prints_hash_before_cycles() {
+    let path = match skip_if_no_dmg_acid2() {
+        Some(p) => p,
+        None => return,
+    };
+
     let out = gb_cli(&[
         "run",
-        dmg_acid2_path().to_str().unwrap(),
+        path.to_str().unwrap(),
         "--headless",
         "--max-cycles",
         "200000",

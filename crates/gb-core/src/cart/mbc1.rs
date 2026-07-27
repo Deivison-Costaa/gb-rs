@@ -20,6 +20,7 @@ pub struct Mbc1 {
     ram_enabled: bool,
     ram_bank: u8,
     banking_mode: bool,
+    has_battery: bool,
 }
 
 impl Mbc1 {
@@ -45,6 +46,7 @@ impl Mbc1 {
             ram_enabled: false,
             ram_bank: 0x00,
             banking_mode: false,
+            has_battery: false,
         })
     }
 
@@ -86,6 +88,14 @@ impl Mbc1 {
         let upper = (self.ram_bank & 0x03) as u16;
         let full = (upper << 5) | (corrected as u16);
         (full as u8) & self.bank_mask
+    }
+
+    #[must_use]
+    pub fn with_battery(self) -> Self {
+        Self {
+            has_battery: true,
+            ..self
+        }
     }
 }
 
@@ -129,6 +139,19 @@ impl Cartridge for Mbc1 {
                 }
             }
         }
+    }
+
+    fn ram_data(&self) -> Option<&[u8]> {
+        if self.has_battery && !self.ram.is_empty() {
+            Some(&self.ram)
+        } else {
+            None
+        }
+    }
+
+    fn load_ram(&mut self, data: &[u8]) {
+        let len = data.len().min(self.ram.len());
+        self.ram[..len].copy_from_slice(&data[..len]);
     }
 }
 

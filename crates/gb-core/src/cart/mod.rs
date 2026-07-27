@@ -25,6 +25,12 @@ const MBC1_RAM_BATTERY: u8 = 0x03;
 pub trait Cartridge {
     fn read(&self, addr: u16) -> u8;
     fn write(&mut self, addr: u16, value: u8);
+
+    fn ram_data(&self) -> Option<&[u8]> {
+        None
+    }
+
+    fn load_ram(&mut self, _data: &[u8]) {}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,7 +94,13 @@ pub fn load(rom: Vec<u8>) -> Result<Box<dyn Cartridge>, CartridgeError> {
 
     match cartridge_type.code() {
         ROM_ONLY => Ok(Box::new(NoMbc::new(rom)?)),
-        MBC1 | MBC1_RAM | MBC1_RAM_BATTERY => Ok(Box::new(Mbc1::new(rom, rom_banks, ram_bytes)?)),
+        MBC1 | MBC1_RAM | MBC1_RAM_BATTERY => {
+            let mut mbc = Mbc1::new(rom, rom_banks, ram_bytes)?;
+            if cartridge_type.code() == MBC1_RAM_BATTERY {
+                mbc = mbc.with_battery();
+            }
+            Ok(Box::new(mbc))
+        }
         _ => Err(CartridgeError::UnsupportedType { cartridge_type }),
     }
 }

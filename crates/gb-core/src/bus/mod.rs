@@ -235,6 +235,11 @@ impl Bus {
     }
 
     #[must_use]
+    pub fn cartridge_ram(&self) -> Option<&[u8]> {
+        self.cartridge.ram_data()
+    }
+
+    #[must_use]
     pub fn framebuffer(&self) -> &[u8; 160 * 144] {
         self.ppu.framebuffer()
     }

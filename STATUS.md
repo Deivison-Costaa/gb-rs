@@ -3,9 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0065 — MBC1 banking: secondary register + modo 0/1 ([doc](docs/iterations/0065-mbc1-banking.md)). `effective_bank` agora combina o registrador secundário (bits 5-6) com o principal (bits 0-4); `bank_mask` cobre até 7 bits para ROMs > 512 KiB; modo 1 expõe o secondary em 0000-3FFF (bancos $20/$40/$60). Bateria: **5/5 pegos**; um buraco de cobertura (`secondary=2` wrappava para 0 com mask 0x3F) descoberto e corrigido. Placar: 18/121 (sem alteração). 19 testes novos. Erro #1: `bank_mask` cap `0x1F` assume 5 bits para qualquer ROM; #2: `effective_bank` ignora o secondary; #3: 0000-3FFF sempre banco 0.
-**Iteração anterior:** 0064 — Joypad (P1/JOYP + interrupção).
-**Próxima tarefa:** ROADMAP **4.3** — SRAM com bateria: persistir `.sav` ao sair, carregar ao abrir. O `Cartridge` trait recebe `&mut self` em `write` — a persistência é só salvar o `ram: Box<[u8]>` do `Mbc1` em disco quando o emulador fecha e recarregá-lo ao abrir. A decisão de onde o arquivo `.sav` mora (ao lado da ROM, com o mesmo nome base) é convenção de fato. Não há spec de hardware — é funcionalidade de QoL do emulador. `2.4b` continua bloqueado.
+**Última iteração concluída:** 0066 — SRAM com bateria: persistir `.sav` e carregar ao abrir ([doc](docs/iterations/0066-sram-battery.md)). `Cartridge` trait ganha `ram_data()` e `load_ram()` com defaults; `Mbc1` tem `has_battery` (setado via `with_battery()` para tipo `$03`) e implementa os dois métodos; `Bus` expõe `cartridge_ram()`; `gb-cli` lê `.sav` antes de criar o `Bus` e escreve depois do loop. Bateria: **10/10 pegos**, 4/4 controles verdes. 10 testes novos. Erro #1: assumi que leitura além da RAM alocada retorna 0x00, mas o Mbc1 retorna OPEN_BUS; #2: pensei em quebrar a assinatura de `Mbc1::new()` antes de usar o builder pattern.
+**Próxima tarefa:** ROADMAP **4.4** — `gb-desktop`: janela winit + framebuffer a 60 fps + mapeamento de teclado. O `Bus` já expõe `framebuffer()` e `key_down`/`key_up`; a PPU está completa desde M3. É a primeira iteração que mexe em `gb-desktop` desde o scaffold. `2.4b` continua bloqueado.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -35,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **780** (eram 761 na 0064 — 19 novos em `cart_mbc1.rs`).
+Testes do workspace: **790** (eram 780 na 0065 — 8 novos em `cart_mbc1.rs`, 2 novos em `bus_memory_map.rs`).
 
 ## Invariantes
 

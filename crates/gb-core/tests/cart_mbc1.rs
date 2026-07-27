@@ -285,3 +285,98 @@ fn load_mbc1_ram_battery_creates_ram() {
     cart.write(0xA000, 0x55);
     assert_eq!(cart.read(0xA000), 0x55);
 }
+
+// ---------------------------------------------------------------------------
+// SRAM com bateria: ram_data / load_ram (ROADMAP 4.3)
+// ---------------------------------------------------------------------------
+
+fn rom_mbc1_ram(nbanks: usize, ram_bytes: usize) -> Mbc1 {
+    let rom_len = nbanks * BANK_LEN;
+    let mut rom = vec![0u8; rom_len];
+    for (i, byte) in rom.iter_mut().enumerate() {
+        *byte = ((i / BANK_LEN) as u8) << 4 | (i & 0x0F) as u8;
+    }
+    Mbc1::new(rom, nbanks, ram_bytes).expect("rom+ram do fixture cabe num MBC1")
+}
+
+#[test]
+fn ram_data_with_battery_returns_some() {
+    let mbc = rom_mbc1_ram(2, RAM_LEN_8K).with_battery();
+    assert!(
+        mbc.ram_data().is_some(),
+        "battery-backed MBC1 deve expor a RAM"
+    );
+}
+
+#[test]
+fn ram_data_without_battery_returns_none() {
+    let mbc = rom_mbc1_ram(2, RAM_LEN_8K);
+    assert!(
+        mbc.ram_data().is_none(),
+        "MBC1+RAM sem bateria não deve expor a RAM para persistência"
+    );
+}
+
+#[test]
+fn ram_data_with_no_ram_returns_none_even_with_battery() {
+    let mbc = rom_mbc1_ram(2, 0).with_battery();
+    assert!(
+        mbc.ram_data().is_none(),
+        "battery sem RAM alocada não deve expor nada"
+    );
+}
+
+#[test]
+fn load_ram_populates_sram_readable_through_read() {
+    let mut mbc = rom_mbc1_ram(2, RAM_LEN_8K).with_battery();
+    mbc.write(0x0000, 0x0A);
+    let data: Vec<u8> = (0..16).map(|i| i as u8 * 3).collect();
+    mbc.load_ram(&data);
+    for (i, &expected) in data.iter().enumerate() {
+        let addr = 0xA000 + i as u16;
+        assert_eq!(mbc.read(addr), expected, "byte {i} do SRAM ({addr:04X})");
+    }
+}
+
+#[test]
+fn load_ram_partial_preserves_remaining_bytes() {
+    let mut mbc = rom_mbc1_ram(2, RAM_LEN_8K).with_battery();
+    mbc.write(0x0000, 0x0A);
+    mbc.write(0xA010, 0xFF);
+    let data = vec![0xAB; 8];
+    mbc.load_ram(&data);
+    assert_eq!(mbc.read(0xA000), 0xAB);
+    assert_eq!(
+        mbc.read(0xA010),
+        0xFF,
+        "byte fora do range carregado deve continuar intocado"
+    );
+}
+
+#[test]
+fn load_ram_excess_is_truncated() {
+    let mut mbc = rom_mbc1_ram(2, 256).with_battery();
+    mbc.write(0x0000, 0x0A);
+    let data = vec![0xCD; 512];
+    mbc.load_ram(&data);
+    for i in 0..256 {
+        assert_eq!(mbc.read(0xA000 + i as u16), 0xCD, "byte {i} do SRAM");
+    }
+    assert_eq!(mbc.read(0xA100), OPEN_BUS, "além da RAM alocada é open bus");
+}
+
+#[test]
+fn ram_data_no_mbc_returns_none() {
+    let nombc = gb_core::cart::NoMbc::new(vec![0u8; 32 * KIB]).expect("ROM de 32 KiB cabe");
+    assert!(nombc.ram_data().is_none(), "NoMbc nunca tem SRAM");
+}
+
+#[test]
+fn load_ram_no_mbc_is_noop() {
+    let mut nombc = gb_core::cart::NoMbc::new(vec![0u8; 32 * KIB]).expect("ROM de 32 KiB cabe");
+    nombc.load_ram(&[0x42; 16]);
+    assert!(
+        nombc.ram_data().is_none(),
+        "load_ram em NoMbc não deve alterar nada"
+    );
+}

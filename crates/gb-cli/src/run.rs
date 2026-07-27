@@ -33,13 +33,20 @@ fn execute_inner(path: &Path, max_cycles: u64, expected_fb_hash: Option<&str>) -
         }
     };
 
-    let cartridge = match cart::load(rom) {
+    let sav_path = path.with_extension("sav");
+    let sav_data = std::fs::read(&sav_path).ok();
+
+    let mut cartridge = match cart::load(rom) {
         Ok(cart) => cart,
         Err(error) => {
             eprintln!("{}: {error}", path.display());
             return ExitCode::from(exit::DATA_ERROR);
         }
     };
+
+    if let Some(ref data) = sav_data {
+        cartridge.load_ram(data);
+    }
 
     let mut bus = Bus::new(cartridge);
     let mut cpu = Cpu::after_boot_rom(checksum);
@@ -53,7 +60,7 @@ fn execute_inner(path: &Path, max_cycles: u64, expected_fb_hash: Option<&str>) -
         cycle_count = cycle_count.saturating_add(1);
     }
 
-    if let Some(expected) = expected_fb_hash {
+    let result = if let Some(expected) = expected_fb_hash {
         let fb = bus.framebuffer();
         let mut hasher = Sha256::new();
         hasher.update(fb);
@@ -81,5 +88,11 @@ fn execute_inner(path: &Path, max_cycles: u64, expected_fb_hash: Option<&str>) -
         } else {
             ExitCode::from(exit::NOT_IMPLEMENTED)
         }
+    };
+
+    if let Some(ram) = bus.cartridge_ram() {
+        let _ = std::fs::write(&sav_path, ram);
     }
+
+    result
 }

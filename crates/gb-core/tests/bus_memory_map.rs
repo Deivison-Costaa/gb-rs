@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use gb_core::bus::{Bus, Region};
-use gb_core::cart::{Cartridge, OPEN_BUS};
+use gb_core::cart::{Cartridge, Mbc1, OPEN_BUS};
 
 fn pattern(addr: u16) -> u8 {
     (addr as u8) ^ ((addr >> 8) as u8)
@@ -356,4 +356,34 @@ fn the_regions_without_an_owner_are_open_bus_and_swallow_writes() {
              {item} chegou, este teste é que está velho"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// SRAM com bateria: cartridge_ram() (ROADMAP 4.3)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn cartridge_ram_delegates_to_cartridge_trait() {
+    const KIB: usize = 1024;
+    let rom = vec![0u8; 32 * KIB];
+    let mbc = Mbc1::new(rom, 2, 8 * KIB)
+        .expect("rom+ram do fixture cabe")
+        .with_battery();
+    let bus = Bus::new(Box::new(mbc));
+    assert!(
+        bus.cartridge_ram().is_some(),
+        "Bus deve expor a RAM do cartucho com bateria"
+    );
+}
+
+#[test]
+fn cartridge_ram_without_battery_returns_none() {
+    const KIB: usize = 1024;
+    let rom = vec![0u8; 32 * KIB];
+    let mbc = Mbc1::new(rom, 2, 8 * KIB).expect("rom+ram do fixture cabe");
+    let bus = Bus::new(Box::new(mbc));
+    assert!(
+        bus.cartridge_ram().is_none(),
+        "Bus nao deve expor RAM de cartucho sem bateria"
+    );
 }

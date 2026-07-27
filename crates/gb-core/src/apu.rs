@@ -35,6 +35,74 @@ const T_CYCLES_PER_FRAME_SEQUENCER_TICK: u32 = 8192;
 
 const NR52_POWER_BIT: u8 = 0x80;
 
+const NRX4_TRIGGER_BIT: u8 = 0x80;
+
+const FREQ_MAX: u16 = 2048;
+
+#[derive(Debug, Clone)]
+struct Channel2 {
+    enabled: bool,
+    freq_timer: u16,
+    duty_step: u8,
+    envelope_volume: u8,
+    envelope_timer: u8,
+}
+
+impl Channel2 {
+    const fn new() -> Self {
+        Self {
+            enabled: false,
+            freq_timer: 0,
+            duty_step: 0,
+            envelope_volume: 0,
+            envelope_timer: 0,
+        }
+    }
+
+    fn trigger(&mut self, nr22: u8, nr23: u8, nr24: u8) {
+        self.enabled = true;
+        self.freq_timer = period(nr23, nr24);
+        self.envelope_volume = nr22 >> 4;
+        let pace = nr22 & 0x07;
+        self.envelope_timer = if pace == 0 { 8 } else { pace };
+    }
+
+    fn tick_freq(&mut self, nr23: u8, nr24: u8) {
+        self.freq_timer = self.freq_timer.wrapping_add(4);
+        if self.freq_timer >= FREQ_MAX {
+            self.freq_timer = period(nr23, nr24);
+            self.duty_step = (self.duty_step + 1) & 0x07;
+        }
+    }
+
+    fn tick_envelope(&mut self, nr22: u8) {
+        let pace = nr22 & 0x07;
+        if pace == 0 {
+            return;
+        }
+
+        if self.envelope_timer > 0 {
+            self.envelope_timer -= 1;
+        }
+
+        if self.envelope_timer == 0 {
+            self.envelope_timer = pace;
+
+            if (nr22 >> 3) & 1 == 0 {
+                if self.envelope_volume > 0 {
+                    self.envelope_volume -= 1;
+                }
+            } else if self.envelope_volume < 15 {
+                self.envelope_volume += 1;
+            }
+        }
+    }
+}
+
+const fn period(nr23: u8, nr24: u8) -> u16 {
+    u16::from_le_bytes([nr23, nr24 & 0x07])
+}
+
 pub(crate) struct Apu {
     nr10: u8,
     nr11: u8,
@@ -60,6 +128,8 @@ pub(crate) struct Apu {
     wave_ram: [u8; 16],
     div_apu: u32,
     frame_sequencer_step: u8,
+    prev_frame_sequencer_step: u8,
+    ch2: Channel2,
 }
 
 impl Apu {
@@ -89,6 +159,8 @@ impl Apu {
             wave_ram: [0x00; 16],
             div_apu: 0,
             frame_sequencer_step: 0,
+            prev_frame_sequencer_step: 0,
+            ch2: Channel2::new(),
         }
     }
 
@@ -130,7 +202,12 @@ impl Apu {
             NR21_ADDR => self.nr21 = value,
             NR22_ADDR => self.nr22 = value,
             NR23_ADDR => self.nr23 = value,
-            NR24_ADDR => self.nr24 = value,
+            NR24_ADDR => {
+                self.nr24 = value;
+                if value & NRX4_TRIGGER_BIT != 0 {
+                    self.ch2.trigger(self.nr22, self.nr23, self.nr24);
+                }
+            }
             NR30_ADDR => self.nr30 = value,
             NR31_ADDR => self.nr31 = value,
             NR32_ADDR => self.nr32 = value,
@@ -154,13 +231,62 @@ impl Apu {
 
     pub(crate) fn tick(&mut self) {
         self.div_apu = self.div_apu.wrapping_add(4);
+
+        if self.nr52 & NR52_POWER_BIT != 0 && self.ch2.enabled {
+            self.ch2.tick_freq(self.nr23, self.nr24);
+        }
+
         if self.div_apu >= T_CYCLES_PER_FRAME_SEQUENCER_TICK {
             self.div_apu -= T_CYCLES_PER_FRAME_SEQUENCER_TICK;
+            self.prev_frame_sequencer_step = self.frame_sequencer_step;
             self.frame_sequencer_step = (self.frame_sequencer_step + 1) & 0x07;
+
+            if self.nr52 & NR52_POWER_BIT != 0 && self.ch2.enabled {
+                let step = self.frame_sequencer_step;
+                if step == 2 || step == 6 {
+                    self.ch2.tick_envelope(self.nr22);
+                }
+            }
         }
     }
 
     pub(crate) const fn frame_sequencer_step(&self) -> u8 {
         self.frame_sequencer_step
+    }
+
+    pub(crate) const fn ch2_enabled(&self) -> bool {
+        self.ch2.enabled
+    }
+
+    pub(crate) const fn ch2_duty_pattern(&self) -> u8 {
+        self.nr21 >> 6
+    }
+
+    pub(crate) const fn ch2_initial_volume(&self) -> u8 {
+        self.nr22 >> 4
+    }
+
+    pub(crate) const fn ch2_envelope_pace(&self) -> u8 {
+        self.nr22 & 0x07
+    }
+
+    pub(crate) const fn ch2_dac_enabled(&self) -> bool {
+        self.nr22 & 0xF8 != 0
+    }
+
+    pub(crate) const fn ch2_period(&self) -> u16 {
+        period(self.nr23, self.nr24)
+    }
+
+    pub(crate) const fn ch2_frequency_timer(&self) -> u16 {
+        self.ch2.freq_timer
+    }
+
+    pub(crate) const fn ch2_duty_step(&self) -> u8 {
+        self.ch2.duty_step
+    }
+
+    pub(crate) const fn ch2_envelope_volume(&self) -> u8 {
+        self.ch2.envelope_volume
     }
 }

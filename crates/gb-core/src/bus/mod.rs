@@ -4,8 +4,11 @@
 pub(crate) mod boot;
 
 use crate::cart::{Cartridge, OPEN_BUS};
+use crate::joypad::{Joypad, Key};
 use crate::ppu::Ppu;
 use crate::serial::Serial;
+
+const P1_ADDR: u16 = 0xFF00;
 
 const DIV_ADDR: u16 = 0xFF04;
 const TIMA_ADDR: u16 = 0xFF05;
@@ -85,6 +88,7 @@ pub struct Bus {
     io: [u8; boot::IO_LEN],
     ie: u8,
     serial: Serial,
+    joypad: Joypad,
     sys_counter: u16,
     prev_and_result: bool,
     tima_overflow: TimerOverflow,
@@ -103,6 +107,7 @@ impl Bus {
             io: boot::IO,
             ie: boot::INTERRUPT_ENABLE,
             serial: Serial::new(),
+            joypad: Joypad::new(),
             sys_counter: 0xAB00,
             prev_and_result: false,
             tima_overflow: TimerOverflow::Idle,
@@ -118,6 +123,7 @@ impl Bus {
             Region::HighRam => self.hram[hram_index(addr)],
             Region::NotUsable => NOT_USABLE_READ,
             Region::IoRegisters => match addr {
+                P1_ADDR => self.joypad.read(),
                 DIV_ADDR => (self.sys_counter >> 8) as u8,
                 SB_ADDR | SC_ADDR => self.serial.read(addr),
                 0xFF40..=0xFF4B => self.ppu.read(addr),
@@ -154,6 +160,7 @@ impl Bus {
             Region::WorkRam | Region::EchoRam => self.wram[wram_index(addr)] = value,
             Region::HighRam => self.hram[hram_index(addr)] = value,
             Region::IoRegisters => match addr {
+                P1_ADDR => self.joypad.write(value),
                 DIV_ADDR => {
                     let old_and = self.and_result();
                     self.sys_counter = 0;
@@ -230,6 +237,21 @@ impl Bus {
     #[must_use]
     pub fn framebuffer(&self) -> &[u8; 160 * 144] {
         self.ppu.framebuffer()
+    }
+
+    pub fn key_down(&mut self, key: Key) {
+        self.joypad.key_down(key);
+    }
+
+    pub fn key_up(&mut self, key: Key) {
+        self.joypad.key_up(key);
+    }
+
+    pub fn tick_joypad_interrupt(&mut self) {
+        if self.joypad.interrupt {
+            self.joypad.interrupt = false;
+            self.io[IF_IDX] |= 0x10;
+        }
     }
 
     pub fn tick_timer(&mut self) {

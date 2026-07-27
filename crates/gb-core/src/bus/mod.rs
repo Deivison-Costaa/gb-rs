@@ -1,9 +1,10 @@
 //! spec: `docs/reference/01-memory-map.md`. Bus é struct, não trait — vtable
 //! no caminho mais quente do emulador não compra nada (ver docs/iterations/0010).
 
-mod boot;
+pub(crate) mod boot;
 
 use crate::cart::{Cartridge, OPEN_BUS};
+use crate::ppu::Ppu;
 use crate::serial::Serial;
 
 const DIV_ADDR: u16 = 0xFF04;
@@ -81,6 +82,7 @@ pub struct Bus {
     sys_counter: u16,
     prev_and_result: bool,
     tima_overflow: TimerOverflow,
+    ppu: Ppu,
 }
 
 impl Bus {
@@ -96,6 +98,7 @@ impl Bus {
             sys_counter: 0xAB00,
             prev_and_result: false,
             tima_overflow: TimerOverflow::Idle,
+            ppu: Ppu::new(),
         }
     }
 
@@ -109,6 +112,7 @@ impl Bus {
             Region::IoRegisters => match addr {
                 DIV_ADDR => (self.sys_counter >> 8) as u8,
                 SB_ADDR | SC_ADDR => self.serial.read(addr),
+                0xFF40 | 0xFF41 | 0xFF44 | 0xFF45 => self.ppu.read(addr),
                 _ => {
                     let index = io_index(addr);
                     if boot::IO_HAS_OWNER[index] {
@@ -161,6 +165,7 @@ impl Bus {
                     self.prev_and_result = new_and;
                 }
                 SB_ADDR | SC_ADDR => self.serial.write(addr, value),
+                0xFF40 | 0xFF41 | 0xFF44 | 0xFF45 => self.ppu.write(addr, value),
                 _ => {
                     let index = io_index(addr);
                     if boot::IO_HAS_OWNER[index] {
@@ -176,6 +181,10 @@ impl Bus {
     #[must_use]
     pub fn take_serial_output(&mut self) -> Vec<u8> {
         self.serial.take_output()
+    }
+
+    pub fn tick_ppu(&mut self) {
+        self.ppu.tick();
     }
 
     pub fn tick_timer(&mut self) {

@@ -55,6 +55,9 @@ const HARDWARE_REGISTERS: &[(u16, Option<u8>)] = &[
 
 pub(super) const INTERRUPT_ENABLE: u8 = 0x00;
 
+pub(crate) const STAT_BOOT_VALUE: u8 = 0x85;
+pub(crate) const STAT_BOOT_WRITABLE: u8 = STAT_BOOT_VALUE & 0xF8;
+
 pub(super) const IO: [u8; IO_LEN] = {
     let mut io = [UNINITIALIZED; IO_LEN];
     let mut i = 0;

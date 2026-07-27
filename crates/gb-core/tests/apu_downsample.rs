@@ -130,6 +130,28 @@ fn amostras_sao_fatia_contigua_do_ring_buffer() {
 }
 
 #[test]
+fn disponiveis_continuam_iguais_a_fatia_depois_da_volta_do_anel() {
+    let (_cpu, mut bus) = machine(&[]);
+    let mut cpu = Cpu::after_boot_rom(
+        CartridgeHeader::parse(&vec![0x00; NoMbc::MAX_ROM_LEN])
+            .expect("cabeçalho")
+            .checksum(),
+    );
+
+    // O anel tem 4096 posições e enche a cada ~22 M-cycles por amostra: 500 mil
+    // passos sem consumir dão a volta com folga.
+    step_n(&mut cpu, &mut bus, 500_000);
+
+    let available = bus.audio_samples_available();
+    assert!(available > 0, "500 mil M-cycles produzem amostras");
+    assert_eq!(
+        bus.audio_samples().len(),
+        available,
+        "o gb-desktop faz audio_samples()[..available]: fatia menor que o contador é pânico em runtime"
+    );
+}
+
+#[test]
 fn apu_desligado_acumula_silencio() {
     let (_cpu, mut bus) = machine(&[]);
     let mut cpu = Cpu::after_boot_rom(

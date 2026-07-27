@@ -33,15 +33,19 @@ fn create_audio_buffer() -> AudioBuffer {
 }
 
 fn drain_bus_audio(bus: &mut Bus, buffer: &AudioBuffer) {
-    let available = bus.audio_samples_available();
-    if available == 0 {
-        return;
-    }
-    let samples: Vec<(f32, f32)> = bus.audio_samples()[..available].to_vec();
-    bus.consume_audio_samples(available);
     let mut buf = buffer.lock().expect("audio buffer mutex poisoned");
-    for sample in samples {
-        buf.push_back(sample);
+    // Em laço porque a fatia é contígua: com o anel na volta, esvaziar tudo no
+    // mesmo frame custa duas passadas.
+    loop {
+        let available = bus.audio_samples_available();
+        if available == 0 {
+            return;
+        }
+        let samples: Vec<(f32, f32)> = bus.audio_samples()[..available].to_vec();
+        bus.consume_audio_samples(available);
+        for sample in samples {
+            buf.push_back(sample);
+        }
     }
 }
 

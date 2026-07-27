@@ -3,10 +3,10 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0053 — blargg instr_timing, mem_timing, mem_timing-2, halt_bug ([doc](docs/iterations/0053-blargg-timing-haltbug.md)). Corrige MBC1: `rom_addr` usava `bank = 1u8` em vez de `effective_bank()`; RAM externa (`ram_enabled`, `ram_bank`, `banking_mode`) adicionada para tipos `$02`/`$03`. 10 testes novos em `cart_mbc1.rs`. Placar: 10→16 (instr_timing 1/1, mem_timing 4/4; cpu_instrs 10→11 por efeito colateral). halt_bug e mem_timing-2 permanecem 0: travam em `while LY != $90` — só com PPU (M3). Bateria: **3/3 pegos, 2/2 controles verdes**.
-**Iteração anterior:** 0052 — HALT + o bug do HALT.
-**Próxima tarefa:** ROADMAP **3.1** — registradores da PPU: LCDC, STAT, SCY, SCX, LY, LYC, BGP, OBP0, OBP1, WY, WX. VRAM/OAM. O MARCO M2 está encerrado: instr_timing e mem_timing passam (16/121 no placar). halt_bug e mem_timing-2 dependem de LY para avançar — a primeira micro-funcionalidade da PPU deve ser LY ($FF44) incrementando a cada scanline (456 T-cycles), e STAT ($FF41) atualizando os bits de modo (0=HBlank, 1=VBlank, 2=OAM scan, 3=draw). A nota 14 (cache de build) continua relevante para a bateria de mutação. O item 2.4 fica parcialmente concluído — as 2 ROMs que passam estão no scoreboard; as 2 que não passam estão documentadas como dependentes de M3.
-**Marco atual:** M3 — início da PPU
+**Última iteração concluída:** 0054 — módulo PPU: LY ($FF44) e STAT ($FF41) modo ([doc](docs/iterations/0054-ly-stat-mode.md)). 17 testes novos em `ppu_ly_stat_mode.rs`. Placar: inalterado (16/121). halt_bug e mem_timing-2 continuam 0: LY agora incrementa, mas as ROMs precisam de STAT interrupts para sair do loop e produzir saída serial. Bateria: **3/3 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0053 — MBC1 banking + blargg timing suíte.
+**Próxima tarefa:** ROADMAP **3.1b** — registradores restantes da PPU: SCY ($FF42), SCX ($FF43), DMA stub ($FF46), BGP ($FF47), OBP0 ($FF48), OBP1 ($FF49), WY ($FF4A), WX ($FF4B). Todos já existem em `boot.rs` com `IO_HAS_OWNER = true` — o trabalho é rotear `$FF42`–`$FF4B` pelo PPU (`ppu.read`/`ppu.write`) no `match` do `Bus`, igual ao feito para `$FF40|$FF41|$FF44|$FF45` na 0054. A nota 14 (cache de build) continua relevante. O DMA ($FF46) é um stub: armazena o valor escrito e retorna na leitura; o trigger de transferência (160 M-cycles) entra em M3 (item 3.2).
+**Marco atual:** M3 — PPU
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 

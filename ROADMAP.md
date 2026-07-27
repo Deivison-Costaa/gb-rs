@@ -263,6 +263,10 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 ## M3 — PPU
 
 - [ ] 3.1 Registradores: LCDC, STAT, SCY, SCX, LY, LYC, BGP, OBP0, OBP1, WY, WX. VRAM/OAM.
+  - [x] 3.1a Módulo PPU: LY ($FF44) incrementando a cada scanline (456 T-cycles), STAT ($FF41) com bits de modo (Mode 2→3→0 por scanline, Mode 1 no VBlank). LCDC ($FF40, bit 7 PPU enable), LYC ($FF45) para o bit LYC=LY do STAT.
+  - [ ] 3.1b Restantes: SCY ($FF42), SCX ($FF43), DMA stub ($FF46), BGP ($FF47), OBP0 ($FF48), OBP1 ($FF49), WY ($FF4A), WX ($FF4B).
+  - [ ] 3.1c VRAM ($8000–$9FFF).
+  - [ ] 3.1d OAM ($FE00–$FE9F).
 - [ ] 3.2 Máquina de modos (OAM scan 80 / draw / hblank / vblank) + interrupções STAT e VBlank.
 - [ ] 3.3 Background por scanline: tilemap, tiledata, endereçamento signed/unsigned.
 - [ ] 3.4 Window (incluindo o contador interno de linha da window).

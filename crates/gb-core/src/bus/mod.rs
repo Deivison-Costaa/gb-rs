@@ -296,6 +296,81 @@ impl Bus {
     }
 
     #[must_use]
+    pub fn ch1_enabled(&self) -> bool {
+        self.apu.ch1_enabled()
+    }
+
+    #[must_use]
+    pub fn ch1_sweep_pace(&self) -> u8 {
+        self.apu.ch1_sweep_pace()
+    }
+
+    #[must_use]
+    pub fn ch1_sweep_direction(&self) -> u8 {
+        self.apu.ch1_sweep_direction()
+    }
+
+    #[must_use]
+    pub fn ch1_sweep_step(&self) -> u8 {
+        self.apu.ch1_sweep_step()
+    }
+
+    #[must_use]
+    pub fn ch1_sweep_shadow(&self) -> u16 {
+        self.apu.ch1_sweep_shadow()
+    }
+
+    #[must_use]
+    pub fn ch1_sweep_enabled(&self) -> bool {
+        self.apu.ch1_sweep_enabled()
+    }
+
+    #[must_use]
+    pub fn ch1_sweep_timer(&self) -> u8 {
+        self.apu.ch1_sweep_timer()
+    }
+
+    #[must_use]
+    pub fn ch1_duty_pattern(&self) -> u8 {
+        self.apu.ch1_duty_pattern()
+    }
+
+    #[must_use]
+    pub fn ch1_initial_volume(&self) -> u8 {
+        self.apu.ch1_initial_volume()
+    }
+
+    #[must_use]
+    pub fn ch1_envelope_pace(&self) -> u8 {
+        self.apu.ch1_envelope_pace()
+    }
+
+    #[must_use]
+    pub fn ch1_dac_enabled(&self) -> bool {
+        self.apu.ch1_dac_enabled()
+    }
+
+    #[must_use]
+    pub fn ch1_period(&self) -> u16 {
+        self.apu.ch1_period()
+    }
+
+    #[must_use]
+    pub fn ch1_frequency_timer(&self) -> u16 {
+        self.apu.ch1_frequency_timer()
+    }
+
+    #[must_use]
+    pub fn ch1_duty_step(&self) -> u8 {
+        self.apu.ch1_duty_step()
+    }
+
+    #[must_use]
+    pub fn ch1_envelope_volume(&self) -> u8 {
+        self.apu.ch1_envelope_volume()
+    }
+
+    #[must_use]
     pub fn ch2_enabled(&self) -> bool {
         self.apu.ch2_enabled()
     }

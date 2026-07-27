@@ -1,4 +1,4 @@
-//! spec: docs/reference/07-apu.md. ROADMAP 6.1 — frame sequencer 512 Hz.
+//! spec: docs/reference/07-apu.md. ROADMAP 6.3 — CH1 sweep.
 
 use crate::cart::OPEN_BUS;
 
@@ -40,7 +40,7 @@ const NRX4_TRIGGER_BIT: u8 = 0x80;
 const FREQ_MAX: u16 = 2048;
 
 #[derive(Debug, Clone)]
-struct Channel2 {
+struct PulseChannel {
     enabled: bool,
     freq_timer: u16,
     duty_step: u8,
@@ -48,7 +48,7 @@ struct Channel2 {
     envelope_timer: u8,
 }
 
-impl Channel2 {
+impl PulseChannel {
     const fn new() -> Self {
         Self {
             enabled: false,
@@ -59,24 +59,24 @@ impl Channel2 {
         }
     }
 
-    fn trigger(&mut self, nr22: u8, nr23: u8, nr24: u8) {
+    fn trigger(&mut self, nrx2: u8, nrx3: u8, nrx4: u8) {
         self.enabled = true;
-        self.freq_timer = period(nr23, nr24);
-        self.envelope_volume = nr22 >> 4;
-        let pace = nr22 & 0x07;
+        self.freq_timer = period(nrx3, nrx4);
+        self.envelope_volume = nrx2 >> 4;
+        let pace = nrx2 & 0x07;
         self.envelope_timer = if pace == 0 { 8 } else { pace };
     }
 
-    fn tick_freq(&mut self, nr23: u8, nr24: u8) {
+    fn tick_freq(&mut self, nrx3: u8, nrx4: u8) {
         self.freq_timer = self.freq_timer.wrapping_add(4);
         if self.freq_timer >= FREQ_MAX {
-            self.freq_timer = period(nr23, nr24);
+            self.freq_timer = period(nrx3, nrx4);
             self.duty_step = (self.duty_step + 1) & 0x07;
         }
     }
 
-    fn tick_envelope(&mut self, nr22: u8) {
-        let pace = nr22 & 0x07;
+    fn tick_envelope(&mut self, nrx2: u8) {
+        let pace = nrx2 & 0x07;
         if pace == 0 {
             return;
         }
@@ -88,7 +88,7 @@ impl Channel2 {
         if self.envelope_timer == 0 {
             self.envelope_timer = pace;
 
-            if (nr22 >> 3) & 1 == 0 {
+            if (nrx2 >> 3) & 1 == 0 {
                 if self.envelope_volume > 0 {
                     self.envelope_volume -= 1;
                 }
@@ -99,8 +99,43 @@ impl Channel2 {
     }
 }
 
-const fn period(nr23: u8, nr24: u8) -> u16 {
-    u16::from_le_bytes([nr23, nr24 & 0x07])
+#[derive(Debug, Clone)]
+struct Channel1 {
+    pulse: PulseChannel,
+    sweep_shadow: u16,
+    sweep_timer: u8,
+    sweep_enabled: bool,
+}
+
+impl Channel1 {
+    const fn new() -> Self {
+        Self {
+            pulse: PulseChannel::new(),
+            sweep_shadow: 0,
+            sweep_timer: 0,
+            sweep_enabled: false,
+        }
+    }
+}
+
+const fn period(nrx3: u8, nrx4: u8) -> u16 {
+    u16::from_le_bytes([nrx3, nrx4 & 0x07])
+}
+
+fn sweep_calculate(nr10: u8, shadow: u16) -> u16 {
+    let direction = (nr10 >> 3) & 1;
+    let step = nr10 & 0x07;
+    let shift = shadow >> step;
+    if direction == 0 {
+        shadow.wrapping_add(shift)
+    } else {
+        shadow.wrapping_sub(shift)
+    }
+}
+
+fn sweep_write_back(new: u16, nr13: &mut u8, nr14: &mut u8) {
+    *nr13 = (new & 0xFF) as u8;
+    *nr14 = (*nr14 & 0xF8) | ((new >> 8) & 0x07) as u8;
 }
 
 pub(crate) struct Apu {
@@ -129,7 +164,8 @@ pub(crate) struct Apu {
     div_apu: u32,
     frame_sequencer_step: u8,
     prev_frame_sequencer_step: u8,
-    ch2: Channel2,
+    ch1: Channel1,
+    ch2: PulseChannel,
 }
 
 impl Apu {
@@ -160,7 +196,8 @@ impl Apu {
             div_apu: 0,
             frame_sequencer_step: 0,
             prev_frame_sequencer_step: 0,
-            ch2: Channel2::new(),
+            ch1: Channel1::new(),
+            ch2: PulseChannel::new(),
         }
     }
 
@@ -192,13 +229,20 @@ impl Apu {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn write(&mut self, addr: u16, value: u8) {
         match addr {
             NR10_ADDR => self.nr10 = value,
             NR11_ADDR => self.nr11 = value,
             NR12_ADDR => self.nr12 = value,
             NR13_ADDR => self.nr13 = value,
-            NR14_ADDR => self.nr14 = value,
+            NR14_ADDR => {
+                self.nr14 = value;
+                if value & NRX4_TRIGGER_BIT != 0 {
+                    self.ch1.pulse.trigger(self.nr12, self.nr13, self.nr14);
+                    self.trigger_ch1_sweep();
+                }
+            }
             NR21_ADDR => self.nr21 = value,
             NR22_ADDR => self.nr22 = value,
             NR23_ADDR => self.nr23 = value,
@@ -229,10 +273,65 @@ impl Apu {
         }
     }
 
+    fn trigger_ch1_sweep(&mut self) {
+        let pace = (self.nr10 >> 4) & 0x07;
+        let step = self.nr10 & 0x07;
+        self.ch1.sweep_shadow = period(self.nr13, self.nr14);
+        self.ch1.sweep_timer = if pace == 0 { 8 } else { pace };
+        self.ch1.sweep_enabled = pace != 0 || step != 0;
+
+        if step != 0 {
+            let new_period = sweep_calculate(self.nr10, self.ch1.sweep_shadow);
+            if new_period > 2047 {
+                self.ch1.pulse.enabled = false;
+                return;
+            }
+            self.ch1.sweep_shadow = new_period;
+            sweep_write_back(new_period, &mut self.nr13, &mut self.nr14);
+        }
+    }
+
+    fn tick_ch1_sweep(&mut self) {
+        let pace = (self.nr10 >> 4) & 0x07;
+
+        if self.ch1.sweep_timer > 0 {
+            self.ch1.sweep_timer -= 1;
+        }
+
+        if self.ch1.sweep_timer == 0 {
+            self.ch1.sweep_timer = if pace == 0 { 8 } else { pace };
+
+            if self.ch1.sweep_enabled && pace != 0 {
+                let new_period = sweep_calculate(self.nr10, self.ch1.sweep_shadow);
+                if new_period > 2047 {
+                    self.ch1.pulse.enabled = false;
+                    return;
+                }
+
+                let step = self.nr10 & 0x07;
+                if step != 0 {
+                    self.ch1.sweep_shadow = new_period;
+                    sweep_write_back(new_period, &mut self.nr13, &mut self.nr14);
+
+                    let second = sweep_calculate(self.nr10, new_period);
+                    if second > 2047 {
+                        self.ch1.pulse.enabled = false;
+                    }
+                }
+            }
+        }
+    }
+
     pub(crate) fn tick(&mut self) {
         self.div_apu = self.div_apu.wrapping_add(4);
 
-        if self.nr52 & NR52_POWER_BIT != 0 && self.ch2.enabled {
+        let powered = self.nr52 & NR52_POWER_BIT != 0;
+
+        if powered && self.ch1.pulse.enabled {
+            self.ch1.pulse.tick_freq(self.nr13, self.nr14);
+        }
+
+        if powered && self.ch2.enabled {
             self.ch2.tick_freq(self.nr23, self.nr24);
         }
 
@@ -241,10 +340,18 @@ impl Apu {
             self.prev_frame_sequencer_step = self.frame_sequencer_step;
             self.frame_sequencer_step = (self.frame_sequencer_step + 1) & 0x07;
 
-            if self.nr52 & NR52_POWER_BIT != 0 && self.ch2.enabled {
+            if powered {
                 let step = self.frame_sequencer_step;
                 if step == 2 || step == 6 {
-                    self.ch2.tick_envelope(self.nr22);
+                    if self.ch1.pulse.enabled {
+                        self.ch1.pulse.tick_envelope(self.nr12);
+                    }
+                    if self.ch2.enabled {
+                        self.ch2.tick_envelope(self.nr22);
+                    }
+                    if self.ch1.pulse.enabled {
+                        self.tick_ch1_sweep();
+                    }
                 }
             }
         }
@@ -252,6 +359,66 @@ impl Apu {
 
     pub(crate) const fn frame_sequencer_step(&self) -> u8 {
         self.frame_sequencer_step
+    }
+
+    pub(crate) const fn ch1_enabled(&self) -> bool {
+        self.ch1.pulse.enabled
+    }
+
+    pub(crate) const fn ch1_sweep_pace(&self) -> u8 {
+        (self.nr10 >> 4) & 0x07
+    }
+
+    pub(crate) const fn ch1_sweep_direction(&self) -> u8 {
+        (self.nr10 >> 3) & 1
+    }
+
+    pub(crate) const fn ch1_sweep_step(&self) -> u8 {
+        self.nr10 & 0x07
+    }
+
+    pub(crate) const fn ch1_sweep_shadow(&self) -> u16 {
+        self.ch1.sweep_shadow
+    }
+
+    pub(crate) const fn ch1_sweep_enabled(&self) -> bool {
+        self.ch1.sweep_enabled
+    }
+
+    pub(crate) const fn ch1_sweep_timer(&self) -> u8 {
+        self.ch1.sweep_timer
+    }
+
+    pub(crate) const fn ch1_duty_pattern(&self) -> u8 {
+        self.nr11 >> 6
+    }
+
+    pub(crate) const fn ch1_initial_volume(&self) -> u8 {
+        self.nr12 >> 4
+    }
+
+    pub(crate) const fn ch1_envelope_pace(&self) -> u8 {
+        self.nr12 & 0x07
+    }
+
+    pub(crate) const fn ch1_dac_enabled(&self) -> bool {
+        self.nr12 & 0xF8 != 0
+    }
+
+    pub(crate) const fn ch1_period(&self) -> u16 {
+        period(self.nr13, self.nr14)
+    }
+
+    pub(crate) const fn ch1_frequency_timer(&self) -> u16 {
+        self.ch1.pulse.freq_timer
+    }
+
+    pub(crate) const fn ch1_duty_step(&self) -> u8 {
+        self.ch1.pulse.duty_step
+    }
+
+    pub(crate) const fn ch1_envelope_volume(&self) -> u8 {
+        self.ch1.pulse.envelope_volume
     }
 
     pub(crate) const fn ch2_enabled(&self) -> bool {

@@ -313,8 +313,12 @@ impl RingBuffer {
         }
     }
 
+    // Contíguo, não total: `slice()` para no fim do vetor quando o anel dá a
+    // volta, e quem consome indexa `slice()[..available()]`. Devolver `count`
+    // aqui deixava os dois discordarem e derrubava o gb-desktop no primeiro
+    // wrap (ver docs/iterations/0079b).
     fn available(&self) -> usize {
-        self.count
+        self.count.min(RING_BUFFER_CAPACITY - self.read_pos)
     }
 
     fn slice(&self) -> &[(f32, f32)] {

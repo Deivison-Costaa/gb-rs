@@ -731,3 +731,80 @@ mesma:
 O `gb-desktop` foi entregue como "o marco que torna jogável". A primeira coisa
 que ele realmente pagou, cinco horas depois, foi servir de instrumento de medição
 para um item de **timing de CPU**, que não tem nada a ver com gráficos.
+
+## 2026-07-27 — O único juiz da PPU é cego para o defeito que impede qualquer jogo
+
+O usuário abriu o Pokémon Red no `gb-desktop` e relatou: **o Ash não aparece**.
+Disse que já tinha visto o mesmo no Tetris (o bloco não cai) e no Super Mario
+Land (o Mario não existe). Três jogos, um sintoma: nenhum sprite.
+
+O `$FF46` guarda o byte e não transfere nada:
+
+```rust
+DMA_ADDR => self.dma = value,
+```
+
+Todo jogo atualiza a OAM por DMA, uma vez por quadro. Sem a transferência a OAM
+fica vazia e não há sprite nenhum — em jogo nenhum, nunca.
+
+**Por que o placar não viu.** Contando as instruções nas ROMs:
+
+| ROM | `LDH ($46),A` |
+|---|---|
+| `dmg-acid2` | **0** |
+| Pokémon Red | **8** |
+
+O `dmg-acid2` é a única ROM do placar que escreve na OAM direto. Ele é, entre
+todas, exatamente a que não exerce o defeito. O 3.7 foi celebrado como "o
+primeiro juiz externo da PPU" e ele é cego para a coisa que quebra tudo.
+
+**Por que o ROADMAP não viu.** O 3.1b entregou "DMA **stub** ($FF46)", marcou a
+caixa `[x]`, e **nunca abriu caixa para o DMA real**. O stub virou o estado
+final por omissão. O M3 foi declarado completo com a PPU incapaz de desenhar o
+protagonista de qualquer jogo.
+
+**O padrão, agora com três ocorrências no mesmo dia:**
+
+1. `mem_timing-2` marcado `crash` estava passando — o juiz ouvia o canal errado.
+2. O PR #97 mergeou verde e quebrava em 8 s com jogo real — nenhuma ROM da CI
+   passa pelo `gb-desktop`.
+3. O `dmg-acid2` passa e o emulador não desenha sprite em jogo — a suíte de
+   testes tem um buraco do tamanho exato do defeito.
+
+As três foram achadas por **uma pessoa olhando para a tela**, nenhuma por
+mecanismo automático, e as três estavam invisíveis para todas as camadas de
+verificação simultaneamente. A lição não é "faltou teste": é que **a cobertura
+de uma suíte é medida pelo que ela exerce, não pelo que ela afirma cobrir** — e
+que um juiz externo escolhido a dedo pode ser tão enviesado quanto um teste
+escrito por quem escreveu o código.
+
+Abriu-se o 3.8 para o DMA real, reabrindo o M3.
+
+## 2026-07-27 — Defeito na costura entre duas iterações, cada uma verde
+
+A 0078 (6.7a) escreveu o ring buffer de áudio no `gb-core`; a 0079 (6.7b) o
+consumiu no `gb-desktop`. Cada uma passou nos próprios testes, na bateria de
+mutação e na CI. Juntas, o emulador morria em 8 segundos:
+
+```
+panicked at run.rs:40: range end index 803 out of range for slice of length 78
+```
+
+`available()` devolvia o total de amostras; `slice()` devolvia só o trecho
+contíguo, que é menor assim que o anel dá a volta. Enquanto não dá, os dois
+números batem e tudo passa.
+
+O detalhe que dói: a **própria 0078 escreveu o teste que afirma o invariante
+violado** — `amostras_sao_fatia_contigua_do_ring_buffer` faz
+`assert_eq!(samples.len(), available)`. Ele passa porque o teste nunca enche o
+anel. O nome dele diz "contígua"; a asserção diz que os dois são iguais; o código
+diz que não são. Três afirmações e nenhuma contradição detectável dentro de uma
+iteração.
+
+A bateria de mutação age **dentro** de uma iteração. Não existe mecanismo que
+teste o contrato **entre** duas — e o placar não ajuda, porque exercita o
+`gb-cli`, que não tem áudio: nenhuma ROM da CI passa pelo `gb-desktop`.
+
+Conserto: `available()` passa a devolver o comprimento contíguo, honrando o
+teste que já existia, e o `gb-desktop` drena em laço para esvaziar a volta no
+mesmo quadro.

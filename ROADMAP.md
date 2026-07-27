@@ -302,6 +302,8 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [x] 6.5 Canal 4: noise (LFSR de 15/7 bits).
 - [x] 6.6 Mixer: NR50/NR51/NR52, panning, DAC enable.
 - [ ] 6.7 Downsample para 48 kHz + ring buffer + saída via `cpal`.
+  - [x] 6.7a Acumulador de downsample no `Apu` (gb-core): soma amostras do mixer a cada M-cycle, divide pelo número de M-cycles acumulados a cada ~87, produzindo `(f32, f32)` a ~48 kHz. Inclui ring buffer circular exposto como `&[(f32, f32)]` para consumo pelo `gb-desktop`. Testes unitários.
+  - [ ] 6.7b Saída de áudio via `cpal` no `gb-desktop`: callback `cpal::Stream` que lê do buffer do `Apu` e entrega ao dispositivo de áudio.
 - [ ] 6.8 blargg `dmg_sound` 01 a 12.
 
 ## M7 — Rigor

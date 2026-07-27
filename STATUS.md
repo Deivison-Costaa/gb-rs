@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0077 — APU: Mixer (NR50/NR51/NR52) ([doc](docs/iterations/0077-mixer.md)). `mixer_sample()` retorna `(u16, u16)` — soma digital dos 4 canais com panning NR51 e master volume NR50 (volume `V` → escala `V+1`, nunca muta). `digital_output()` em PulseChannel (duty cycle × envelope), Channel3 (wave RAM nibble × output level 0/100/50/25%), Channel4 (LFSR bit 0 × envelope). NR52 bits 3-0 dinâmicos (refletem `chX.enabled`); power-off (`bit 7 = 0`) zera NR10–NR51 e recria canais, preservando wave RAM. 24 testes novos (871 total). Bateria: **4/4 pegos**, 2 sobreviventes analisados (DAC check inobservável via mixer), 1/1 controles verdes. Sem saída de áudio — só a soma digital.
-**Próxima tarefa:** ROADMAP **6.7** (Downsample para 48 kHz + ring buffer + saída via cpal). Abrir `docs/reference/07-apu.md` § Audio Details — a saída do mixer (`(left, right)` como `u16`) precisa ser convertida em amostras `f32` ou `i16` a 48 kHz. O APU roda a ~1 MHz (cada M-cycle = 4 T-cycles do master clock de ~4 MHz), então o downsample é ~87× (4.194.304 / 48.000). A abordagem comum: acumulador que soma as amostras do mixer a cada M-cycle e divide pelo número de M-cycles por amostra de saída. Ring buffer com `cpal` para output no `gb-desktop`. `gb-core` expõe o buffer; `gb-desktop` consome. O ring buffer deve ter tamanho fixo (~4096 amostras) e o consumidor (cpal) lê em bloco. Nota nova: o mixer_sample atual retorna `(u16, u16)` — o 6.7 vai consumir isso, possivelmente mudando a assinatura ou adicionando um acumulador.
+**Última iteração concluída:** 0078 — APU: Downsample + ring buffer ([doc](docs/iterations/0078-apu-downsample-ring-buffer.md)). `Apu::tick()` chama `mixer_sample()` a cada M-cycle e acumula via `Downsampler` com phase accumulator exato (375/8192 → ~21.85 M-cycles por amostra). `normalize_mixer_value(u16) → f32` mapeia 0..480 para [-1, 1]. `RingBuffer` circular de 4096 `(f32, f32)` exposto por `Apu` → `Bus`: `audio_samples_available()`, `audio_samples()`, `consume_audio_samples(n)`. Power-off reseta acumulador e ring buffer. 10 testes novos (881 total). Bateria: **4/4 pegos**, 1/1 controles verdes. Sem saída de áudio — só o buffer exposto.
+**Próxima tarefa:** ROADMAP **6.7b** (Saída de áudio via cpal no gb-desktop). O `Bus` já expõe `audio_samples() → &[(f32, f32)]` e `consume_audio_samples(n)`. O `gb-desktop` precisa criar um `cpal::Stream` cujo callback lê do buffer do `Apu` (via `Bus`) e entrega ao dispositivo de áudio. O `Cargo.toml` do `gb-desktop` já deve ter `cpal` como dependência ou precisa ser adicionado. O callback do cpal roda em thread separada — o `Bus` é `&mut` no loop principal, então o acesso ao ring buffer precisa de sincronização (`Mutex<Bus>` ou extrair o buffer para um `Arc<Mutex<RingBuffer>>`). Alternativa: no `gb-desktop`, após cada frame, drenar o buffer de áudio e passá-lo para um canal (`mpsc`) que alimenta o callback do cpal. Nota nova: o loop do `gb-desktop` roda um frame por vez (17556 M-cycles), produzindo ~803 amostras de áudio por frame — drenar o buffer no fim do frame e enviar por canal é suficiente para evitar underrun.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **871** (eram 847 na 0076 — 24 novos em `apu_mixer.rs`).
+Testes do workspace: **881** (eram 871 na 0077 — 10 novos em `apu_downsample.rs`).
 
 ## Invariantes
 

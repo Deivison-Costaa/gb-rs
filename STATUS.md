@@ -3,13 +3,10 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0052 — HALT + o bug do HALT ([doc](docs/iterations/0052-halt-bug.md)). `HALT` ($76) agora pausa a CPU: flag `halted: bool` no `Cpu`, checado no início de `step()` antes do dispatch. Wake-up com `IE & IF != 0` sem atraso (cai para `check_interrupt` no mesmo M-cycle). Bug do HALT: `halt_bug: bool` suprime um incremento de PC em `read_at_pc` quando `IME=0 && IE & IF != 0` no momento do HALT, causando re-leitura do byte seguinte. `decoded_elsewhere` perdeu a exclusão de `$76`; todos os 256 opcodes agora são decodificados ou illegal. Bateria: **7/7 pegos, 2/2 controles verdes** — M2 e M4 sobreviveram na primeira rodada e exigiram um teste novo (`after_wake_up_cpu_is_no_longer_halted`) e PC checks em `halt_bug_byte_after_halt_executed_twice`.
-**Iteração anterior:** 0051 — interrupções (IE/IF/IME, dispatch).
-**Iteração anterior:** 0050 — timer completo.
-**Iteração anterior:** 0049 — registrador DIV ($FF04).
-**Iteração anterior:** 0048 — correção do DAA ($27).
-**Próxima tarefa:** ROADMAP **2.4** — blargg `instr_timing`, `mem_timing`, `mem_timing-2`, `halt_bug`. Executar as 4 ROMs de timing + halt_bug via `gb-cli` com o M1+M2 completo e verificar a saída serial para cada uma. A ROM de halt_bug depende de timer funcional (que já está ok desde a 0050) e de interrupções (0051) mais o HALT (esta iteração) — se travar, `check_interrupt` e `halted` precisam ser depurados juntos. As ROMs de timing testam a exatidão dos M-cycles de cada instrução: o maior risco são instruções com timing condicional (JR/JC/JCALL/RET) implementadas antes do timer estar no ar, e o `ADD SP,e8` que tem 4 M-cycles e o instante do write final já foi fonte de erro (0017). A nota 14 (cache de build) continua relevante; a nota 53 (RMW de IF) não deve doer aqui porque as ROMs não têm PPU. O placar do scoreboard deve subir de 0 para alguma contagem em `halt_bug`, `instr_timing`, `mem_timing` e `mem_timing-2`.
-**Marco atual:** M2 — HALT completo, iniciando ROMs de timing
+**Última iteração concluída:** 0053 — blargg instr_timing, mem_timing, mem_timing-2, halt_bug ([doc](docs/iterations/0053-blargg-timing-haltbug.md)). Corrige MBC1: `rom_addr` usava `bank = 1u8` em vez de `effective_bank()`; RAM externa (`ram_enabled`, `ram_bank`, `banking_mode`) adicionada para tipos `$02`/`$03`. 10 testes novos em `cart_mbc1.rs`. Placar: 10→16 (instr_timing 1/1, mem_timing 4/4; cpu_instrs 10→11 por efeito colateral). halt_bug e mem_timing-2 permanecem 0: travam em `while LY != $90` — só com PPU (M3). Bateria: **3/3 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0052 — HALT + o bug do HALT.
+**Próxima tarefa:** ROADMAP **3.1** — registradores da PPU: LCDC, STAT, SCY, SCX, LY, LYC, BGP, OBP0, OBP1, WY, WX. VRAM/OAM. O MARCO M2 está encerrado: instr_timing e mem_timing passam (16/121 no placar). halt_bug e mem_timing-2 dependem de LY para avançar — a primeira micro-funcionalidade da PPU deve ser LY ($FF44) incrementando a cada scanline (456 T-cycles), e STAT ($FF41) atualizando os bits de modo (0=HBlank, 1=VBlank, 2=OAM scan, 3=draw). A nota 14 (cache de build) continua relevante para a bateria de mutação. O item 2.4 fica parcialmente concluído — as 2 ROMs que passam estão no scoreboard; as 2 que não passam estão documentadas como dependentes de M3.
+**Marco atual:** M3 — início da PPU
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -27,9 +24,9 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 
 | Suíte | Passando | Total |
 |---|---|---|
-| blargg cpu_instrs | 10 | 12 |
-| blargg instr_timing | 0 | 1 |
-| blargg mem_timing | 0 | 4 |
+| blargg cpu_instrs | 11 | 12 |
+| blargg instr_timing | 1 | 1 |
+| blargg mem_timing | 4 | 4 |
 | blargg mem_timing-2 | 0 | 4 |
 | blargg halt_bug | 0 | 1 |
 | blargg oam_bug | 0 | 9 |
@@ -39,7 +36,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **643** (eram **633** na 0051 — 10 novos em `cpu_halt.rs`, incluindo `after_wake_up_cpu_is_no_longer_halted` que fechou o buraco do M2 na bateria de mutação; 3 testes existentes atualizados em `cpu_mcycle_loop.rs` [1 reescrito], `cpu_ld_r8_block.rs` [1 reescrito com verificações novas] e `cpu_halt.rs` [1 com PC checks adicionais]; ajuste em `decoded_elsewhere` removeu a exclusão de `$76`).
+Testes do workspace: **653** (eram **643** na 0052 — 10 novos em `cart_mbc1.rs`).
 
 ## Invariantes
 

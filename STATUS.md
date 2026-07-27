@@ -3,9 +3,9 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0059 — Background por scanline ([doc](docs/iterations/0059-ppu-background-scanline.md)). 6 testes novos em `ppu_background_scanline.rs`. Primeira iteração que produz pixels: framebuffer 160x144, renderização durante Mode 3 via `begin_mode3` em `PpuSignals`, tilemap ($9800/$9C00), tiledata (signed/unsigned via LCDC.4), SCX/SCY, BGP, LCDC.0 (BG disable). Placar de ROMs inalterado (121 ROMs, 0 passando). Bateria: **5/5 pegos, 1/1 controle verde**.
-**Iteração anterior:** 0058 — Máquina de modos + interrupções STAT e VBlank.
-**Próxima tarefa:** ROADMAP **3.4** — Window (incluindo o contador interno de linha da window). A window compartilha o tilemap e a tiledata com o background mas tem posição fixa na tela (WX-7, WY) e seu próprio contador de linha interno. Armadilhas: o contador de linha da window só incrementa quando a window está visível na scanline; WX=0 tem comportamento especial (shift de SCX%8 pixels); WX=166 no DMG tem um bug que faz a window cobrir a tela inteira com offset de 1 scanline; `2.4b` (`halt_bug` e `mem_timing-2`) continua bloqueado — reavalie quando o rendering estiver mais completo (M3 fechado).
+**Última iteração concluída:** 0060 — Window por scanline ([doc](docs/iterations/0060-ppu-window.md)). 9 testes novos em `ppu_window_scanline.rs`. Condição Y gerenciada em `tick()` (avaliada no início de cada scanline, limpa no VBlank), contador interno `window_line` (incrementa só quando window visível), tilemap independente (LCDC.6 vs LCDC.3), posicionamento WX−7, casos especiais WX=0 (shift SCX%8) e WX=166 (bug DMG: tela inteira + offset vertical). Placar de ROMs inalterado (121 ROMs, 0 passando). Bateria: **3/3 pegos, 1/1 controle verde** (controle quebrou `ppu_ly_stat_mode`).
+**Iteração anterior:** 0059 — Background por scanline.
+**Próxima tarefa:** ROADMAP **3.5** — Sprites (OAM scan, limite 10/linha, prioridade, flip X/Y, modo 8×16). A OAM já está mapeada no `Bus` (iteração 3.1d) mas não é consumida pela PPU. Armadilhas: o OAM scan ocorre no Mode 2 (80 dots) e seleciona até 10 sprites por scanline; a prioridade de desenho no DMG é por X coordinate (menor X = maior prioridade) + desempate por índice OAM; sprites com X=0 ou X≥168 ficam invisíveis mas ainda contam no limite de 10; o tile de sprite sempre usa endereçamento unsigned ($8000); cor 0 do sprite é transparente (deixa o BG/window aparecer); `2.4b` (`halt_bug` e `mem_timing-2`) continua bloqueado — reavalie quando os sprites fecharem (M3 completo).
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -35,7 +35,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **698** (eram 692 na 0058 — 6 novos em `ppu_background_scanline.rs`).
+Testes do workspace: **707** (eram 698 na 0059 — 9 novos em `ppu_window_scanline.rs`).
 
 ## Invariantes
 

@@ -267,7 +267,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
   - [x] 3.1b Restantes: SCY ($FF42), SCX ($FF43), DMA stub ($FF46), BGP ($FF47), OBP0 ($FF48), OBP1 ($FF49), WY ($FF4A), WX ($FF4B).
   - [x] 3.1c VRAM ($8000–$9FFF).
   - [x] 3.1d OAM ($FE00–$FE9F).
-- [ ] 3.2 Máquina de modos (OAM scan 80 / draw / hblank / vblank) + interrupções STAT e VBlank.
+- [x] 3.2 Máquina de modos (OAM scan 80 / draw / hblank / vblank) + interrupções STAT e VBlank.
 - [ ] 3.3 Background por scanline: tilemap, tiledata, endereçamento signed/unsigned.
 - [ ] 3.4 Window (incluindo o contador interno de linha da window).
 - [ ] 3.5 Sprites: OAM scan, limite de 10/linha, prioridade, flip X/Y, modo 8x16.

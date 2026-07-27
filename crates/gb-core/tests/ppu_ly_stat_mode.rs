@@ -335,3 +335,227 @@ fn lcdc_is_readable_and_writable() {
         "LCDC aceita escrita e devolve o valor"
     );
 }
+
+// ── Interrupções PPU — ROADMAP 3.2 ─────────────────────────────────────
+
+const IE: u16 = 0xFFFF;
+const IF: u16 = 0xFF0F;
+
+#[test]
+fn vblank_interrupt_fires_when_entering_vblank() {
+    let (mut cpu, mut bus) = machine(&[]);
+
+    bus.write(IE, 0x01);
+    bus.write(IF, 0x00);
+
+    // Entra no VBlank: LY=144 após 144 scanlines de 114 M-cycles
+    let m_cycles_to_vblank = VBLANK_FIRST_LY as u32 * M_CYCLES_PER_SCANLINE;
+    step_n(&mut cpu, &mut bus, m_cycles_to_vblank);
+
+    assert_eq!(
+        bus.read(LY),
+        VBLANK_FIRST_LY,
+        "LY deve ser 144 no início do VBlank"
+    );
+    assert_eq!(
+        stat_mode(&bus),
+        MODE_VBLANK,
+        "STAT deve reportar Mode 1 (VBlank)"
+    );
+    assert_eq!(
+        bus.read(IF) & 0x01,
+        0x01,
+        "IF bit 0 (VBlank) deve estar setado ao entrar no VBlank"
+    );
+}
+
+#[test]
+fn vblank_interrupt_does_not_fire_again_within_vblank() {
+    let (mut cpu, mut bus) = machine(&[]);
+
+    bus.write(IE, 0x01);
+    bus.write(IF, 0x00);
+
+    // Entra no VBlank (LY=144)
+    let m_cycles_to_vblank = VBLANK_FIRST_LY as u32 * M_CYCLES_PER_SCANLINE;
+    step_n(&mut cpu, &mut bus, m_cycles_to_vblank);
+
+    // Limpa o bit de VBlank de IF
+    bus.write(IF, 0x00);
+
+    // Avança mais uma scanline dentro do VBlank (LY=145)
+    step_n(&mut cpu, &mut bus, M_CYCLES_PER_SCANLINE);
+
+    assert_eq!(
+        bus.read(LY),
+        145,
+        "LY deve ser 145 (uma scanline após o início do VBlank)"
+    );
+    assert_eq!(
+        bus.read(IF) & 0x01,
+        0x00,
+        "IF bit 0 (VBlank) não deve ser setado de novo dentro do VBlank"
+    );
+}
+
+#[test]
+fn stat_interrupt_fires_on_mode_2_transition_when_enabled() {
+    let (mut cpu, mut bus) = machine(&[]);
+
+    bus.write(STAT, 0x20); // bit 5 = Mode 2 int select
+    bus.write(IE, 0x02);
+    bus.write(IF, 0x00);
+
+    // Avança até o início da scanline 1: Mode 0 (fim da scanline 0) → Mode 2
+    step_n(&mut cpu, &mut bus, M_CYCLES_PER_SCANLINE);
+
+    assert_eq!(bus.read(LY), 1, "LY deve ser 1");
+    assert_eq!(
+        stat_mode(&bus),
+        MODE_OAM_SCAN,
+        "STAT deve reportar Mode 2 no início da scanline"
+    );
+    assert_eq!(
+        bus.read(IF) & 0x02,
+        0x02,
+        "IF bit 1 (LCD/STAT) deve estar setado na transição para Mode 2"
+    );
+}
+
+#[test]
+fn stat_interrupt_fires_on_mode_0_transition_when_enabled() {
+    let (mut cpu, mut bus) = machine(&[]);
+
+    bus.write(STAT, 0x08); // bit 3 = Mode 0 int select
+    bus.write(IE, 0x02);
+    bus.write(IF, 0x00);
+
+    // Avança até o fim do Mode 3 (M-cycles 20-62) — transição Mode 3→0
+    // Mode 3 começa em dots=80 (M-cycle 20), dura 172 dots = 43 M-cycles
+    // Transição Mode 3→0: dots=252 (M-cycle 63)
+    step_n(&mut cpu, &mut bus, MODE_2_M_CYCLES + MODE_3_M_CYCLES);
+
+    assert_eq!(bus.read(LY), 0, "ainda na scanline 0");
+    assert_eq!(
+        stat_mode(&bus),
+        MODE_HBLANK,
+        "STAT deve reportar Mode 0 (HBlank)"
+    );
+    assert_eq!(
+        bus.read(IF) & 0x02,
+        0x02,
+        "IF bit 1 (LCD/STAT) deve estar setado na transição para Mode 0"
+    );
+}
+
+#[test]
+fn stat_interrupt_fires_on_lyc_equality_when_enabled() {
+    let (mut cpu, mut bus) = machine(&[]);
+
+    // LYC=5, LY=0 estão diferentes. Bit 6 = LYC int select.
+    bus.write(LYC, 0x05);
+    bus.write(STAT, 0x40); // bit 6 = LYC int select
+    bus.write(IE, 0x02);
+    bus.write(IF, 0x00);
+
+    // Avança 5 scanlines: LY vai de 0 a 5
+    step_n(&mut cpu, &mut bus, 5 * M_CYCLES_PER_SCANLINE);
+
+    assert_eq!(bus.read(LY), 5, "LY deve ser 5");
+    assert!(
+        lyc_eq_ly(&bus),
+        "STAT bit 2 (LYC=LY) deve estar setado quando LY=5 e LYC=5"
+    );
+    assert_eq!(
+        bus.read(IF) & 0x02,
+        0x02,
+        "IF bit 1 (LCD/STAT) deve estar setado quando LY torna-se igual a LYC"
+    );
+}
+
+#[test]
+fn stat_interrupt_does_not_fire_when_no_int_select_bits_are_set() {
+    let (mut cpu, mut bus) = machine(&[]);
+
+    bus.write(STAT, 0x00); // nenhum bit de int select
+    bus.write(IE, 0x02);
+    bus.write(IF, 0x00);
+
+    // Avança uma scanline inteira (passa por Mode 2, 3, 0)
+    step_n(&mut cpu, &mut bus, M_CYCLES_PER_SCANLINE);
+
+    assert_eq!(
+        bus.read(IF) & 0x02,
+        0x00,
+        "IF bit 1 (LCD/STAT) não deve ser setado sem int select"
+    );
+}
+
+#[test]
+fn stat_interrupt_does_not_fire_on_lyc_mismatch() {
+    let (mut cpu, mut bus) = machine(&[]);
+
+    bus.write(LYC, 0x10);
+    bus.write(STAT, 0x40); // bit 6 = LYC int select
+    bus.write(IE, 0x02);
+    bus.write(IF, 0x00);
+
+    // Avança 3 scanlines (LY=3, LYC=16 — sem coincidência)
+    step_n(&mut cpu, &mut bus, 3 * M_CYCLES_PER_SCANLINE);
+
+    assert_eq!(
+        bus.read(IF) & 0x02,
+        0x00,
+        "IF bit 1 (LCD/STAT) não deve ser setado sem coincidência LYC=LY"
+    );
+}
+
+#[test]
+fn stat_blocking_mode_0_to_mode_1_prevents_vblank_stat_interrupt() {
+    let (mut cpu, mut bus) = machine(&[]);
+
+    // Habilita Mode 0 (bit 3) e Mode 1 (bit 4)
+    bus.write(STAT, 0x18); // bits 3 e 4 = Mode 0 e Mode 1 int select
+    bus.write(IE, 0x02);
+    bus.write(IF, 0x00);
+
+    // Avança até o fim da scanline 143 (entra em Mode 0 após Mode 3)
+    // Mode 3→0 acontece por scanline. Precisamos passar do fim do Mode 3 em LY=143.
+    // Avança: 143 scanlines completas + Mode 3 em LY=143 = 143*114 + 63 M-cycles
+    step_n(
+        &mut cpu,
+        &mut bus,
+        143 * M_CYCLES_PER_SCANLINE + MODE_2_M_CYCLES + MODE_3_M_CYCLES,
+    );
+
+    // Agora estamos em Mode 0 em LY=143. O primeiro STAT (Mode 0) deve ter disparado.
+    let if_before = bus.read(IF) & 0x02;
+    assert_eq!(
+        if_before, 0x02,
+        "STAT interrupt (Mode 0) deve ter disparado em LY=143"
+    );
+
+    // Limpa IF e avança até entrar em VBlank (LY=144)
+    bus.write(IF, 0x00);
+
+    // Avança o restante da scanline 143: Mode 0 termina, dots vira 0, LY=144, mode=1
+    // Faltam: DOTS_PER_SCANLINE/4 - (MODE_2_M_CYCLES + MODE_3_M_CYCLES) = 114 - (20+43) = 51
+    let remaining_mode0 = M_CYCLES_PER_SCANLINE - MODE_2_M_CYCLES - MODE_3_M_CYCLES;
+    step_n(&mut cpu, &mut bus, remaining_mode0);
+
+    assert_eq!(
+        bus.read(LY),
+        VBLANK_FIRST_LY,
+        "LY deve ser 144 após terminar a scanline 143"
+    );
+    assert_eq!(
+        stat_mode(&bus),
+        MODE_VBLANK,
+        "STAT deve reportar Mode 1 (VBlank)"
+    );
+    assert_eq!(
+        bus.read(IF) & 0x02,
+        0x00,
+        "IF bit 1 (LCD/STAT) não deve ser setado para Mode 1 — STAT blocking"
+    );
+}

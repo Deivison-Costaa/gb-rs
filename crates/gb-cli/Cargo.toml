@@ -9,3 +9,4 @@ repository.workspace = true
 
 [dependencies]
 gb-core = { path = "../gb-core" }
+sha2 = "0.10"

@@ -3,9 +3,9 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0063 — dmg-acid2 + comparação de hash do framebuffer na CI ([doc](docs/iterations/0063-dmg-acid2-hash.md)). Flag `--check-fb-hash` no `gb-cli run`: calcula SHA-256 do framebuffer (usando crate `sha2` em `gb-cli`, não em `gb-core`) e compara com hash esperado. Hash de referência extraído do PNG oficial (`dmg-acid2-dmg.png`, 160×144, modo L): `f844ea76...a32a458`. `scoreboard.sh` passa `--check-fb-hash` para ROMs da suíte `dmg-acid2`. 4 testes novos em `run_command.rs`. PPU passou de primeira — sem correções de renderização. Bateria: **3/3 pegos, 1/1 controle verde**. Placar: 18/121 (dmg-acid2 de 0/1 para 1/1).
-**Iteração anterior:** 0062 — Bloqueio VRAM/OAM por modo.
-**Próxima tarefa:** ROADMAP **4.1** — Joypad (P1/JOYP + interrupção). O M4 começa com input, e o joypad é o primeiro periférico de entrada. A spec está em `docs/reference/01-memory-map.md` (§ FF00 — P1/JOYP). O `Bus::read`/`write` do endereço `$FF00` precisa selecionar entre as linhas de direção (bits 5–4 de P1) e retornar os bits 3–0 conforme as teclas pressionadas. `2.4b` (`halt_bug` e `mem_timing-2`) pode ser reavaliado agora que o M3 está fechado — ver nota 54.
+**Última iteração concluída:** 0064 — Joypad (P1/JOYP + interrupção) ([doc](docs/iterations/0064-joypad.md)). `Joypad` com seleção ativa-baixa (bits 5-4), retorno de estado nos bits 3-0 e interrupção em IF bit 4. `Key` enum com 8 variantes exportado. `Bus::key_down`/`key_up` delegam; `tick_joypad_interrupt` propaga IF via `Cpu::step`. Bateria: **5/5 pegos, 1/1 controle verde**. Placar: 18/121 (sem alteração). 21 testes novos. Erro #1: constantes SELECT_BUTTONS/SELECT_DPAD trocadas (active-low confundido com active-high).
+**Iteração anterior:** 0063 — dmg-acid2 + comparação de hash do framebuffer na CI.
+**Próxima tarefa:** ROADMAP **4.2** — MBC1: banking de ROM/RAM, modo 0/1. A spec está em `docs/reference/08-cartridges-mbc.md` (há stub `mbc1.rs` com testes). O MBC1 lida com 5 registradores mapeados em `$0000–$7FFF` (escrita) e as janelas de ROM/RAM em `$0000–$7FFF` / `$A000–$BFFF` (leitura/escrita). A armadilha clássica é o `rom_addr = 0` virar 1 automaticamente para os bancos baixos — o `mbc1.rs` já tem o esqueleto dessa lógica. `2.4b` continua bloqueado: as ROMs halt_bug e mem_timing-2 seguem rodando até o teto de ciclos mesmo com M3 fechado — o bloqueio foi reavaliado em 27/07 e confirmado.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -35,7 +35,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **740** (eram 736 na 0062 — 4 novos em `run_command.rs`).
+Testes do workspace: **761** (eram 740 na 0063 — 21 novos em `input_joypad.rs`).
 
 ## Invariantes
 

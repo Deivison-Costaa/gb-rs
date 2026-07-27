@@ -3,9 +3,9 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0054 — módulo PPU: LY ($FF44) e STAT ($FF41) modo ([doc](docs/iterations/0054-ly-stat-mode.md)). 17 testes novos em `ppu_ly_stat_mode.rs`. Placar: inalterado (16/121). halt_bug e mem_timing-2 continuam 0: LY agora incrementa, mas as ROMs precisam de STAT interrupts para sair do loop e produzir saída serial. Bateria: **3/3 pegos, 2/2 controles verdes**.
-**Iteração anterior:** 0053 — MBC1 banking + blargg timing suíte.
-**Próxima tarefa:** ROADMAP **3.1b** — registradores restantes da PPU: SCY ($FF42), SCX ($FF43), DMA stub ($FF46), BGP ($FF47), OBP0 ($FF48), OBP1 ($FF49), WY ($FF4A), WX ($FF4B). Todos já existem em `boot.rs` com `IO_HAS_OWNER = true` — o trabalho é rotear `$FF42`–`$FF4B` pelo PPU (`ppu.read`/`ppu.write`) no `match` do `Bus`, igual ao feito para `$FF40|$FF41|$FF44|$FF45` na 0054. A nota 14 (cache de build) continua relevante. O DMA ($FF46) é um stub: armazena o valor escrito e retorna na leitura; o trigger de transferência (160 M-cycles) entra em M3 (item 3.2).
+**Última iteração concluída:** 0055 — PPU registradores SCY/SCX/DMA/BGP/OBP0/OBP1/WY/WX ($FF42–$FF4B) roteados pelo PPU no `Bus` ([doc](docs/iterations/0055-ppu-registers-rest.md)). 12 testes novos em `ppu_registers_3_1b.rs`. Placar: inalterado (16/121). Range do PPU no `match` do `Bus` agora é `0xFF40..=0xFF4B` (12 endereços contíguos). DMA é stub: armazena o valor escrito. Bateria: **3/3 pegos, 2/2 controles verdes**.
+**Iteração anterior:** 0054 — módulo PPU: LY ($FF44) e STAT ($FF41) modo.
+**Próxima tarefa:** ROADMAP **3.1c** — VRAM ($8000–$9FFF)
 **Marco atual:** M3 — PPU
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
@@ -36,7 +36,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **653** (eram **643** na 0052 — 10 novos em `cart_mbc1.rs`).
+Testes do workspace: **682** (eram 670 na 0054 — 12 novos em `ppu_registers_3_1b.rs`).
 
 ## Invariantes
 

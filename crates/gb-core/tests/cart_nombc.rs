@@ -147,7 +147,7 @@ fn load_dispatches_rom_only_to_nombc() {
 
 #[test]
 fn load_refuses_types_it_cannot_map() {
-    for code in [0x19u8, 0x42, 0xFF] {
+    for code in [0x20u8, 0x42, 0xFF] {
         let rom = rom_of_type(code, 32 * KIB);
         match load(rom) {
             Err(CartridgeError::UnsupportedType { cartridge_type }) => assert_eq!(
@@ -215,12 +215,12 @@ fn error_messages_carry_the_offending_value() {
         "a mensagem devia dizer o tamanho recusado, e diz: {too_large:?}"
     );
 
-    let unsupported = load(rom_of_type(0x19, 32 * KIB))
+    let unsupported = load(rom_of_type(0x20, 32 * KIB))
         .err()
-        .expect("MBC5 não é suportado")
+        .expect("MBC6 não é suportado")
         .to_string();
     assert!(
-        unsupported.contains("$19") && unsupported.contains("MBC5"),
+        unsupported.contains("$20") && unsupported.contains("MBC6"),
         "a mensagem devia nomear o tipo recusado, e diz: {unsupported:?}"
     );
 }

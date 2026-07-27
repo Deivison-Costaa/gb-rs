@@ -403,6 +403,21 @@ impl Ppu {
         }
     }
 
+    pub(crate) fn is_vram_accessible(&self) -> bool {
+        if self.lcdc & 0x80 == 0 {
+            return true;
+        }
+        self.current_mode() != MODE_DRAW
+    }
+
+    pub(crate) fn is_oam_accessible(&self) -> bool {
+        if self.lcdc & 0x80 == 0 {
+            return true;
+        }
+        let mode = self.current_mode();
+        mode == MODE_HBLANK || mode == MODE_VBLANK
+    }
+
     fn current_mode(&self) -> u8 {
         if self.lcdc & 0x80 == 0 {
             return MODE_HBLANK;

@@ -131,8 +131,20 @@ impl Bus {
                 }
             },
             Region::InterruptEnable => self.ie,
-            Region::VideoRam => self.vram[vram_index(addr)],
-            Region::ObjectAttributeMemory => self.oam[oam_index(addr)],
+            Region::VideoRam => {
+                if self.ppu.is_vram_accessible() {
+                    self.vram[vram_index(addr)]
+                } else {
+                    OPEN_BUS
+                }
+            }
+            Region::ObjectAttributeMemory => {
+                if self.ppu.is_oam_accessible() {
+                    self.oam[oam_index(addr)]
+                } else {
+                    OPEN_BUS
+                }
+            }
         }
     }
 
@@ -183,9 +195,17 @@ impl Bus {
                 }
             },
             Region::InterruptEnable => self.ie = value,
-            Region::VideoRam => self.vram[vram_index(addr)] = value,
+            Region::VideoRam => {
+                if self.ppu.is_vram_accessible() {
+                    self.vram[vram_index(addr)] = value;
+                }
+            }
             Region::NotUsable => {}
-            Region::ObjectAttributeMemory => self.oam[oam_index(addr)] = value,
+            Region::ObjectAttributeMemory => {
+                if self.ppu.is_oam_accessible() {
+                    self.oam[oam_index(addr)] = value;
+                }
+            }
         }
     }
 

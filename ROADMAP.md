@@ -271,7 +271,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [x] 3.3 Background por scanline: tilemap, tiledata, endereçamento signed/unsigned.
 - [x] 3.4 Window (incluindo o contador interno de linha da window).
 - [x] 3.5 Sprites: OAM scan, limite de 10/linha, prioridade, flip X/Y, modo 8x16.
-- [ ] 3.6 Bloqueio de acesso a VRAM/OAM por modo.
+- [x] 3.6 Bloqueio de acesso a VRAM/OAM por modo.
 - [ ] 3.7 `dmg-acid2` passando + comparação de hash do framebuffer na CI.
 
 ## M4 — Jogável

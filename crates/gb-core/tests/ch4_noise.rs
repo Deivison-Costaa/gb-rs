@@ -234,7 +234,7 @@ fn divider_0_e_tratado_como_metade() {
 }
 
 #[test]
-fn envelope_do_ch4_carrega_volume_do_trigger_e_diminui_no_passo_2() {
+fn envelope_do_ch4_carrega_volume_do_trigger_e_diminui_no_passo_7() {
     let (mut cpu, mut bus) = machine(&[]);
 
     bus.write(NR42, 0xF1);
@@ -246,36 +246,37 @@ fn envelope_do_ch4_carrega_volume_do_trigger_e_diminui_no_passo_2() {
         "volume do envelope é o initial_volume (15) após o trigger"
     );
 
-    step_n(&mut cpu, &mut bus, 4096);
+    step_n(&mut cpu, &mut bus, 14336);
     assert_eq!(
         bus.apu_frame_sequencer_step(),
-        2,
-        "depois de 4096 M-cycles o frame sequencer está no passo 2"
+        7,
+        "depois de 14336 M-cycles o frame sequencer está no passo 7"
     );
     assert_eq!(
         bus.ch4_envelope_volume(),
         14,
-        "no passo 2, com pace=1, o volume do envelope diminui de 15 para 14"
+        "no passo 7, com pace=1, o volume do envelope diminui de 15 para 14"
     );
 }
 
 #[test]
-fn envelope_do_ch4_diminui_de_novo_no_passo_6() {
+fn envelope_do_ch4_diminui_de_novo_no_segundo_passo_7() {
     let (mut cpu, mut bus) = machine(&[]);
 
     bus.write(NR42, 0xF1);
     bus.write(NR44, 0x80);
 
-    step_n(&mut cpu, &mut bus, 12288);
+    // 15 * 2048 = 30720 M-cycles: um ciclo completo + 7 passos = passo 7 do segundo ciclo.
+    step_n(&mut cpu, &mut bus, 30720);
     assert_eq!(
         bus.apu_frame_sequencer_step(),
-        6,
-        "depois de 12288 M-cycles o frame sequencer está no passo 6"
+        7,
+        "depois de 30720 M-cycles o frame sequencer está no passo 7 do segundo ciclo"
     );
     assert_eq!(
         bus.ch4_envelope_volume(),
         13,
-        "no passo 6, com pace=1, o volume diminui mais uma vez: 14 → 13"
+        "no segundo passo 7, com pace=1, o volume diminui mais uma vez: 14 → 13"
     );
 }
 
@@ -288,7 +289,8 @@ fn envelope_com_pace_0_nao_altera_volume() {
 
     assert_eq!(bus.ch4_envelope_volume(), 15);
 
-    step_n(&mut cpu, &mut bus, 16384);
+    // Avançar até o passo 7 (14336 M-cycles).
+    step_n(&mut cpu, &mut bus, 14336);
     assert_eq!(
         bus.ch4_envelope_volume(),
         15,
@@ -305,11 +307,11 @@ fn envelope_com_direcao_1_aumenta_volume() {
 
     assert_eq!(bus.ch4_envelope_volume(), 0);
 
-    step_n(&mut cpu, &mut bus, 4096);
+    step_n(&mut cpu, &mut bus, 14336);
     assert_eq!(
         bus.ch4_envelope_volume(),
         1,
-        "no passo 2, com direção=increase e pace=1, o volume sobe para 1"
+        "no passo 7, com direção=increase e pace=1, o volume sobe para 1"
     );
 }
 
@@ -321,7 +323,8 @@ fn envelope_do_ch4_nao_dispara_se_canal_estiver_desligado() {
 
     assert!(!bus.ch4_enabled());
 
-    step_n(&mut cpu, &mut bus, 4096);
+    step_n(&mut cpu, &mut bus, 14336);
+    assert_eq!(bus.apu_frame_sequencer_step(), 7);
     assert_eq!(
         bus.ch4_envelope_volume(),
         0,

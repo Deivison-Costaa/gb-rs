@@ -840,7 +840,7 @@ impl Apu {
                 if step == 0 || step == 2 || step == 4 || step == 6 {
                     self.tick_length_timers();
                 }
-                if step == 2 || step == 6 {
+                if step == 7 {
                     if self.ch1.pulse.enabled {
                         self.ch1.pulse.tick_envelope(self.nr12);
                     }
@@ -850,9 +850,9 @@ impl Apu {
                     if self.ch4.enabled {
                         self.ch4.tick_envelope(self.nr42);
                     }
-                    if self.ch1.pulse.enabled {
-                        self.tick_ch1_sweep();
-                    }
+                }
+                if (step == 2 || step == 6) && self.ch1.pulse.enabled {
+                    self.tick_ch1_sweep();
                 }
             }
         }

@@ -316,7 +316,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [ ] 6.8 blargg `dmg_sound` 01 a 12.
   - [x] 6.8a Length counter: NRx1 load, trigger reload, 256 Hz tick, channel disable on expiry, NR52 readback.
   - [x] 6.8b Extra length clocking + obscure behavior (trigger-when-next-non-length-step, Prehistorik Man fix).
-  - [ ] 6.8c Fix envelope timing: 64 Hz (step 7 only), not 128 Hz (steps 2,6).
+   - [x] 6.8c Fix envelope timing: 64 Hz (step 7 only), not 128 Hz (steps 2,6).
   - [ ] 6.8d DAC-off trigger protection: NRx4 MSB should not enable channel when DAC is off.
   - [ ] 6.8e Remaining fixes + final verification run.
 

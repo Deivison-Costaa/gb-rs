@@ -258,7 +258,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [x] 2.3 `HALT` + o bug do HALT.
 - [ ] 2.4 blargg `instr_timing`, `mem_timing`, `mem_timing-2`, `halt_bug`.
   - [x] 2.4a `instr_timing` e `mem_timing` passando (não dependem de PPU).
-  - [ ] 2.4b `halt_bug` e `mem_timing-2` passando — **BLOQUEADO por M3**. A previsão anterior ("precisam de LY") era curta demais: o `LY` chegou no 3.1a e medi as duas em 26/07 às 22:12 — seguem rodando até o teto de ciclos sem dar veredito. Reavalie quando a máquina de modos do 3.2 fechar.
+  - [ ] 2.4b `halt_bug` e `mem_timing-2` passando — M3 fechou no 3.7, o bloqueio expirou. Reavaliar: em 26/07 as ROMs rodavam até o teto de ciclos sem veredito; com a máquina de modos completa podem passar ou apontar bugs novos.
 
 ## M3 — PPU
 
@@ -279,7 +279,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [x] 4.1 Joypad: P1/JOYP + interrupção.
 - [x] 4.2 MBC1: banking de ROM/RAM, modo 0/1.
 - [x] 4.3 SRAM com bateria: persistir `.sav` ao sair, carregar ao abrir.
-- [ ] 4.4 `gb-desktop`: winit + pixels, 60 fps, mapeamento de teclado.
+- [x] 4.4 `gb-desktop`: winit + pixels, 60 fps, mapeamento de teclado.
 
 **Marco M4: Tetris e Super Mario Land jogáveis.**
 

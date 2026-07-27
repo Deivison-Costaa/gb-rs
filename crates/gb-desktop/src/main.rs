@@ -1,15 +1,21 @@
-//! `gb-desktop` — frontend gráfico. ROADMAP 4.4.
-
-#![forbid(unsafe_code)]
-
+use std::path::PathBuf;
 use std::process::ExitCode;
 
+mod run;
+
 fn main() -> ExitCode {
-    eprintln!(
-        "gb-desktop {} (modelo {})",
-        env!("CARGO_PKG_VERSION"),
-        gb_core::MODEL
-    );
-    eprintln!("Frontend gráfico ainda não implementado: ROADMAP 4.4.");
-    ExitCode::FAILURE
+    let mut args = std::env::args_os().skip(1);
+
+    let Some(rom_arg) = args.next() else {
+        eprintln!("uso: gb-desktop <rom>");
+        eprintln!("gb-desktop {}", env!("CARGO_PKG_VERSION"));
+        eprintln!("Frontend gráfico do gb-rs (ROADMAP 4.4)");
+        return ExitCode::from(64);
+    };
+
+    let path = PathBuf::from(rom_arg);
+
+    run::execute(&path);
+
+    ExitCode::SUCCESS
 }

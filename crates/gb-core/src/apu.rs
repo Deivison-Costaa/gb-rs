@@ -64,6 +64,9 @@ impl PulseChannel {
     }
 
     fn trigger(&mut self, nrx2: u8, nrx3: u8, nrx4: u8) {
+        if nrx2 & 0xF8 == 0 {
+            return;
+        }
         self.enabled = true;
         self.freq_timer = period(nrx3, nrx4);
         self.envelope_volume = nrx2 >> 4;
@@ -211,6 +214,9 @@ impl Channel4 {
     }
 
     fn trigger(&mut self, nr42: u8) {
+        if nr42 & 0xF8 == 0 {
+            return;
+        }
         self.enabled = true;
         self.lfsr = 0x0000;
         self.freq_timer = 0;

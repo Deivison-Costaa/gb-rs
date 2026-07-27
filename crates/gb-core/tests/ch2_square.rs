@@ -113,6 +113,7 @@ fn trigger_do_ch2_liga_o_canal_e_carrega_freq_timer_do_periodo() {
     let (_cpu, bus) = machine(&[]);
     let mut bus = bus;
 
+    bus.write(NR22, 0xF1);
     bus.write(NR23, 0x00);
     bus.write(NR24, 0x85);
 
@@ -128,10 +129,25 @@ fn trigger_do_ch2_liga_o_canal_e_carrega_freq_timer_do_periodo() {
 }
 
 #[test]
+fn trigger_com_dac_desligado_nao_liga_o_canal() {
+    let (_cpu, bus) = machine(&[]);
+    let mut bus = bus;
+
+    bus.write(NR23, 0x00);
+    bus.write(NR24, 0x85);
+
+    assert!(
+        !bus.ch2_enabled(),
+        "trigger não liga o canal 2 se o DAC (NR22) está desligado"
+    );
+}
+
+#[test]
 fn freq_timer_do_ch2_avanca_4_por_m_cycle_e_sofre_overflow() {
     let (_cpu, bus) = machine(&[]);
     let mut bus = bus;
 
+    bus.write(NR22, 0xF1);
     bus.write(NR23, 0x00);
     bus.write(NR24, 0x85);
 
@@ -143,6 +159,7 @@ fn freq_timer_do_ch2_avanca_4_por_m_cycle_e_sofre_overflow() {
     );
 
     // Recria a máquina com o mesmo estado da IO
+    bus.write(NR22, 0xF1);
     bus.write(NR23, 0x00);
     bus.write(NR24, 0x85);
 
@@ -167,6 +184,7 @@ fn freq_timer_do_ch2_avanca_4_por_m_cycle_e_sofre_overflow() {
 fn duty_step_avanca_no_overflow_do_freq_timer() {
     let (mut cpu, mut bus) = machine(&[]);
 
+    bus.write(NR22, 0xF1);
     bus.write(NR23, 0x00);
     bus.write(NR24, 0x85);
 

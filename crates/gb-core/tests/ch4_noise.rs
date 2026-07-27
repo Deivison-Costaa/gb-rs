@@ -131,6 +131,7 @@ fn trigger_do_ch4_liga_o_canal_e_reseta_lfsr_para_zero() {
     let (_cpu, bus) = machine(&[]);
     let mut bus = bus;
 
+    bus.write(NR42, 0xF1);
     bus.write(NR44, 0x80);
 
     assert!(
@@ -145,9 +146,23 @@ fn trigger_do_ch4_liga_o_canal_e_reseta_lfsr_para_zero() {
 }
 
 #[test]
+fn trigger_com_dac_desligado_nao_liga_o_canal() {
+    let (_cpu, bus) = machine(&[]);
+    let mut bus = bus;
+
+    bus.write(NR44, 0x80);
+
+    assert!(
+        !bus.ch4_enabled(),
+        "trigger não liga o canal 4 se o DAC (NR42) está desligado"
+    );
+}
+
+#[test]
 fn lfsr_avanca_com_clock_divider_1_e_shift_0() {
     let (mut cpu, mut bus) = machine(&[]);
 
+    bus.write(NR42, 0xF1);
     bus.write(NR43, 0x01);
     bus.write(NR44, 0x80);
 
@@ -351,6 +366,7 @@ fn ch4_nao_avanca_lfsr_se_canal_estiver_desligado() {
 fn lfsr_em_modo_15_bits_produz_sequencia_pseudoaleatoria() {
     let (mut cpu, mut bus) = machine(&[]);
 
+    bus.write(NR42, 0xF1);
     bus.write(NR43, 0x01);
     bus.write(NR44, 0x80);
 

@@ -3,6 +3,7 @@
 mod header;
 mod mbc1;
 mod mbc2;
+mod mbc3;
 mod nombc;
 
 pub use header::{
@@ -10,6 +11,7 @@ pub use header::{
 };
 pub use mbc1::Mbc1;
 pub use mbc2::Mbc2;
+pub use mbc3::Mbc3;
 pub use nombc::NoMbc;
 
 use std::fmt;
@@ -23,6 +25,11 @@ const MBC1_RAM: u8 = 0x02;
 const MBC1_RAM_BATTERY: u8 = 0x03;
 const MBC2: u8 = 0x05;
 const MBC2_BATTERY: u8 = 0x06;
+const MBC3_TIMER_BATTERY: u8 = 0x0F;
+const MBC3_TIMER_RAM_BATTERY: u8 = 0x10;
+const MBC3: u8 = 0x11;
+const MBC3_RAM: u8 = 0x12;
+const MBC3_RAM_BATTERY: u8 = 0x13;
 
 // O cartucho visto pelo barramento: dois endereços, read e write.
 // write existe mesmo em ROM ONLY (no-op) — quem chama é o Bus, que não sabe o MBC.
@@ -94,7 +101,7 @@ pub fn load(rom: Vec<u8>) -> Result<Box<dyn Cartridge>, CartridgeError> {
     let cartridge_type = header.cartridge_type();
     let rom_banks = rom_bank_count(header.rom_size(), rom.len());
 
-    let ram_bytes = mbc1_ram_bytes(cartridge_type.code(), header.ram_size());
+    let ram_bytes = mbc_ram_bytes(cartridge_type.code(), header.ram_size());
 
     match cartridge_type.code() {
         ROM_ONLY => Ok(Box::new(NoMbc::new(rom)?)),
@@ -112,14 +119,29 @@ pub fn load(rom: Vec<u8>) -> Result<Box<dyn Cartridge>, CartridgeError> {
             }
             Ok(Box::new(mbc))
         }
+        MBC3 | MBC3_RAM | MBC3_RAM_BATTERY | MBC3_TIMER_BATTERY | MBC3_TIMER_RAM_BATTERY => {
+            let mut mbc = Mbc3::new(rom, rom_banks, ram_bytes)?;
+            if cartridge_type.code() == MBC3_RAM_BATTERY
+                || cartridge_type.code() == MBC3_TIMER_BATTERY
+                || cartridge_type.code() == MBC3_TIMER_RAM_BATTERY
+            {
+                mbc = mbc.with_battery();
+            }
+            Ok(Box::new(mbc))
+        }
         _ => Err(CartridgeError::UnsupportedType { cartridge_type }),
     }
 }
 
 const RAM_BANK_LEN: u32 = 8 * 1024;
 
-fn mbc1_ram_bytes(cart_type: u8, ram_size: RamSize) -> usize {
-    if cart_type != MBC1_RAM && cart_type != MBC1_RAM_BATTERY {
+fn mbc_ram_bytes(cart_type: u8, ram_size: RamSize) -> usize {
+    if cart_type != MBC1_RAM
+        && cart_type != MBC1_RAM_BATTERY
+        && cart_type != MBC3_RAM
+        && cart_type != MBC3_RAM_BATTERY
+        && cart_type != MBC3_TIMER_RAM_BATTERY
+    {
         return 0;
     }
     match ram_size.code() {

@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0068 — MBC2: ROM 256 KiB + RAM 512×4 bits + seleção de registrador via bit 8 ([doc](docs/iterations/0068-mbc2.md)). `Mbc2` em `crates/gb-core/src/cart/mbc2.rs` (87 linhas), dispatch em `load()` para `$05`/`$06`, 23 testes novos. Bateria: **5/5 pegos**, 2/2 controles verdes. Erro #1: eco de RAM mal calculado no teste (0xB1FE ≠ offset 0); #2: `assert!(... || true)` pego pelo clippy.
-**Próxima tarefa:** ROADMAP **2.4b** e **5.2** em aberto. `2.4b` (`halt_bug`, `mem_timing-2`) continua batendo no teto de ciclos sem veredito — reavaliado na 0068, as 5 ROMs rodam 250M M-cycles sem saída serial. Seguir para **5.2** (MBC3 + RTC). MBC3 é o mapper mais complexo: banking de ROM/RAM até 2MB/32KB + RTC com latch, 4 bancos de RAM. A estrutura de `Cartridge` está madura (NoMbc, Mbc1, Mbc2) e serve de gabarito. A RAM do MBC3 é externa (SRAM com bateria), não embutida — o padrão `ram_data()`/`load_ram()` do Mbc1 se aplica. Nota nova (54) sobre o RTC: o timer é acionado por um oscilador externo de 32.768 kHz que o emulador não tem; o latch congela uma cópia dos registradores para leitura consistente. Ver `docs/reference/08-cartridges-mbc.md` § MBC3 — a seção cobre registradores de banking, RTC e latch, mas não cobre o comportamento de borda do latch durante escrita (nota 55).
+**Última iteração concluída:** 0069 — MBC3: ROM banking (2MB, 7 bits) + RAM banking (32KB, 4 bancos) ([doc](docs/iterations/0069-mbc3-rom-ram.md)). `Mbc3` em `crates/gb-core/src/cart/mbc3.rs` (107 linhas), dispatch em `load()` para `$0F`/`$10`/`$11`/`$12`/`$13`, 29 testes novos. Bateria: **6/6 pegos**, 2/2 controles verdes. Erro #1: supressão de escrita com RAM desabilitado não era verificada pela suíte; #2: teste de nibble-A do enable só exercitava `$0A` exato.
+**Próxima tarefa:** ROADMAP **5.2b** (MBC3 RTC). O banking de ROM/RAM está implementado; falta o Real Time Clock: 5 registradores (`$08`–`$0C`: segundos, minutos, horas, dia low, dia high/halt/carry), latch via `$6000`–`$7FFF` (sequência `$00`→`$01`), e halt flag (bit 6 do registro `$0C`). Notas 54 e 55 continuam relevantes — o timer não avança sozinho (oscilador externo), e o latch durante escrita tem comportamento ambíguo. A escolha conservadora da nota 55 (permitir escrita sob latch, latch só afeta leitura) vira implementação aqui. Ver `docs/reference/08-cartridges-mbc.md` § MBC3 — registradores `$08`–`$0C`, latch e procedimento de leitura/escrita.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **826** (eram 803 na 0067 — 23 novos em `cart_mbc2.rs`).
+Testes do workspace: **855** (eram 826 na 0068 — 29 novos em `cart_mbc3.rs`).
 
 ## Invariantes
 

@@ -30,6 +30,8 @@ const VBLANK_START_LY: u8 = 144;
 
 const TOTAL_LINES: u8 = 154;
 
+const MAX_SPRITES: usize = 10;
+
 pub(crate) const SCREEN_W: usize = 160;
 pub(crate) const SCREEN_H: usize = 144;
 
@@ -126,6 +128,107 @@ impl Ppu {
             vblank_interrupt: vblank_fired,
             stat_interrupt,
             begin_mode3,
+        }
+    }
+
+    pub(crate) fn render_scanline(&mut self, vram: &[u8], oam: &[u8]) {
+        self.render_background_scanline(vram);
+        if self.lcdc & 0x02 != 0 {
+            self.render_sprites(oam, vram);
+        }
+    }
+
+    fn render_sprites(&mut self, oam: &[u8], vram: &[u8]) {
+        let ly = self.ly as i32;
+        if ly >= SCREEN_H as i32 {
+            return;
+        }
+        let row_offset = ly as usize * SCREEN_W;
+        let obj_height: i32 = if self.lcdc & 0x04 != 0 { 16 } else { 8 };
+
+        let mut selected: [(u8, u8, u8, u8, u8); MAX_SPRITES] = [(0, 0, 0, 0, 0); MAX_SPRITES];
+        let mut count = 0;
+
+        for i in 0..40 {
+            let y = oam[i * 4];
+            let sprite_y = (y as i32) - 16;
+            if sprite_y <= ly && ly < sprite_y + obj_height && count < MAX_SPRITES {
+                let x = oam[i * 4 + 1];
+                let tile = oam[i * 4 + 2];
+                let attr = oam[i * 4 + 3];
+                selected[count] = (x, y, tile, attr, i as u8);
+                count += 1;
+            }
+        }
+
+        selected[..count].sort_by(|a, b| a.0.cmp(&b.0).then(a.4.cmp(&b.4)));
+
+        for pixel_x in 0..SCREEN_W {
+            let mut sprite_pixel: Option<(u8, u8, u8)> = None;
+
+            for &(x, y, tile_idx, attr, _oam_idx) in &selected[..count] {
+                let screen_x = (x as i32) - 8;
+                let right = screen_x + 8;
+                if pixel_x as i32 >= right || (pixel_x as i32) < screen_x {
+                    continue;
+                }
+
+                let sprite_y = (y as i32) - 16;
+                let current_line = ly - sprite_y;
+
+                let flipped_line = if attr & 0x40 != 0 {
+                    (obj_height - 1 - current_line) as u8
+                } else {
+                    current_line as u8
+                };
+
+                let (effective_tile, line_in_tile) = if obj_height == 16 {
+                    let base = tile_idx & 0xFE;
+                    if flipped_line < 8 {
+                        (base, flipped_line)
+                    } else {
+                        (base | 1, flipped_line - 8)
+                    }
+                } else {
+                    (tile_idx, flipped_line)
+                };
+
+                let pixels_into_sprite = pixel_x as i32 - screen_x;
+                let pixel_in_tile = if attr & 0x20 != 0 {
+                    (pixels_into_sprite) as u8
+                } else {
+                    (7 - pixels_into_sprite) as u8
+                };
+
+                let tile_addr = 0x8000u16 + effective_tile as u16 * 16 + line_in_tile as u16 * 2;
+                let vram_idx = tile_addr as usize - 0x8000;
+                let byte0 = vram[vram_idx];
+                let byte1 = vram[vram_idx + 1];
+
+                let color = ((byte1 >> pixel_in_tile) & 1) << 1 | ((byte0 >> pixel_in_tile) & 1);
+
+                if color != 0 {
+                    let palette_bit = (attr >> 4) & 1;
+                    let bg_priority = (attr >> 7) & 1;
+                    sprite_pixel = Some((color, palette_bit, bg_priority));
+                    break;
+                }
+            }
+
+            if let Some((color, palette_bit, bg_priority)) = sprite_pixel {
+                let bg_shade = self.framebuffer[row_offset + pixel_x];
+                let sprite_wins = !(bg_priority != 0 && bg_shade != 0 && self.lcdc & 0x01 != 0);
+
+                if sprite_wins {
+                    let palette_reg = if palette_bit != 0 {
+                        self.obp1
+                    } else {
+                        self.obp0
+                    };
+                    let shade = (palette_reg >> (color * 2)) & 0x03;
+                    self.framebuffer[row_offset + pixel_x] = shade;
+                }
+            }
         }
     }
 

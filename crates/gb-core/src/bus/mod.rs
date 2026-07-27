@@ -196,12 +196,20 @@ impl Bus {
 
     pub fn tick_ppu(&mut self) {
         let signals = self.ppu.tick();
+        if signals.begin_mode3 {
+            self.ppu.render_background_scanline(&self.vram);
+        }
         if signals.vblank_interrupt {
             self.io[IF_IDX] |= 0x01;
         }
         if signals.stat_interrupt {
             self.io[IF_IDX] |= 0x02;
         }
+    }
+
+    #[must_use]
+    pub fn framebuffer(&self) -> &[u8; 160 * 144] {
+        self.ppu.framebuffer()
     }
 
     pub fn tick_timer(&mut self) {

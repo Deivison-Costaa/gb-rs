@@ -3,10 +3,9 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0058 — Máquina de modos + interrupções STAT e VBlank ([doc](docs/iterations/0058-ppu-mode-machine.md)). 8 testes novos em `ppu_ly_stat_mode.rs`. Placar: inalterado (16/121). `PpuSignals` com `vblank_interrupt` e `stat_interrupt`, retornado por `tick()` e consumido por `Bus::tick_ppu()` que seta IF. STAT interrupt usa `compute_stat_line` (OR das fontes habilitadas) + detecção de borda de subida — captura STAT blocking naturalmente. Bateria: **5/5 pegos, 1/1 controle verde**.
-**Iteração anterior:** 0057 — OAM ($FE00–$FE9F).
-**Próxima tarefa:** ROADMAP **3.3** — Background por scanline: tilemap, tiledata, endereçamento signed/unsigned. Primeira iteração que produz pixels de fato. Armadilhas: a leitura do tile index do tilemap ($9800/$9C00) e dos 2 bytes de tile data ($8000-$97FF) ocorrem dentro do Mode 3 com timings específicos; o endereçamento signed usa `$8800` como base ($9000 com offset signed de 8 bits); o SCX/SCY determinam qual tile da tilemap é o primeiro a ser lido, e os 3 bits baixos de SCX controlam o deslocamento fino (fine scroll). O renderizador é por scanline (não FIFO). `2.4b` (`halt_bug` e `mem_timing-2`) continua bloqueado — o LY e a máquina de modos já existem, reavalie quando 3.3 fechar.
-**Marco atual:** M3 — PPU
+**Última iteração concluída:** 0059 — Background por scanline ([doc](docs/iterations/0059-ppu-background-scanline.md)). 6 testes novos em `ppu_background_scanline.rs`. Primeira iteração que produz pixels: framebuffer 160x144, renderização durante Mode 3 via `begin_mode3` em `PpuSignals`, tilemap ($9800/$9C00), tiledata (signed/unsigned via LCDC.4), SCX/SCY, BGP, LCDC.0 (BG disable). Placar de ROMs inalterado (121 ROMs, 0 passando). Bateria: **5/5 pegos, 1/1 controle verde**.
+**Iteração anterior:** 0058 — Máquina de modos + interrupções STAT e VBlank.
+**Próxima tarefa:** ROADMAP **3.4** — Window (incluindo o contador interno de linha da window). A window compartilha o tilemap e a tiledata com o background mas tem posição fixa na tela (WX-7, WY) e seu próprio contador de linha interno. Armadilhas: o contador de linha da window só incrementa quando a window está visível na scanline; WX=0 tem comportamento especial (shift de SCX%8 pixels); WX=166 no DMG tem um bug que faz a window cobrir a tela inteira com offset de 1 scanline; `2.4b` (`halt_bug` e `mem_timing-2`) continua bloqueado — reavalie quando o rendering estiver mais completo (M3 fechado).
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -36,7 +35,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **692** (eram 687 na 0056 — 5 novos em `bus_oam.rs`).
+Testes do workspace: **698** (eram 692 na 0058 — 6 novos em `ppu_background_scanline.rs`).
 
 ## Invariantes
 

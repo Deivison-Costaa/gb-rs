@@ -545,10 +545,25 @@ impl Apu {
             NR12_ADDR => self.nr12 = value,
             NR13_ADDR => self.nr13 = value,
             NR14_ADDR => {
+                let old_nr14 = self.nr14;
                 self.nr14 = value;
+                if self.next_step_is_not_length_clock() {
+                    let prev_off = old_nr14 & 0x40 == 0;
+                    let now_on = value & 0x40 != 0;
+                    if prev_off && now_on && self.ch1.pulse.length_timer != 0 {
+                        self.ch1.pulse.length_timer -= 1;
+                        if self.ch1.pulse.length_timer == 0 && value & NRX4_TRIGGER_BIT == 0 {
+                            self.ch1.pulse.enabled = false;
+                        }
+                    }
+                }
                 if value & NRX4_TRIGGER_BIT != 0 {
                     if self.ch1.pulse.length_timer == 0 {
-                        self.ch1.pulse.length_timer = 64;
+                        if self.next_step_is_not_length_clock() && value & 0x40 != 0 {
+                            self.ch1.pulse.length_timer = 63;
+                        } else {
+                            self.ch1.pulse.length_timer = 64;
+                        }
                     }
                     self.ch1.pulse.trigger(self.nr12, self.nr13, self.nr14);
                     self.trigger_ch1_sweep();
@@ -561,10 +576,25 @@ impl Apu {
             NR22_ADDR => self.nr22 = value,
             NR23_ADDR => self.nr23 = value,
             NR24_ADDR => {
+                let old_nr24 = self.nr24;
                 self.nr24 = value;
+                if self.next_step_is_not_length_clock() {
+                    let prev_off = old_nr24 & 0x40 == 0;
+                    let now_on = value & 0x40 != 0;
+                    if prev_off && now_on && self.ch2.length_timer != 0 {
+                        self.ch2.length_timer -= 1;
+                        if self.ch2.length_timer == 0 && value & NRX4_TRIGGER_BIT == 0 {
+                            self.ch2.enabled = false;
+                        }
+                    }
+                }
                 if value & NRX4_TRIGGER_BIT != 0 {
                     if self.ch2.length_timer == 0 {
-                        self.ch2.length_timer = 64;
+                        if self.next_step_is_not_length_clock() && value & 0x40 != 0 {
+                            self.ch2.length_timer = 63;
+                        } else {
+                            self.ch2.length_timer = 64;
+                        }
                     }
                     self.ch2.trigger(self.nr22, self.nr23, self.nr24);
                 }
@@ -582,10 +612,25 @@ impl Apu {
             NR32_ADDR => self.nr32 = value,
             NR33_ADDR => self.nr33 = value,
             NR34_ADDR => {
+                let old_nr34 = self.nr34;
                 self.nr34 = value;
+                if self.next_step_is_not_length_clock() {
+                    let prev_off = old_nr34 & 0x40 == 0;
+                    let now_on = value & 0x40 != 0;
+                    if prev_off && now_on && self.ch3.length_timer != 0 {
+                        self.ch3.length_timer -= 1;
+                        if self.ch3.length_timer == 0 && value & NRX4_TRIGGER_BIT == 0 {
+                            self.ch3.enabled = false;
+                        }
+                    }
+                }
                 if value & NRX4_TRIGGER_BIT != 0 {
                     if self.ch3.length_timer == 0 {
-                        self.ch3.length_timer = 256;
+                        if self.next_step_is_not_length_clock() && value & 0x40 != 0 {
+                            self.ch3.length_timer = 255;
+                        } else {
+                            self.ch3.length_timer = 256;
+                        }
                     }
                     self.trigger_ch3();
                 }
@@ -597,10 +642,25 @@ impl Apu {
             NR42_ADDR => self.nr42 = value,
             NR43_ADDR => self.nr43 = value,
             NR44_ADDR => {
+                let old_nr44 = self.nr44;
                 self.nr44 = value;
+                if self.next_step_is_not_length_clock() {
+                    let prev_off = old_nr44 & 0x40 == 0;
+                    let now_on = value & 0x40 != 0;
+                    if prev_off && now_on && self.ch4.length_timer != 0 {
+                        self.ch4.length_timer -= 1;
+                        if self.ch4.length_timer == 0 && value & NRX4_TRIGGER_BIT == 0 {
+                            self.ch4.enabled = false;
+                        }
+                    }
+                }
                 if value & NRX4_TRIGGER_BIT != 0 {
                     if self.ch4.length_timer == 0 {
-                        self.ch4.length_timer = 64;
+                        if self.next_step_is_not_length_clock() && value & 0x40 != 0 {
+                            self.ch4.length_timer = 63;
+                        } else {
+                            self.ch4.length_timer = 64;
+                        }
                     }
                     self.ch4.trigger(self.nr42);
                 }
@@ -878,6 +938,11 @@ impl Apu {
 
     pub(crate) const fn frame_sequencer_step(&self) -> u8 {
         self.frame_sequencer_step
+    }
+
+    pub(crate) const fn next_step_is_not_length_clock(&self) -> bool {
+        let next = (self.frame_sequencer_step + 1) & 0x07;
+        next != 0 && next != 2 && next != 4 && next != 6
     }
 
     pub(crate) const fn ch1_enabled(&self) -> bool {

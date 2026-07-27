@@ -56,7 +56,14 @@ readonly CSV="${SCOREBOARD_CSV:-$ROOT/scoreboard.csv}"
 readonly CSV_HEADER="timestamp,commit,suite,rom,status,ciclos"
 
 readonly ROM_TIMEOUT="${ROM_TIMEOUT:-30}"
-readonly MAX_CYCLES="${MAX_CYCLES:-250000000}"
+# 100 M e não 250 M. O teto só governa quem NUNCA dá veredito — desde que o
+# gb-cli sai no primeiro Passed/Failed, quem passa custa o que consome. Medido
+# em 27/07 com as 20 ROMs que passam: a mais cara é cpu_instrs.gb com 56,1 M,
+# depois 11-op a,(hl) com 18,5 M; as demais ficam abaixo de 4 M. 100 M deixa
+# 1,8x de folga sobre a pior e corta em 2,5x o custo das 70 mudas, que são o
+# grosso dos ~12 min do job. Subir de volta é uma linha, se alguma ROM legítima
+# passar a precisar de mais.
+readonly MAX_CYCLES="${MAX_CYCLES:-100000000}"
 
 # SHA-256 do framebuffer esperado do dmg-acid2 — extraído de
 # tests/roms/dmg-acid2/dmg-acid2-dmg.png (160×144, modo L, 4 tons).

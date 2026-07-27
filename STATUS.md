@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0080 — APU length counter (6.8a) ([doc](docs/iterations/0080-apu-length-counter.md)). Implementa carregamento via NRx1 (`64 - (v & 0x3F)` para CH1/2/4, `256 - v` para CH3), recarga por trigger quando expirado, decremento a 256 Hz (passos 0/2/4/6 do frame sequencer), e desligamento do canal ao chegar a zero. 13 testes novos (899 total). Bateria: **4/4 pegos**, 1/1 controles verdes. As 13 ROMs dmg_sound continuam crash (precisam de DAC-off trigger protection e envelope timing).
-**Próxima tarefa:** ROADMAP **6.8b** (extra length clocking + obscure behavior). O spec (`07-apu.md` § Obscure Behavior) descreve dois casos: (1) escrever NRx4 quando o próximo passo do DIV-APU não é um passo de length clock, com length timer previamente desabilitado e agora habilitado e não-zero, decrementa o contador imediatamente; (2) trigger quando o próximo passo não é de length clock e o contador estava em zero, carrega com 63 (não 64) ou 255 (não 256). O caso (1) quebra Prehistorik Man. Notas relevantes: nenhuma nova.
+**Última iteração concluída:** 0081 — APU obscure behavior (6.8b) ([doc](docs/iterations/0081-apu-obscure-behavior.md)). Implementa extra length clocking no NRx4 (decremento imediato quando bit6 transiciona 0→1 com next=NON-length step e length≠0; desliga canal se chegar a 0 sem trigger) e trigger obscure (recarga com 63/255 em vez de 64/256 quando next=NON-length). 16 testes novos (915 total). Bateria: **4/4 pegos**, 2/2 controles verdes. As 13 ROMs dmg_sound continuam crash.
+**Próxima tarefa:** ROADMAP **6.8c** (fix envelope timing: 64 Hz, step 7 only, not 128 Hz steps 2,6). Notas relevantes: nenhuma nova. Atenção: o init NRx4=0xBF (bit6=0) faz a primeira escrita com bit6=1 disparar o Case 1 — testes que usam trigger direto com bit6=1 devem posicionar o frame sequencer em step ímpar (next par = IS length clock) para evitar o obscure behavior.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **899** (eram 886 na 0079 — 13 novos em `gb-core`).
+Testes do workspace: **915** (eram 899 na 0080 — 16 novos em `gb-core`).
 
 ## Invariantes
 

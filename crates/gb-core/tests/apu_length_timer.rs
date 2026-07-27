@@ -138,6 +138,9 @@ fn nr41_carrega_length_timer_interno_com_64_menos_l() {
 fn length_timer_do_ch2_desliga_canal_ao_expirar_com_length_enable() {
     let (mut cpu, mut bus) = machine(&[]);
 
+    // Posiciona step=1 (next=2 IS length clock) para evitar obscure behavior
+    step_n(&mut cpu, &mut bus, FRAME_SEQUENCER_MCYCLES);
+
     // NR21=0x3F (L=63): contador carrega com 64-63=1 → expira em 1 tick de length
     bus.write(NR21, 0x3F);
     bus.write(NR22, 0xF1);
@@ -146,8 +149,7 @@ fn length_timer_do_ch2_desliga_canal_ao_expirar_com_length_enable() {
 
     assert!(bus.ch2_enabled(), "canal 2 deve estar ligado após trigger");
 
-    // 1 tick de length = 2 passos do frame sequencer. Do passo 0 inicial,
-    // transição para passo 2 são 2 * 2048 = 4096 M-cycles.
+    // step 1→2 (length tick: 1→0, desliga) → 3.   2 * 2048 M-cycles.
     step_n(&mut cpu, &mut bus, 2 * FRAME_SEQUENCER_MCYCLES);
 
     assert!(
@@ -181,6 +183,9 @@ fn length_timer_do_ch2_nao_desliga_canal_sem_length_enable() {
 fn length_timer_e_recarregado_ao_disparar_quando_expirou() {
     let (mut cpu, mut bus) = machine(&[]);
 
+    // Posiciona step=1 (next=2 IS length clock) para evitar obscure behavior
+    step_n(&mut cpu, &mut bus, FRAME_SEQUENCER_MCYCLES);
+
     // NR21=0x3F (L=63): contador=1, expira rapidamente
     bus.write(NR21, 0x3F);
     bus.write(NR22, 0xF1);
@@ -194,7 +199,7 @@ fn length_timer_e_recarregado_ao_disparar_quando_expirou() {
         "canal deve estar desligado após expirar"
     );
 
-    // Dispara de novo: length interno estava 0, deve recarregar para 64
+    // step=3, next=4 IS length clock. Re-trigger carrega 64 normalmente.
     bus.write(NR24, 0xC7); // trigger + length enable
     assert!(
         bus.ch2_length_timer_internal() == 64,
@@ -206,6 +211,9 @@ fn length_timer_e_recarregado_ao_disparar_quando_expirou() {
 #[test]
 fn nr52_reflete_canal_desligado_por_length_expirar() {
     let (mut cpu, mut bus) = machine(&[]);
+
+    // Posiciona step=1 (next=2 IS length clock) para evitar obscure behavior
+    step_n(&mut cpu, &mut bus, FRAME_SEQUENCER_MCYCLES);
 
     bus.write(NR21, 0x3F);
     bus.write(NR22, 0xF1);
@@ -233,6 +241,9 @@ fn nr52_reflete_canal_desligado_por_length_expirar() {
 fn length_timer_do_ch1_desliga_canal_ao_expirar() {
     let (mut cpu, mut bus) = machine(&[]);
 
+    // Posiciona step=1 (next=2 IS length clock) para evitar obscure behavior
+    step_n(&mut cpu, &mut bus, FRAME_SEQUENCER_MCYCLES);
+
     bus.write(NR10, 0x00); // sweep off
     bus.write(NR11, 0x3F); // L=63, contador=1
     bus.write(NR12, 0xF1);
@@ -253,6 +264,9 @@ fn length_timer_do_ch1_desliga_canal_ao_expirar() {
 fn length_timer_do_ch3_desliga_canal_ao_expirar() {
     let (mut cpu, mut bus) = machine(&[]);
 
+    // Posiciona step=1 (next=2 IS length clock) para evitar obscure behavior
+    step_n(&mut cpu, &mut bus, FRAME_SEQUENCER_MCYCLES);
+
     bus.write(NR30, 0x80); // DAC on para CH3
     bus.write(NR31, 0xFF); // L=255, contador=1
     bus.write(NR32, 0x80); // output level 100%
@@ -272,6 +286,9 @@ fn length_timer_do_ch3_desliga_canal_ao_expirar() {
 #[test]
 fn length_timer_do_ch4_desliga_canal_ao_expirar() {
     let (mut cpu, mut bus) = machine(&[]);
+
+    // Posiciona step=1 (next=2 IS length clock) para evitar obscure behavior
+    step_n(&mut cpu, &mut bus, FRAME_SEQUENCER_MCYCLES);
 
     bus.write(NR41, 0x3F); // L=63, contador=1
     bus.write(NR42, 0xF1);
@@ -308,7 +325,10 @@ fn length_timer_do_ch3_nao_desliga_sem_dac_ligado() {
 fn length_timer_da_tick_em_cada_2_passos_do_frame_sequencer() {
     let (mut cpu, mut bus) = machine(&[]);
 
-    // Contador = 4: precisa de 4 ticks de length. Começa em passo 0.
+    // Posiciona step=1 (next=2 IS length clock) para evitar obscure behavior
+    step_n(&mut cpu, &mut bus, FRAME_SEQUENCER_MCYCLES);
+
+    // Contador = 4: precisa de 4 ticks de length. Começa em passo 1.
     bus.write(NR21, 0x3C); // L=60, contador=64-60=4
     bus.write(NR22, 0xF1);
     bus.write(NR23, 0x00);
@@ -316,16 +336,11 @@ fn length_timer_da_tick_em_cada_2_passos_do_frame_sequencer() {
 
     assert!(bus.ch2_enabled());
 
-    // Passo 0→1: sem tick de length. Contador continua 4.
-    step_n(&mut cpu, &mut bus, FRAME_SEQUENCER_MCYCLES);
-    assert!(bus.ch2_enabled());
-    assert_eq!(bus.ch2_length_timer_internal(), 4);
-
     // Passo 1→2: tick de length. Contador 4→3.
     step_n(&mut cpu, &mut bus, FRAME_SEQUENCER_MCYCLES);
     assert_eq!(bus.ch2_length_timer_internal(), 3);
 
-    // Passo 2→3: sem tick.
+    // Passo 2→3: sem tick. Contador continua 3.
     step_n(&mut cpu, &mut bus, FRAME_SEQUENCER_MCYCLES);
     assert_eq!(bus.ch2_length_timer_internal(), 3);
 

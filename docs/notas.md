@@ -1072,5 +1072,14 @@
     Gold/Silver) é o caminho; na ausência de teste, a escolha conservadora é
     permitir escrita mesmo sob latch (o latch só afeta leitura, não escrita —
     o contador continua avançando e aceitando ajustes). Ver
-    [doc da 0068](docs/iterations/0068-mbc2.md) § Notas.
+     [doc da 0068](docs/iterations/0068-mbc2.md) § Notas.
+
+56. **MBC5: banco 0 é banco 0, não 1 — divergência de todos os MBCs anteriores.**
+    MBC1, MBC2 e MBC3 traduzem `rom_bank=0` para banco 1 na região `$4000`–`$7FFF`.
+    O MBC5 não: escrever `$00` no registrador de ROM bank seleciona o banco 0
+    de fato. É a primeira vez que um mapper quebra essa invariante, e código que
+    reusa a lógica de `rom_offset` do MBC3 sem ajuste vai mapear o banco errado.
+    Ver `docs/reference/08-cartridges-mbc.md` § MBC5 — "writing 0 will indeed give
+    bank 0 on MBC5, unlike other MBCs".
+
 

@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0069 — MBC3: ROM banking (2MB, 7 bits) + RAM banking (32KB, 4 bancos) ([doc](docs/iterations/0069-mbc3-rom-ram.md)). `Mbc3` em `crates/gb-core/src/cart/mbc3.rs` (107 linhas), dispatch em `load()` para `$0F`/`$10`/`$11`/`$12`/`$13`, 29 testes novos. Bateria: **6/6 pegos**, 2/2 controles verdes. Erro #1: supressão de escrita com RAM desabilitado não era verificada pela suíte; #2: teste de nibble-A do enable só exercitava `$0A` exato.
-**Próxima tarefa:** ROADMAP **5.2b** (MBC3 RTC). O banking de ROM/RAM está implementado; falta o Real Time Clock: 5 registradores (`$08`–`$0C`: segundos, minutos, horas, dia low, dia high/halt/carry), latch via `$6000`–`$7FFF` (sequência `$00`→`$01`), e halt flag (bit 6 do registro `$0C`). Notas 54 e 55 continuam relevantes — o timer não avança sozinho (oscilador externo), e o latch durante escrita tem comportamento ambíguo. A escolha conservadora da nota 55 (permitir escrita sob latch, latch só afeta leitura) vira implementação aqui. Ver `docs/reference/08-cartridges-mbc.md` § MBC3 — registradores `$08`–`$0C`, latch e procedimento de leitura/escrita.
+**Última iteração concluída:** 0070 — MBC3: RTC (registradores de clock, latch, halt flag) ([doc](docs/iterations/0070-mbc3-rtc.md)). 5 registradores (`$08`–`$0C`) acessíveis via janela RAM sob `ram_enabled`, latch via `$6000`–`$7FFF` (sequência `$00`→`$01`, sem efeito observável pois timer não avança — nota 54), halt flag (bit 6 de `$0C`), `with_rtc()` setado para tipos `$0F`/`$10` no `load()`. 12 testes novos (867 total). Bateria: **6/6 pegos**, 2/2 controles verdes. O latch sobrevive como no-op (C2) porque sem ticking não há divergência live/latched — corrigível quando o timer avançar. `Mbc3` em `crates/gb-core/src/cart/mbc3.rs` (171 linhas, +35).
+**Próxima tarefa:** ROADMAP **5.3** (MBC5). O MBC5 é o último mapper do marco M5: até 8 MiB de ROM (9 bits, dois registradores separados em `$2000`–`$2FFF` para os 8 bits baixos e `$3000`–`$3FFF` para o bit 9), até 128 KiB de RAM externa (16 bancos de 8 KiB, seleção via `$4000`–`$5FFF` com 4 bits), sem 00→01 translation no banco ROM (banco 0 é banco 0). Rumble em bit 3 do registrador RAM (tipos `$1C`–`$1E`) pode ser ignorado — não há hardware físico para vibrar. Ver `docs/reference/08-cartridges-mbc.md` § MBC5. Nota nova: 56 (MBC5 banco 0 é banco 0, não 1 — divergência de todos os MBCs anteriores). O dispatch em `load()` precisa aceitar os 6 códigos (`$19`–`$1E`).
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **855** (eram 826 na 0068 — 29 novos em `cart_mbc3.rs`).
+Testes do workspace: **867** (eram 855 na 0069 — 12 novos em `cart_mbc3.rs`).
 
 ## Invariantes
 
@@ -244,4 +244,7 @@ Numeração é estável e citada no código: **nunca renumere**.
     registradores do RTC enquanto o latch está ativo (`$01`) são ignoradas ou
     passam. Testar com ROMs MBC3 reais (Pokémon) é o caminho; na ausência de
     teste, a escolha conservadora é permitir escrita mesmo sob latch (o latch só
-    afeta leitura). Ver corpo em `docs/notas.md`.
+     afeta leitura). Ver corpo em `docs/notas.md`.
+56. **MBC5: banco 0 é banco 0, não 1 — divergência de todos os MBCs anteriores.**
+    MBC1, MBC2 e MBC3 traduzem `rom_bank=0` para banco 1. O MBC5 não: escrever
+    `$00` seleciona o banco 0 de fato. Ver corpo em `docs/notas.md`.

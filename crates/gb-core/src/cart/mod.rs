@@ -127,6 +127,11 @@ pub fn load(rom: Vec<u8>) -> Result<Box<dyn Cartridge>, CartridgeError> {
             {
                 mbc = mbc.with_battery();
             }
+            if cartridge_type.code() == MBC3_TIMER_BATTERY
+                || cartridge_type.code() == MBC3_TIMER_RAM_BATTERY
+            {
+                mbc = mbc.with_rtc();
+            }
             Ok(Box::new(mbc))
         }
         _ => Err(CartridgeError::UnsupportedType { cartridge_type }),

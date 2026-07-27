@@ -298,6 +298,15 @@ impl Bus {
     }
 
     #[must_use]
+    pub fn sample_buffer_len(&self) -> usize {
+        self.apu.sample_buffer_len()
+    }
+
+    pub fn drain_sample_buffer(&mut self, output: &mut [(f32, f32)]) -> usize {
+        self.apu.drain_sample_buffer(output)
+    }
+
+    #[must_use]
     pub fn apu_frame_sequencer_step(&self) -> u8 {
         self.apu.frame_sequencer_step()
     }

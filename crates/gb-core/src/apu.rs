@@ -37,6 +37,10 @@ const NR52_POWER_BIT: u8 = 0x80;
 
 const NRX4_TRIGGER_BIT: u8 = 0x80;
 
+const M_CYCLES_PER_SECOND: u32 = 1_048_576;
+const SAMPLE_RATE: u32 = 48_000;
+const RING_BUFFER_SIZE: usize = 4096;
+
 const FREQ_MAX: u16 = 2048;
 
 const DUTY_WAVEFORMS: [u8; 4] = [0b00000001, 0b10000001, 0b10000111, 0b01111110];
@@ -311,6 +315,14 @@ pub(crate) struct Apu {
     ch2: PulseChannel,
     ch3: Channel3,
     ch4: Channel4,
+    sample_accum_left: f32,
+    sample_accum_right: f32,
+    sample_accum_count: u32,
+    sample_phase: u32,
+    sample_buffer: Box<[f32]>,
+    sample_buffer_read: usize,
+    sample_buffer_write: usize,
+    sample_buffer_count: usize,
 }
 
 impl Apu {
@@ -345,6 +357,14 @@ impl Apu {
             ch2: PulseChannel::new(),
             ch3: Channel3::new(),
             ch4: Channel4::new(),
+            sample_accum_left: 0.0,
+            sample_accum_right: 0.0,
+            sample_accum_count: 0,
+            sample_phase: 0,
+            sample_buffer: vec![0.0f32; RING_BUFFER_SIZE * 2].into_boxed_slice(),
+            sample_buffer_read: 0,
+            sample_buffer_write: 0,
+            sample_buffer_count: 0,
         }
     }
 
@@ -476,6 +496,9 @@ impl Apu {
         self.ch2 = PulseChannel::new();
         self.ch3 = Channel3::new();
         self.ch4 = Channel4::new();
+        self.sample_accum_left = 0.0;
+        self.sample_accum_right = 0.0;
+        self.sample_accum_count = 0;
     }
 
     fn trigger_ch1_sweep(&mut self) {
@@ -595,6 +618,55 @@ impl Apu {
                 }
             }
         }
+
+        self.tick_downsample();
+    }
+
+    fn tick_downsample(&mut self) {
+        let (left, right) = self.mixer_sample();
+        self.sample_accum_left += left as f32;
+        self.sample_accum_right += right as f32;
+        self.sample_accum_count += 1;
+        self.sample_phase += SAMPLE_RATE;
+
+        while self.sample_phase >= M_CYCLES_PER_SECOND {
+            self.sample_phase -= M_CYCLES_PER_SECOND;
+            let divisor = self.sample_accum_count as f32;
+            let sample_left = self.sample_accum_left / divisor;
+            let sample_right = self.sample_accum_right / divisor;
+            self.sample_accum_left = 0.0;
+            self.sample_accum_right = 0.0;
+            self.sample_accum_count = 0;
+            self.push_sample(sample_left, sample_right);
+        }
+    }
+
+    fn push_sample(&mut self, left: f32, right: f32) {
+        if self.sample_buffer_count >= RING_BUFFER_SIZE {
+            self.sample_buffer_read = (self.sample_buffer_read + 2) % (RING_BUFFER_SIZE * 2);
+        } else {
+            self.sample_buffer_count += 1;
+        }
+        self.sample_buffer[self.sample_buffer_write] = left;
+        self.sample_buffer[self.sample_buffer_write + 1] = right;
+        self.sample_buffer_write = (self.sample_buffer_write + 2) % (RING_BUFFER_SIZE * 2);
+    }
+
+    pub(crate) fn sample_buffer_len(&self) -> usize {
+        self.sample_buffer_count
+    }
+
+    pub(crate) fn drain_sample_buffer(&mut self, output: &mut [(f32, f32)]) -> usize {
+        let to_drain = output.len().min(self.sample_buffer_count);
+        for entry in output.iter_mut().take(to_drain) {
+            *entry = (
+                self.sample_buffer[self.sample_buffer_read],
+                self.sample_buffer[self.sample_buffer_read + 1],
+            );
+            self.sample_buffer_read = (self.sample_buffer_read + 2) % (RING_BUFFER_SIZE * 2);
+        }
+        self.sample_buffer_count -= to_drain;
+        to_drain
     }
 
     pub(crate) fn mixer_sample(&self) -> (u16, u16) {

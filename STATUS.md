@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0073 — APU: Canal 2 (square sem sweep): frequency timer, duty step counter, volume envelope ([doc](docs/iterations/0073-ch2-square.md)). `Channel2` em `crates/gb-core/src/apu.rs`, com `tick_freq()` a cada M-cycle e `tick_envelope()` nos passos 2 e 6 do frame sequencer. 14 testes novos (921 total). Bateria: **3/3 pegos**, 2/2 controles verdes. Sem saída de áudio ainda — só a máquina de estados. DAC não bloqueia trigger (não era escopo).
-**Próxima tarefa:** ROADMAP **6.3** (Canal 1: square + sweep de frequência). Abrir `docs/reference/07-apu.md` § Sound Channel 1, § Pulse channel with sweep (CH1). O canal 1 é idêntico ao canal 2 mas com a unidade de sweep (`NR10` em $FF10). O sweep é clockado nos passos 2 e 6 do frame sequencer (128 Hz), com shadow register, pace, direction e individual step. O overflow do sweep desliga o canal. Aproveitar a estrutura do `Channel2` e generalizar para ambos os canais de pulso — extrair a lógica comum de frequency timer + duty step + envelope para uma struct `PulseChannel`, e instanciar `ch1` e `ch2` a partir dela. O sweep fica só em `ch1`. NR10 (pace, direction, step) + trigger behavior do CH1 (sweep calculation imediata se step != 0).
+**Última iteração concluída:** 0074 — APU: Canal 1 (square + sweep de frequência) ([doc](docs/iterations/0074-ch1-sweep.md)). `PulseChannel` (refatorado de `Channel2`) compartilhado entre CH1 e CH2; `Channel1` com unidade de sweep (`NR10`, shadow register, timer, enabled flag). Cálculo imediato no trigger (step != 0) e iteração nos passos 2/6 do frame sequencer (128 Hz). Overflow (> 2047) desliga o canal mesmo com pace=0. 19 testes novos (940 total). Bateria: **3/3 pegos**, 2/2 controles verdes. Sem saída de áudio — só a máquina de estados.
+**Próxima tarefa:** ROADMAP **6.4** (Canal 3: wave RAM). Abrir `docs/reference/07-apu.md` § Sound Channel 3 — Wave output e § Wave channel (CH3). O canal 3 não tem envelope (volume fixo por NR32 bits 6-5), não tem sweep, mas tem wave RAM de 16 bytes (32 samples de 4 bits). NR30 (DAC enable), NR31 (length timer 8 bits), NR32 (output level: mute/100%/50%/25%), NR33/NR34 (period 11 bits + trigger). O period divider é clockado a 2097152 Hz (2× dos canais de pulso). Acesso à wave RAM durante reprodução é bloqueado (lê $FF, ignora escrita). Trigger reseta o índice da wave RAM (começa no sample 1, não no 0).
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **921** (eram 907 na 0072 — 14 novos em `ch2_square.rs`).
+Testes do workspace: **940** (eram 921 na 0073 — 19 novos em `ch1_sweep.rs`).
 
 ## Invariantes
 

@@ -295,7 +295,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 
 ## M6 — APU
 
-- [ ] 6.1 Frame sequencer 512 Hz (length / envelope / sweep).
+- [x] 6.1 Frame sequencer 512 Hz (length / envelope / sweep).
 - [ ] 6.2 Canal 2: square sem sweep (o mais simples — comece por ele).
 - [ ] 6.3 Canal 1: square + sweep de frequência.
 - [ ] 6.4 Canal 3: wave RAM.

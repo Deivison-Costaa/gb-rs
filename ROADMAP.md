@@ -277,7 +277,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 ## M4 — Jogável
 
 - [x] 4.1 Joypad: P1/JOYP + interrupção.
-- [ ] 4.2 MBC1: banking de ROM/RAM, modo 0/1.
+- [x] 4.2 MBC1: banking de ROM/RAM, modo 0/1.
 - [ ] 4.3 SRAM com bateria: persistir `.sav` ao sair, carregar ao abrir.
 - [ ] 4.4 `gb-desktop`: winit + pixels, 60 fps, mapeamento de teclado.
 

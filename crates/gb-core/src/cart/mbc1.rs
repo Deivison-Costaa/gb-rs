@@ -29,11 +29,7 @@ impl Mbc1 {
         }
 
         let required_bits = (rom_banks - 1).ilog2() + 1;
-        let bank_mask = if required_bits >= 5 {
-            0x1F
-        } else {
-            (1u8 << required_bits) - 1
-        };
+        let bank_mask = (1u8 << required_bits) - 1;
 
         let ram = if ram_bytes > 0 {
             vec![0x00; ram_bytes].into_boxed_slice()
@@ -59,7 +55,12 @@ impl Mbc1 {
 
         let addr = addr as usize;
         if addr < BANK_LEN {
-            addr
+            if self.banking_mode {
+                let bank = ((self.ram_bank & 0x03) as usize) << 5;
+                (bank & (self.bank_mask as usize)) * BANK_LEN + addr
+            } else {
+                addr
+            }
         } else {
             let bank = self.effective_bank();
             bank as usize * BANK_LEN + (addr - BANK_LEN)
@@ -77,12 +78,14 @@ impl Mbc1 {
     }
 
     fn effective_bank(&self) -> u8 {
-        let masked = self.rom_bank & self.bank_mask;
-        if masked == 0 && self.rom_bank == 0 {
-            1
+        let corrected = if self.rom_bank == 0 {
+            0x01
         } else {
-            masked
-        }
+            self.rom_bank
+        };
+        let upper = (self.ram_bank & 0x03) as u16;
+        let full = (upper << 5) | (corrected as u16);
+        (full as u8) & self.bank_mask
     }
 }
 

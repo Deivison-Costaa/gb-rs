@@ -3,9 +3,9 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0064 — Joypad (P1/JOYP + interrupção) ([doc](docs/iterations/0064-joypad.md)). `Joypad` com seleção ativa-baixa (bits 5-4), retorno de estado nos bits 3-0 e interrupção em IF bit 4. `Key` enum com 8 variantes exportado. `Bus::key_down`/`key_up` delegam; `tick_joypad_interrupt` propaga IF via `Cpu::step`. Bateria: **5/5 pegos, 1/1 controle verde**. Placar: 18/121 (sem alteração). 21 testes novos. Erro #1: constantes SELECT_BUTTONS/SELECT_DPAD trocadas (active-low confundido com active-high).
-**Iteração anterior:** 0063 — dmg-acid2 + comparação de hash do framebuffer na CI.
-**Próxima tarefa:** ROADMAP **4.2** — MBC1: banking de ROM/RAM, modo 0/1. A spec está em `docs/reference/08-cartridges-mbc.md` (há stub `mbc1.rs` com testes). O MBC1 lida com 5 registradores mapeados em `$0000–$7FFF` (escrita) e as janelas de ROM/RAM em `$0000–$7FFF` / `$A000–$BFFF` (leitura/escrita). A armadilha clássica é o `rom_addr = 0` virar 1 automaticamente para os bancos baixos — o `mbc1.rs` já tem o esqueleto dessa lógica. `2.4b` continua bloqueado: as ROMs halt_bug e mem_timing-2 seguem rodando até o teto de ciclos mesmo com M3 fechado — o bloqueio foi reavaliado em 27/07 e confirmado.
+**Última iteração concluída:** 0065 — MBC1 banking: secondary register + modo 0/1 ([doc](docs/iterations/0065-mbc1-banking.md)). `effective_bank` agora combina o registrador secundário (bits 5-6) com o principal (bits 0-4); `bank_mask` cobre até 7 bits para ROMs > 512 KiB; modo 1 expõe o secondary em 0000-3FFF (bancos $20/$40/$60). Bateria: **5/5 pegos**; um buraco de cobertura (`secondary=2` wrappava para 0 com mask 0x3F) descoberto e corrigido. Placar: 18/121 (sem alteração). 19 testes novos. Erro #1: `bank_mask` cap `0x1F` assume 5 bits para qualquer ROM; #2: `effective_bank` ignora o secondary; #3: 0000-3FFF sempre banco 0.
+**Iteração anterior:** 0064 — Joypad (P1/JOYP + interrupção).
+**Próxima tarefa:** ROADMAP **4.3** — SRAM com bateria: persistir `.sav` ao sair, carregar ao abrir. O `Cartridge` trait recebe `&mut self` em `write` — a persistência é só salvar o `ram: Box<[u8]>` do `Mbc1` em disco quando o emulador fecha e recarregá-lo ao abrir. A decisão de onde o arquivo `.sav` mora (ao lado da ROM, com o mesmo nome base) é convenção de fato. Não há spec de hardware — é funcionalidade de QoL do emulador. `2.4b` continua bloqueado.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -35,7 +35,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **761** (eram 740 na 0063 — 21 novos em `input_joypad.rs`).
+Testes do workspace: **780** (eram 761 na 0064 — 19 novos em `cart_mbc1.rs`).
 
 ## Invariantes
 
@@ -212,7 +212,8 @@ Numeração é estável e citada no código: **nunca renumere**.
 48. **Uma flag que fica intocada não aparece lendo o `diff` — só testando os
 49. **Um valor de "F sujo" único pode coincidir, por acidente, com o que uma
 50. **MBC1 sem teste de banking — adiantado do 4.2 para destravar o 1.13, mas
-    a mutação que força banco constante 1 sobreviveu à suíte inteira.
+    a mutação que força banco constante 1 sobreviveu à suíte inteira.** — RESOLVIDA
+    na 0065: `effective_bank` sempre=1 agora é pego por 2 testes.
 51. **ROM blargg imprime o opcode em hex, não o índice do teste.** O "27" da
     ROM 11 era DAA ($27), não BIT 1,(HL). A 0048 perdeu metade da iteração nessa
     confusão — ver corpo e lição em `docs/notas.md`.

@@ -305,6 +305,11 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
   - [x] 6.7a Acumulador de downsample no `Apu` (gb-core): soma amostras do mixer a cada M-cycle, divide pelo número de M-cycles acumulados a cada ~87, produzindo `(f32, f32)` a ~48 kHz. Inclui ring buffer circular exposto como `&[(f32, f32)]` para consumo pelo `gb-desktop`. Testes unitários.
   - [x] 6.7b Saída de áudio via `cpal` no `gb-desktop`: callback `cpal::Stream` que lê do buffer do `Apu` e entrega ao dispositivo de áudio.
 - [ ] 6.8 blargg `dmg_sound` 01 a 12.
+  - [x] 6.8a Length counter: NRx1 load, trigger reload, 256 Hz tick, channel disable on expiry, NR52 readback.
+  - [ ] 6.8b Extra length clocking + obscure behavior (trigger-when-next-non-length-step, Prehistorik Man fix).
+  - [ ] 6.8c Fix envelope timing: 64 Hz (step 7 only), not 128 Hz (steps 2,6).
+  - [ ] 6.8d DAC-off trigger protection: NRx4 MSB should not enable channel when DAC is off.
+  - [ ] 6.8e Remaining fixes + final verification run.
 
 ## M7 — Rigor
 

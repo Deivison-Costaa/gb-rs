@@ -452,6 +452,66 @@ impl Bus {
         self.apu.ch3_last_sample_buffer()
     }
 
+    #[must_use]
+    pub fn ch4_enabled(&self) -> bool {
+        self.apu.ch4_enabled()
+    }
+
+    #[must_use]
+    pub fn ch4_dac_enabled(&self) -> bool {
+        self.apu.ch4_dac_enabled()
+    }
+
+    #[must_use]
+    pub fn ch4_length_timer(&self) -> u8 {
+        self.apu.ch4_length_timer()
+    }
+
+    #[must_use]
+    pub fn ch4_initial_volume(&self) -> u8 {
+        self.apu.ch4_initial_volume()
+    }
+
+    #[must_use]
+    pub fn ch4_envelope_pace(&self) -> u8 {
+        self.apu.ch4_envelope_pace()
+    }
+
+    #[must_use]
+    pub fn ch4_envelope_volume(&self) -> u8 {
+        self.apu.ch4_envelope_volume()
+    }
+
+    #[must_use]
+    pub fn ch4_clock_shift(&self) -> u8 {
+        self.apu.ch4_clock_shift()
+    }
+
+    #[must_use]
+    pub fn ch4_lfsr_width_7bit(&self) -> bool {
+        self.apu.ch4_lfsr_width_7bit()
+    }
+
+    #[must_use]
+    pub fn ch4_clock_divider(&self) -> u8 {
+        self.apu.ch4_clock_divider()
+    }
+
+    #[must_use]
+    pub fn ch4_lfsr_value(&self) -> u16 {
+        self.apu.ch4_lfsr_value()
+    }
+
+    #[must_use]
+    pub fn ch4_noise_threshold(&self) -> u16 {
+        self.apu.ch4_noise_threshold()
+    }
+
+    #[must_use]
+    pub fn ch4_frequency_timer(&self) -> u16 {
+        self.apu.ch4_frequency_timer()
+    }
+
     fn and_result(&self) -> bool {
         let tac = self.io[TAC_IDX];
         let enable = (tac & 0x04) != 0;

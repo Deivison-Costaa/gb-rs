@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0075 — APU: Canal 3 (wave RAM) ([doc](docs/iterations/0075-ch3-wave.md)). `Channel3` com period counter a 2097152 Hz (8 por M-cycle), varredura de 32 samples (4 bits cada, nibble alto primeiro, sample 0 pulado na primeira volta). NR30 (DAC enable), NR31 (length timer 8 bits), NR32 (output level: mute/100%/50%/25%), NR33/NR34 (period 11 bits + trigger). Acesso à wave RAM bloqueado durante playback (lê $FF, ignora escrita). NR30 bit 7 desliga o canal. 17 testes novos (946 total). Bateria: **4/4 pegos**, 1/1 controles verdes. Sem saída de áudio — só a máquina de estados.
-**Próxima tarefa:** ROADMAP **6.5** (Canal 4: noise). Abrir `docs/reference/07-apu.md` § Sound Channel 4. LFSR de 15/7 bits (NR43 bit 3 controla largura). Registrar NR41 (length timer, 6 bits), NR42 (volume + envelope, igual NR12), NR43 (clock shift bits 7-4, LFSR width bit 3, clock divider bits 2-0 — divider=0 vira 0.5), NR44 (trigger bit 7, length enable bit 6). Frequência do LFSR = 262144 / (divider × 2^shift) Hz. Trigger reseta os bits do LFSR para 0. O envelope usa o mesmo mecanismo do CH1/CH2 (`PulseChannel` já tem `tick_envelope`). Se o bit shifted-out for 0, emite 0; se for 1, emite o volume do envelope. Shift=14 ou 15 para o LFSR.
+**Última iteração concluída:** 0076 — APU: Canal 4 (noise) ([doc](docs/iterations/0076-ch4-noise.md)). `Channel4` com LFSR de 15/7 bits (NR43 bit 3), feedback = NOT(XOR) dos bits 0 e 1. NR41 (length timer 6 bits), NR42 (volume + envelope, igual CH1/CH2), NR43 (clock shift 7-4, LFSR width bit 3, divider 2-0 com divider=0 → 0.5), NR44 (trigger + length enable). Trigger reseta LFSR para 0. Envelope copiado de `PulseChannel::tick_envelope`. Shift ≥ 14 congela o canal. Frequência = 262144 / (divider × 2^shift) Hz, modelada com threshold no `tick_freq` que consome múltiplos clocks por M-cycle via `while`. 19 testes novos (847 total). Bateria: **4/4 pegos**, 1/1 controles verdes. Sem saída de áudio — só a máquina de estados.
+**Próxima tarefa:** ROADMAP **6.6** (Mixer: NR50/NR51/NR52, panning, DAC enable). Abrir `docs/reference/07-apu.md` § Audio Registers — NR50 (master volume left/right + VIN), NR51 (panning, 4 bits left + 4 bits right), NR52 (master on/off + status bits CH1-4 read-only). Os 4 canais já produzem output digital (volume) — o mixer soma e escala. NR50 bits 6-4 e 2-0: volume 0 → escala 1 (não mute), volume 7 → escala 8 (sem redução). NR51: 1 ativo, 0 inativo. A saída é estéreo (left/right), mas o ring buffer final é mono por ora. NR52 bit 7: power on/off (zera todos os registradores ao desligar, exceto wave RAM). Bits 3-0 são read-only e espelham `chX.enabled`. DAC enable: CH1/CH2 `NRx2 & $F8 != 0`, CH3 `NR30 bit 7`, CH4 `NR42 & $F8 != 0`. Canal com DAC desligado não emite som. Sem saída de áudio real — só a soma digital nos registradores.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **940** (eram 921 na 0073 — 19 novos em `ch1_sweep.rs`).
+Testes do workspace: **847** (eram 828 na 0075 — 19 novos em `ch4_noise.rs`).
 
 ## Invariantes
 

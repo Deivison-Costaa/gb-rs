@@ -1,4 +1,4 @@
-//! spec: docs/reference/07-apu.md. ROADMAP 6.4 — CH3 wave.
+//! spec: docs/reference/07-apu.md. ROADMAP 6.5 — CH4 noise.
 
 use crate::cart::OPEN_BUS;
 
@@ -157,6 +157,92 @@ fn sweep_write_back(new: u16, nr13: &mut u8, nr14: &mut u8) {
     *nr14 = (*nr14 & 0xF8) | ((new >> 8) & 0x07) as u8;
 }
 
+#[derive(Debug, Clone)]
+struct Channel4 {
+    enabled: bool,
+    lfsr: u16,
+    freq_timer: u16,
+    envelope_volume: u8,
+    envelope_timer: u8,
+}
+
+impl Channel4 {
+    const fn new() -> Self {
+        Self {
+            enabled: false,
+            lfsr: 0x0000,
+            freq_timer: 0,
+            envelope_volume: 0,
+            envelope_timer: 0,
+        }
+    }
+
+    fn trigger(&mut self, nr42: u8) {
+        self.enabled = true;
+        self.lfsr = 0x0000;
+        self.freq_timer = 0;
+        self.envelope_volume = nr42 >> 4;
+        let pace = nr42 & 0x07;
+        self.envelope_timer = if pace == 0 { 8 } else { pace };
+    }
+
+    fn tick_envelope(&mut self, nr42: u8) {
+        let pace = nr42 & 0x07;
+        if pace == 0 {
+            return;
+        }
+
+        if self.envelope_timer > 0 {
+            self.envelope_timer -= 1;
+        }
+
+        if self.envelope_timer == 0 {
+            self.envelope_timer = pace;
+
+            if (nr42 >> 3) & 1 == 0 {
+                if self.envelope_volume > 0 {
+                    self.envelope_volume -= 1;
+                }
+            } else if self.envelope_volume < 15 {
+                self.envelope_volume += 1;
+            }
+        }
+    }
+
+    fn tick_freq(&mut self, nr43: u8) {
+        let threshold = noise_threshold(nr43);
+        if threshold == u16::MAX {
+            return;
+        }
+        self.freq_timer = self.freq_timer.wrapping_add(4);
+        while self.freq_timer >= threshold {
+            self.freq_timer -= threshold;
+            let bit0 = self.lfsr & 1;
+            let bit1 = (self.lfsr >> 1) & 1;
+            let feedback = if bit0 == bit1 { 1 << 15 } else { 0 };
+            let width_7bit = (nr43 >> 3) & 1 != 0;
+            self.lfsr = (self.lfsr & 0x7FFF) | feedback;
+            if width_7bit {
+                self.lfsr = (self.lfsr & 0xFF7F) | (feedback >> 8);
+            }
+            self.lfsr >>= 1;
+        }
+    }
+}
+
+const fn noise_threshold(nr43: u8) -> u16 {
+    let shift = nr43 >> 4;
+    if shift >= 14 {
+        return u16::MAX;
+    }
+    let divider = (nr43 & 0x07) as u16;
+    if divider == 0 {
+        2u16.wrapping_shl(shift as u32)
+    } else {
+        (4 * divider).wrapping_shl(shift as u32)
+    }
+}
+
 pub(crate) struct Apu {
     nr10: u8,
     nr11: u8,
@@ -186,6 +272,7 @@ pub(crate) struct Apu {
     ch1: Channel1,
     ch2: PulseChannel,
     ch3: Channel3,
+    ch4: Channel4,
 }
 
 impl Apu {
@@ -219,6 +306,7 @@ impl Apu {
             ch1: Channel1::new(),
             ch2: PulseChannel::new(),
             ch3: Channel3::new(),
+            ch4: Channel4::new(),
         }
     }
 
@@ -297,7 +385,12 @@ impl Apu {
             NR41_ADDR => self.nr41 = value,
             NR42_ADDR => self.nr42 = value,
             NR43_ADDR => self.nr43 = value,
-            NR44_ADDR => self.nr44 = value,
+            NR44_ADDR => {
+                self.nr44 = value;
+                if value & NRX4_TRIGGER_BIT != 0 {
+                    self.ch4.trigger(self.nr42);
+                }
+            }
             NR50_ADDR => self.nr50 = value,
             NR51_ADDR => self.nr51 = value,
             NR52_ADDR => {
@@ -400,6 +493,10 @@ impl Apu {
             self.tick_ch3_freq();
         }
 
+        if powered && self.ch4.enabled {
+            self.ch4.tick_freq(self.nr43);
+        }
+
         if self.div_apu >= T_CYCLES_PER_FRAME_SEQUENCER_TICK {
             self.div_apu -= T_CYCLES_PER_FRAME_SEQUENCER_TICK;
             self.prev_frame_sequencer_step = self.frame_sequencer_step;
@@ -413,6 +510,9 @@ impl Apu {
                     }
                     if self.ch2.enabled {
                         self.ch2.tick_envelope(self.nr22);
+                    }
+                    if self.ch4.enabled {
+                        self.ch4.tick_envelope(self.nr42);
                     }
                     if self.ch1.pulse.enabled {
                         self.tick_ch1_sweep();
@@ -548,5 +648,53 @@ impl Apu {
 
     pub(crate) const fn ch3_last_sample_buffer(&self) -> u8 {
         self.ch3.last_sample_buffer
+    }
+
+    pub(crate) const fn ch4_enabled(&self) -> bool {
+        self.ch4.enabled
+    }
+
+    pub(crate) const fn ch4_dac_enabled(&self) -> bool {
+        self.nr42 & 0xF8 != 0
+    }
+
+    pub(crate) const fn ch4_length_timer(&self) -> u8 {
+        self.nr41 & 0x3F
+    }
+
+    pub(crate) const fn ch4_initial_volume(&self) -> u8 {
+        self.nr42 >> 4
+    }
+
+    pub(crate) const fn ch4_envelope_pace(&self) -> u8 {
+        self.nr42 & 0x07
+    }
+
+    pub(crate) const fn ch4_envelope_volume(&self) -> u8 {
+        self.ch4.envelope_volume
+    }
+
+    pub(crate) const fn ch4_clock_shift(&self) -> u8 {
+        self.nr43 >> 4
+    }
+
+    pub(crate) const fn ch4_lfsr_width_7bit(&self) -> bool {
+        (self.nr43 >> 3) & 1 != 0
+    }
+
+    pub(crate) const fn ch4_clock_divider(&self) -> u8 {
+        self.nr43 & 0x07
+    }
+
+    pub(crate) const fn ch4_lfsr_value(&self) -> u16 {
+        self.ch4.lfsr
+    }
+
+    pub(crate) const fn ch4_noise_threshold(&self) -> u16 {
+        noise_threshold(self.nr43)
+    }
+
+    pub(crate) const fn ch4_frequency_timer(&self) -> u16 {
+        self.ch4.freq_timer
     }
 }

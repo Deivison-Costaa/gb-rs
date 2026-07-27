@@ -613,10 +613,12 @@ fazer.
 às 02:57:23Z: `halt_bug` e as quatro de `mem_timing-2` em `crash`, rodando até o
 teto de 250 M ciclos sem veredito.
 
-**Não fez a segunda.** A linha do ROADMAP saiu intocada do commit e ainda manda
-reavaliar quando o 3.2 fechar — condição satisfeita, portanto morta. O
-conhecimento novo foi para o `Próxima tarefa` do `STATUS.md`: "continua
-bloqueado — reavalie quando o rendering estiver mais completo (M3 fechado)".
+**Não fez a segunda — e a correção só veio oito iterações depois.** A linha saiu
+intocada da 0059, ainda mandando reavaliar quando o 3.2 fechasse: condição já
+satisfeita, portanto morta. O conhecimento novo foi para o `Próxima tarefa` do
+`STATUS.md` ("continua bloqueado — reavalie quando o rendering estiver mais
+completo"). Quem consertou a linha foi a **0067**, a iteração do `gb-desktop`,
+que não tinha nada a ver com o `2.4b`.
 
 É a quinta vez que aquele parágrafo vence a regra formal, e a primeira em que os
 dois **se contradizem dentro do mesmo commit**, com o parágrafo certo e o
@@ -626,9 +628,17 @@ Entre o lugar que ele já visita e o que só a regra manda visitar, a informaç�
 fresca vai para o primeiro.
 
 O prejuízo prático é zero — o `scoreboard.sh` roda as duas ROMs toda iteração de
-qualquer forma. O que sobra é uma linha que mente, e o modo de falha que o #68
-queria matar apenas mudou de forma: de "nunca reavaliado" para "reavaliado para
-sempre contra uma condição morta".
+qualquer forma. Medido o saldo da regra do #68: a caixa **é** reavaliada e a
+linha **é** corrigida, mas as duas coisas se separaram no tempo e caíram em
+iterações diferentes. O modo de falha original não voltou; no lugar dele
+apareceu latência de oito iterações entre descobrir que o texto mentia e
+reescrevê-lo.
+
+E um efeito que a regra não cobre: **desbloquear não é agendar**. O `2.4b` está
+aberto e desbloqueado desde a 0067, fica antes do M6 na ordem do arquivo, e
+mesmo assim as oito iterações seguintes foram todas para M5 e M6 — porque o
+`Próxima tarefa` do `STATUS.md` apontava para lá. O parágrafo informal decide a
+fila; o passo 1 formal, não.
 
 ## 2026-07-27 — O teto de tempo é função do tamanho do placar, e ninguém tinha reparado
 

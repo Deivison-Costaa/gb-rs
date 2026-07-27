@@ -4,6 +4,7 @@ mod header;
 mod mbc1;
 mod mbc2;
 mod mbc3;
+mod mbc5;
 mod nombc;
 
 pub use header::{
@@ -12,6 +13,7 @@ pub use header::{
 pub use mbc1::Mbc1;
 pub use mbc2::Mbc2;
 pub use mbc3::Mbc3;
+pub use mbc5::Mbc5;
 pub use nombc::NoMbc;
 
 use std::fmt;
@@ -30,6 +32,12 @@ const MBC3_TIMER_RAM_BATTERY: u8 = 0x10;
 const MBC3: u8 = 0x11;
 const MBC3_RAM: u8 = 0x12;
 const MBC3_RAM_BATTERY: u8 = 0x13;
+const MBC5: u8 = 0x19;
+const MBC5_RAM: u8 = 0x1A;
+const MBC5_RAM_BATTERY: u8 = 0x1B;
+const MBC5_RUMBLE: u8 = 0x1C;
+const MBC5_RUMBLE_RAM: u8 = 0x1D;
+const MBC5_RUMBLE_RAM_BATTERY: u8 = 0x1E;
 
 // O cartucho visto pelo barramento: dois endereços, read e write.
 // write existe mesmo em ROM ONLY (no-op) — quem chama é o Bus, que não sabe o MBC.
@@ -134,6 +142,20 @@ pub fn load(rom: Vec<u8>) -> Result<Box<dyn Cartridge>, CartridgeError> {
             }
             Ok(Box::new(mbc))
         }
+        MBC5
+        | MBC5_RAM
+        | MBC5_RAM_BATTERY
+        | MBC5_RUMBLE
+        | MBC5_RUMBLE_RAM
+        | MBC5_RUMBLE_RAM_BATTERY => {
+            let mut mbc = Mbc5::new(rom, rom_banks, ram_bytes)?;
+            if cartridge_type.code() == MBC5_RAM_BATTERY
+                || cartridge_type.code() == MBC5_RUMBLE_RAM_BATTERY
+            {
+                mbc = mbc.with_battery();
+            }
+            Ok(Box::new(mbc))
+        }
         _ => Err(CartridgeError::UnsupportedType { cartridge_type }),
     }
 }
@@ -146,6 +168,10 @@ fn mbc_ram_bytes(cart_type: u8, ram_size: RamSize) -> usize {
         && cart_type != MBC3_RAM
         && cart_type != MBC3_RAM_BATTERY
         && cart_type != MBC3_TIMER_RAM_BATTERY
+        && cart_type != MBC5_RAM
+        && cart_type != MBC5_RAM_BATTERY
+        && cart_type != MBC5_RUMBLE_RAM
+        && cart_type != MBC5_RUMBLE_RAM_BATTERY
     {
         return 0;
     }

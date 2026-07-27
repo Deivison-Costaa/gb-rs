@@ -2,12 +2,14 @@
 
 mod header;
 mod mbc1;
+mod mbc2;
 mod nombc;
 
 pub use header::{
     CartridgeHeader, CartridgeType, HeaderChecksum, HeaderError, MIN_ROM_LEN, RamSize, RomSize,
 };
 pub use mbc1::Mbc1;
+pub use mbc2::Mbc2;
 pub use nombc::NoMbc;
 
 use std::fmt;
@@ -19,6 +21,8 @@ const ROM_ONLY: u8 = 0x00;
 const MBC1: u8 = 0x01;
 const MBC1_RAM: u8 = 0x02;
 const MBC1_RAM_BATTERY: u8 = 0x03;
+const MBC2: u8 = 0x05;
+const MBC2_BATTERY: u8 = 0x06;
 
 // O cartucho visto pelo barramento: dois endereços, read e write.
 // write existe mesmo em ROM ONLY (no-op) — quem chama é o Bus, que não sabe o MBC.
@@ -97,6 +101,13 @@ pub fn load(rom: Vec<u8>) -> Result<Box<dyn Cartridge>, CartridgeError> {
         MBC1 | MBC1_RAM | MBC1_RAM_BATTERY => {
             let mut mbc = Mbc1::new(rom, rom_banks, ram_bytes)?;
             if cartridge_type.code() == MBC1_RAM_BATTERY {
+                mbc = mbc.with_battery();
+            }
+            Ok(Box::new(mbc))
+        }
+        MBC2 | MBC2_BATTERY => {
+            let mut mbc = Mbc2::new(rom, rom_banks)?;
+            if cartridge_type.code() == MBC2_BATTERY {
                 mbc = mbc.with_battery();
             }
             Ok(Box::new(mbc))

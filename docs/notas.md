@@ -1053,3 +1053,24 @@
     mesmo M-cycle"). Ver [doc da 0051](docs/iterations/0051-interrupts.md)
     § Decisões de arquitetura, item 3.
 
+54. **O RTC do MBC3 é acionado por oscilador externo de 32.768 kHz que o
+    emulador não modela.** O timer do RTC (segundos, minutos, horas, dias) não
+    avança sozinho dentro do emulador — não há cristal de quartzo simulado. O
+    emulador precisa decidir se usa o relógio do host (via `std::time`) ou se
+    oferece uma interface manual para avançar o RTC. O latch (`$6000`: `$00` →
+    `$01`) congela uma cópia dos registradores do RTC para leitura consistente;
+    escrever `$00` de volta destrava. MBC3 com timer (`$0F`, `$10`) sempre tem
+    bateria externa para o RTC; os tipos sem timer (`$11`–`$13`) não têm RTC e
+    funcionam como MBC1 simplificado com banking até 2MB. Ver
+    [doc da 0068](docs/iterations/0068-mbc2.md) § Notas (handoff para 5.2).
+
+55. **O latch do RTC durante escrita tem comportamento de borda ambíguo.**
+    A spec do Pan Docs § MBC3 descreve o latch (`$00` → `$01`: congela cópia;
+    `$01` → `$00`: destrava), mas não especifica se escritas nos registradores
+    do RTC (`$08`–`$0C`) enquanto o latch está ativo (`$01`) são ignoradas ou
+    passam direto para o contador físico. Testar com ROMs MBC3 reais (Pokémon
+    Gold/Silver) é o caminho; na ausência de teste, a escolha conservadora é
+    permitir escrita mesmo sob latch (o latch só afeta leitura, não escrita —
+    o contador continua avançando e aceitando ajustes). Ver
+    [doc da 0068](docs/iterations/0068-mbc2.md) § Notas.
+

@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0067 — `gb-desktop`: janela winit + framebuffer a 60 fps + mapeamento de teclado ([doc](docs/iterations/0067-gb-desktop-winit.md)). `winit 0.28` + `pixels 0.13` (par compatível em `raw-window-handle 0.5`); `map_key` traduz `VirtualKeyCode` → `Key` (setas + Z/X/Enter/RShift); `framebuffer_to_rgba` converte 2-bit para RGBA com paleta verde DMG; loop de eventos avança 17.556 M-cycles por `RedrawRequested`. Bateria: **5/5 pegos**, 2/2 controles verdes. 13 testes novos. Erro #1: assumi `winit 0.29` + `pixels 0.13` compatíveis (raw-window-handle 0.6 vs 0.5); #2: escrevi contra API 0.29 antes de confirmar versão (KeyCode vs VirtualKeyCode, AboutToWait vs MainEventsCleared).
-**Próxima tarefa:** ROADMAP **2.4b** e **5.1** em aberto. `2.4b` (`halt_bug`, `mem_timing-2`) estava **bloqueado por M3** — a PPU fechou no 3.7 e o bloqueio expirou. Reavaliar: as ROMs seguiam rodando até o teto de ciclos sem veredito; com a máquina de modos completa, podem passar ou apontar bugs novos. Se ainda não passarem, seguir para **5.1** (MBC2: RAM embutida de 4 bits).
+**Última iteração concluída:** 0068 — MBC2: ROM 256 KiB + RAM 512×4 bits + seleção de registrador via bit 8 ([doc](docs/iterations/0068-mbc2.md)). `Mbc2` em `crates/gb-core/src/cart/mbc2.rs` (87 linhas), dispatch em `load()` para `$05`/`$06`, 23 testes novos. Bateria: **5/5 pegos**, 2/2 controles verdes. Erro #1: eco de RAM mal calculado no teste (0xB1FE ≠ offset 0); #2: `assert!(... || true)` pego pelo clippy.
+**Próxima tarefa:** ROADMAP **2.4b** e **5.2** em aberto. `2.4b` (`halt_bug`, `mem_timing-2`) continua batendo no teto de ciclos sem veredito — reavaliado na 0068, as 5 ROMs rodam 250M M-cycles sem saída serial. Seguir para **5.2** (MBC3 + RTC). MBC3 é o mapper mais complexo: banking de ROM/RAM até 2MB/32KB + RTC com latch, 4 bancos de RAM. A estrutura de `Cartridge` está madura (NoMbc, Mbc1, Mbc2) e serve de gabarito. A RAM do MBC3 é externa (SRAM com bateria), não embutida — o padrão `ram_data()`/`load_ram()` do Mbc1 se aplica. Nota nova (54) sobre o RTC: o timer é acionado por um oscilador externo de 32.768 kHz que o emulador não tem; o latch congela uma cópia dos registradores para leitura consistente. Ver `docs/reference/08-cartridges-mbc.md` § MBC3 — a seção cobre registradores de banking, RTC e latch, mas não cobre o comportamento de borda do latch durante escrita (nota 55).
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **803** (eram 790 na 0066 — 13 novos em `gb-desktop/run.rs`).
+Testes do workspace: **826** (eram 803 na 0067 — 23 novos em `cart_mbc2.rs`).
 
 ## Invariantes
 
@@ -231,3 +231,17 @@ Numeração é estável e citada no código: **nunca renumere**.
     garantir que a PPU escreva em IF antes do `check_interrupt`, ou que o
     dispatch não use RMW (e.g., `bus.write(IF_ADDR, if_reg & !(1 << bit))`
     direto, sem nova leitura). Ver corpo em `docs/notas.md`.
+54. **O RTC do MBC3 é acionado por oscilador externo de 32.768 kHz que o
+    emulador não modela.** O timer do RTC (segundos, minutos, horas, dias) não
+    avança sozinho — o emulador precisa decidir se usa o relógio do host ou se
+    oferece uma interface manual. O latch (`$6000`: `$00` → `$01`) congela uma
+    cópia dos registradores do RTC para leitura consistente; escrever `$00` de
+    volta destrava. MBC3 com timer (`$0F`, `$10`) sempre tem bateria externa
+    para o RTC; os tipos sem timer (`$11`–`$13`) não têm RTC e funcionam como
+    MBC1 simplificado com banking até 2MB. Ver corpo em `docs/notas.md`.
+55. **O latch do RTC durante escrita tem comportamento de borda ambíguo.**
+    A spec do Pan Docs § MBC3 descreve o latch mas não especifica se escritas nos
+    registradores do RTC enquanto o latch está ativo (`$01`) são ignoradas ou
+    passam. Testar com ROMs MBC3 reais (Pokémon) é o caminho; na ausência de
+    teste, a escolha conservadora é permitir escrita mesmo sob latch (o latch só
+    afeta leitura). Ver corpo em `docs/notas.md`.

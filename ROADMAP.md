@@ -245,9 +245,9 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [x] 1.11 Opcodes: misc — `DAA`, `CPL`, `SCF`, `CCF`, `DI`, `EI`, `NOP`, `STOP`.
 - [x] 1.12 Stub da porta serial (FF01/FF02) → `gb-cli` imprime em stdout.
 - [x] 1.13 blargg `cpu_instrs/individual/01` a `05`.
-- [ ] 1.14 blargg `cpu_instrs/individual/06` a `11` + `cpu_instrs.gb` completo.
+- [x] 1.14 blargg `cpu_instrs/individual/06` a `11` + `cpu_instrs.gb` completo.
   - [x] 1.14a ROMs individuais 06-11 passando (10/11 passam; 02-interrupts é M2).
-  - [ ] 1.14b `cpu_instrs.gb` agregado passando (falha em sub-testes que dependem de timer/interrupções — depende de M2.2; o DIV da 0049 foi o primeiro passo).
+  - [x] 1.14b `cpu_instrs.gb` agregado passando — verificado em 26/07 às 21:58, `Passed all tests` (11 sub-testes) em 22 s. Destravou no **#66** (`rom_addr` do MBC1: o agregado usa banking, os individuais não), e não no 2.2 como esta linha supunha. Ficou uma hora fechado sem estar marcado, e três iterações passaram ao lado.
 
 **Marco M1: 11/11 cpu_instrs, zero código gráfico escrito.**
 
@@ -258,7 +258,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [x] 2.3 `HALT` + o bug do HALT.
 - [ ] 2.4 blargg `instr_timing`, `mem_timing`, `mem_timing-2`, `halt_bug`.
   - [x] 2.4a `instr_timing` e `mem_timing` passando (não dependem de PPU).
-  - [ ] 2.4b `halt_bug` e `mem_timing-2` passando (precisam de LY — aguardam M3).
+  - [ ] 2.4b `halt_bug` e `mem_timing-2` passando — **BLOQUEADO por M3**. A previsão anterior ("precisam de LY") era curta demais: o `LY` chegou no 3.1a e medi as duas em 26/07 às 22:12 — seguem rodando até o teto de ciclos sem dar veredito. Reavalie quando a máquina de modos do 3.2 fechar.
 
 ## M3 — PPU
 

@@ -53,3 +53,4 @@ ts,resultado,custo_usd,turnos,duracao_ms,head_antes,head_depois,modelo,fonte
 2026-07-26T22:28:16-03:00,ok,0.10711773499999998,83,1513000,fc01469,8e4f092,opencode-go/deepseek-v4-pro,orquestrador
 2026-07-26T22:43:35-03:00,ok,0.098239588,80,917000,8e4f092,f1559a2,opencode-go/deepseek-v4-pro,orquestrador
 2026-07-26T23:01:06-03:00,ok,0.08245976000000002,63,1049000,f1559a2,6d22f32,opencode-go/deepseek-v4-pro,orquestrador
+2026-07-26T23:28:11-03:00,ok,0.11797803200000002,68,1623000,6d22f32,da67fd4,opencode-go/deepseek-v4-pro,orquestrador

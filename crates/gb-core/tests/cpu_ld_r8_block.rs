@@ -338,8 +338,13 @@ fn opcode_76_is_halt_and_not_a_load_from_hl_into_hl() {
 
     assert_eq!(
         cpu.lockup(),
-        Some(Lockup::UndecodedOpcode(0x76)),
-        "$76 é `HALT`, que é o 2.3 — não é um load deste bloco"
+        None,
+        "$76 é HALT (2.3), não trava a CPU nem escreve em memória"
+    );
+    assert_eq!(
+        bus.read(SCRATCH),
+        0x5A,
+        "HALT não escreve — não é LD (HL),(HL)"
     );
 }
 

@@ -3,6 +3,7 @@
 
 pub(crate) mod boot;
 
+use crate::apu::Apu;
 use crate::cart::{Cartridge, OPEN_BUS};
 use crate::joypad::{Joypad, Key};
 use crate::ppu::Ppu;
@@ -93,6 +94,7 @@ pub struct Bus {
     prev_and_result: bool,
     tima_overflow: TimerOverflow,
     ppu: Ppu,
+    apu: Apu,
 }
 
 impl Bus {
@@ -112,6 +114,7 @@ impl Bus {
             prev_and_result: false,
             tima_overflow: TimerOverflow::Idle,
             ppu: Ppu::new(),
+            apu: Apu::new(),
         }
     }
 
@@ -126,6 +129,7 @@ impl Bus {
                 P1_ADDR => self.joypad.read(),
                 DIV_ADDR => (self.sys_counter >> 8) as u8,
                 SB_ADDR | SC_ADDR => self.serial.read(addr),
+                0xFF10..=0xFF26 => self.apu.read(addr),
                 0xFF40..=0xFF4B => self.ppu.read(addr),
                 _ => {
                     let index = io_index(addr);
@@ -193,6 +197,7 @@ impl Bus {
                     self.prev_and_result = new_and;
                 }
                 SB_ADDR | SC_ADDR => self.serial.write(addr, value),
+                0xFF10..=0xFF26 => self.apu.write(addr, value),
                 0xFF40..=0xFF4B => self.ppu.write(addr, value),
                 _ => {
                     let index = io_index(addr);
@@ -279,6 +284,15 @@ impl Bus {
         }
 
         self.prev_and_result = new_and;
+    }
+
+    pub fn tick_apu(&mut self) {
+        self.apu.tick();
+    }
+
+    #[must_use]
+    pub fn apu_frame_sequencer_step(&self) -> u8 {
+        self.apu.frame_sequencer_step()
     }
 
     fn and_result(&self) -> bool {

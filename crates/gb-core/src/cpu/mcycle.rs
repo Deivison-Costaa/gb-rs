@@ -466,6 +466,7 @@ impl Cpu {
     pub fn step(&mut self, bus: &mut Bus) {
         bus.tick_timer();
         bus.tick_ppu();
+        bus.tick_apu();
         bus.tick_joypad_interrupt();
 
         if self.halted {

@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0071 — MBC5: ROM banking (9 bits, dois registradores), RAM banking (4 bits, 16 bancos), 6 tipos ($19–$1E) ([doc](docs/iterations/0071-mbc5.md)). Banco 0 é banco 0 (divergência de todos os MBCs anteriores — nota 56), sem 00→01 translation. ROM bank low em `$2000`–`$2FFF` (8 bits), nono bit em `$3000`–`$3FFF` (1 bit mascarado de 8), RAM bank em `$4000`–`$5FFF` (4 bits). Rumble ignorado (bit 3 tratado como parte do registrador de RAM). 33 testes novos (900 total). Bateria: **6/6 pegos**, 2/2 controles verdes. `Mbc5` em `crates/gb-core/src/cart/mbc5.rs` (145 linhas). Marco M5 fechado.
-**Próxima tarefa:** ROADMAP **6.1** (APU — Frame sequencer 512 Hz). Abrir `docs/reference/` para a APU; se não houver arquivo, buscar no Pan Docs (gbdev.io/pandocs/Audio) e commitar antes de implementar. O frame sequencer gera os clocks de 512 Hz que controlam length counter (256 Hz), volume envelope (64 Hz) e sweep (128 Hz). A APU avança junto com a CPU por M-cycle: `div_apu` interno incrementa a cada M-cycle e gera um tick do frame sequencer a cada 8192 M-cycles (512 Hz = 4.194304 MHz / 8192). Quatro canais: dois square waves (1 e 2), wave (3) e noise (4). A ordem sugerida no ROADMAP é canal 2 primeiro (o mais simples), depois 1, 3, 4, mixer, downsample. **Esta é a primeira vez que o emulador produz áudio — comece com a estrutura do módulo APU, o `div_apu`, o frame sequencer e os registradores de enable/volume.**
+**Última iteração concluída:** 0072 — APU: módulo, frame sequencer 512 Hz (8 passos), registradores NRxx ([doc](docs/iterations/0072-apu-frame-sequencer.md)). `Apu` em `crates/gb-core/src/apu.rs`, conectada ao Bus via range `$FF10`–`$FF26` e `tick_apu()` chamado de `Cpu::step()`. 7 testes novos (907 total). Bateria: **3/3 pegos**, 2/2 controles verdes. NR52 armazena o byte completo de boot (`$F1`), bit 7 R/W. Frame sequencer avança a cada 2048 M-cycles (8192 T-cycles = 512 Hz), passo 0–7.
+**Próxima tarefa:** ROADMAP **6.2** (Canal 2: square sem sweep — o mais simples). Abrir `docs/reference/07-apu.md` § Sound Channel 2. O canal 2 é idêntico ao canal 1 mas sem a unidade de sweep (sem `NR10`). Registradores: `NR21` ($FF16, length timer + duty cycle), `NR22` ($FF17, volume + envelope), `NR23` ($FF18, period low), `NR24` ($FF19, period high + trigger). O canal gera uma onda quadrada com duty cycle selecionável (12.5%/25%/50%/75%), controlada por um contador de período de 11 bits e um frequency timer. O envelope (64 Hz) controla o volume ao longo do tempo. A saída digital (0–15) é convertida para analógica via DAC. **Comece com a estrutura do canal: frequency timer, duty step counter, volume envelope. Sem áudio ainda — só a máquina de estados do canal que avança com o frame sequencer.**
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **900** (eram 867 na 0070 — 33 novos em `cart_mbc5.rs`).
+Testes do workspace: **907** (eram 900 na 0071 — 7 novos em `apu_frame_sequencer.rs`).
 
 ## Invariantes
 

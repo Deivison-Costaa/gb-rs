@@ -3,8 +3,8 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0066 — SRAM com bateria: persistir `.sav` e carregar ao abrir ([doc](docs/iterations/0066-sram-battery.md)). `Cartridge` trait ganha `ram_data()` e `load_ram()` com defaults; `Mbc1` tem `has_battery` (setado via `with_battery()` para tipo `$03`) e implementa os dois métodos; `Bus` expõe `cartridge_ram()`; `gb-cli` lê `.sav` antes de criar o `Bus` e escreve depois do loop. Bateria: **10/10 pegos**, 4/4 controles verdes. 10 testes novos. Erro #1: assumi que leitura além da RAM alocada retorna 0x00, mas o Mbc1 retorna OPEN_BUS; #2: pensei em quebrar a assinatura de `Mbc1::new()` antes de usar o builder pattern.
-**Próxima tarefa:** ROADMAP **4.4** — `gb-desktop`: janela winit + framebuffer a 60 fps + mapeamento de teclado. O `Bus` já expõe `framebuffer()` e `key_down`/`key_up`; a PPU está completa desde M3. É a primeira iteração que mexe em `gb-desktop` desde o scaffold. `2.4b` continua bloqueado.
+**Última iteração concluída:** 0067 — `gb-desktop`: janela winit + framebuffer a 60 fps + mapeamento de teclado ([doc](docs/iterations/0067-gb-desktop-winit.md)). `winit 0.28` + `pixels 0.13` (par compatível em `raw-window-handle 0.5`); `map_key` traduz `VirtualKeyCode` → `Key` (setas + Z/X/Enter/RShift); `framebuffer_to_rgba` converte 2-bit para RGBA com paleta verde DMG; loop de eventos avança 17.556 M-cycles por `RedrawRequested`. Bateria: **5/5 pegos**, 2/2 controles verdes. 13 testes novos. Erro #1: assumi `winit 0.29` + `pixels 0.13` compatíveis (raw-window-handle 0.6 vs 0.5); #2: escrevi contra API 0.29 antes de confirmar versão (KeyCode vs VirtualKeyCode, AboutToWait vs MainEventsCleared).
+**Próxima tarefa:** ROADMAP **2.4b** e **5.1** em aberto. `2.4b` (`halt_bug`, `mem_timing-2`) estava **bloqueado por M3** — a PPU fechou no 3.7 e o bloqueio expirou. Reavaliar: as ROMs seguiam rodando até o teto de ciclos sem veredito; com a máquina de modos completa, podem passar ou apontar bugs novos. Se ainda não passarem, seguir para **5.1** (MBC2: RAM embutida de 4 bits).
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -22,7 +22,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 
 | Suíte | Passando | Total |
 |---|---|---|
-| blargg cpu_instrs | 11 | 12 |
+| blargg cpu_instrs | 12 | 12 |
 | blargg instr_timing | 1 | 1 |
 | blargg mem_timing | 4 | 4 |
 | blargg mem_timing-2 | 0 | 4 |
@@ -34,7 +34,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **790** (eram 780 na 0065 — 8 novos em `cart_mbc1.rs`, 2 novos em `bus_memory_map.rs`).
+Testes do workspace: **803** (eram 790 na 0066 — 13 novos em `gb-desktop/run.rs`).
 
 ## Invariantes
 

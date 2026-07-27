@@ -3,9 +3,9 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0061 — Sprites por scanline ([doc](docs/iterations/0061-ppu-sprites.md)). 10 testes novos em `ppu_sprites.rs`. OAM scan com seleção de até 10 sprites por scanline (Y range + altura LCDC.2), prioridade DMG por X (menor X = maior + desempate OAM), flip X/Y espelhando o OBJ inteiro (16 pixels em 8×16), tile sempre unsigned ($8000), paletas OBP0/OBP1 via bit 4 do atributo, cor 0 transparente, BG-over-OBJ (atributo bit 7 × LCDC.0 × BG shade != 0). Bateria: **7/7 pegos, 1/1 controle verde** (M5 sobreviveu na 1ª tentativa — teste de prioridade usava pixel sem sobreposição; corrigido). Placar de ROMs inalterado (17/121).
-**Iteração anterior:** 0060 — Window por scanline.
-**Próxima tarefa:** ROADMAP **3.6** — Bloqueio de acesso a VRAM/OAM por modo. Durante Mode 3 a VRAM é inacessível ao CPU (leitura devolve $FF, escrita é ignorada); durante Mode 2 e 3 a OAM é inacessível. A implementação atual do `Bus::read`/`write` não consulta o modo da PPU. `2.4b` (`halt_bug` e `mem_timing-2`) continua bloqueado — com sprites (3.5) e bloqueio (3.6), M3 fecha e ele deve ser reavaliado.
+**Última iteração concluída:** 0062 — Bloqueio VRAM/OAM por modo ([doc](docs/iterations/0062-vram-oam-blocking.md)). 11 testes novos em `bus_vram_oam_blocking.rs`. `Ppu::is_vram_accessible()`/`is_oam_accessible()` consultados por `Bus::read`/`write`: VRAM bloqueada em Mode 3, OAM bloqueada em Mode 2 e 3; leitura devolve OPEN_BUS ($FF), escrita é ignorada; PPU desligado (LCDC.7=0) libera ambos. Testes `bus_oam.rs` e `ppu_sprites.rs` adaptados para setup com PPU desligado. Bateria: **6/7 pegos, 1/1 controle verde** (M7 sobreviveu — guarda `lcdc & 0x80` é redundante com `current_mode()`). Placar de ROMs inalterado (17/121).
+**Iteração anterior:** 0061 — Sprites por scanline.
+**Próxima tarefa:** ROADMAP **3.7** — `dmg-acid2` passando + comparação de hash do framebuffer na CI. O M3 fecha com VRAM/OAM bloqueados e sprites. A ROM `dmg-acid2` testa renderização de precisão (BG, window, sprites, paletas, scrolling). Se o framebuffer coincidir com o hash de referência, o PPU está correto o bastante para o M4 (jogável). `2.4b` (`halt_bug` e `mem_timing-2`) pode ser reavaliado com o M3 completo.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -35,7 +35,7 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **717** (eram 707 na 0060 — 10 novos em `ppu_sprites.rs`).
+Testes do workspace: **736** (eram 717 na 0061 — 11 novos em `bus_vram_oam_blocking.rs`).
 
 ## Invariantes
 

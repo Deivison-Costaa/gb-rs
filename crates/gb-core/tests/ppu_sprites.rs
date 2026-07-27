@@ -31,7 +31,10 @@ impl Cartridge for MinimalCart {
 }
 
 fn bus() -> Bus {
-    Bus::new(Box::new(MinimalCart))
+    let mut bus = Bus::new(Box::new(MinimalCart));
+    bus.write(LCDC, 0x00);
+    bus.tick_ppu();
+    bus
 }
 
 fn step_into_mode3(bus: &mut Bus) {
@@ -153,21 +156,21 @@ fn atributo_palette_seleciona_obp0_ou_obp1() {
 
 #[test]
 fn sprite_com_flip_x_espelha_horizontalmente() {
-    let mut bus = bus();
+    let mut bus1 = bus();
 
     let mut tile = [0u8; 16];
     tile[0] = 0x80;
     tile[1] = 0x80;
-    set_tile_data(&mut bus, 0, &tile);
+    set_tile_data(&mut bus1, 0, &tile);
 
-    write_sprite(&mut bus, 0, 16, 8, 0, 0x00);
+    write_sprite(&mut bus1, 0, 16, 8, 0, 0x00);
 
-    bus.write(OBP0, PAL_IDENTITY);
-    bus.write(LCDC, LCDC_PPU_ENABLE | LCDC_OBJ_ENABLE);
+    bus1.write(OBP0, PAL_IDENTITY);
+    bus1.write(LCDC, LCDC_PPU_ENABLE | LCDC_OBJ_ENABLE);
 
-    step_into_mode3(&mut bus);
+    step_into_mode3(&mut bus1);
 
-    let fb = bus.framebuffer();
+    let fb = bus1.framebuffer();
     assert_eq!(fb[0], 3, "sem flip: pixel x=0 deveria ser 3, é {}", fb[0]);
     assert_eq!(
         fb[1], 0,
@@ -175,7 +178,7 @@ fn sprite_com_flip_x_espelha_horizontalmente() {
         fb[1]
     );
 
-    let mut bus2 = Bus::new(Box::new(MinimalCart));
+    let mut bus2 = bus();
     set_tile_data(&mut bus2, 0, &tile);
     write_sprite(&mut bus2, 0, 16, 8, 0, 0x20);
     bus2.write(OBP0, PAL_IDENTITY);
@@ -203,20 +206,20 @@ fn sprite_com_flip_y_espelha_verticalmente() {
     tile[14] = 0x00;
     tile[15] = 0x80;
 
-    let mut bus = bus();
-    set_tile_data(&mut bus, 0, &tile);
-    write_sprite(&mut bus, 0, 16, 8, 0, 0x00);
-    bus.write(OBP0, PAL_IDENTITY);
-    bus.write(LCDC, LCDC_PPU_ENABLE | LCDC_OBJ_ENABLE);
-    step_into_mode3(&mut bus);
+    let mut bus1 = bus();
+    set_tile_data(&mut bus1, 0, &tile);
+    write_sprite(&mut bus1, 0, 16, 8, 0, 0x00);
+    bus1.write(OBP0, PAL_IDENTITY);
+    bus1.write(LCDC, LCDC_PPU_ENABLE | LCDC_OBJ_ENABLE);
+    step_into_mode3(&mut bus1);
     assert_eq!(
-        bus.framebuffer()[0],
+        bus1.framebuffer()[0],
         1,
         "sem flip Y: pixel x=0 usa linha 0 (cor 1), é {}",
-        bus.framebuffer()[0]
+        bus1.framebuffer()[0]
     );
 
-    let mut bus2 = Bus::new(Box::new(MinimalCart));
+    let mut bus2 = bus();
     set_tile_data(&mut bus2, 0, &tile);
     write_sprite(&mut bus2, 0, 16, 8, 0, 0x40);
     bus2.write(OBP0, PAL_IDENTITY);
@@ -232,26 +235,26 @@ fn sprite_com_flip_y_espelha_verticalmente() {
 
 #[test]
 fn sprite_8x16_usa_dois_tiles_empilhados() {
-    let mut bus = bus();
+    let mut bus1 = bus();
 
-    set_tile_data(&mut bus, 0, &solid_tile(1));
-    set_tile_data(&mut bus, 1, &solid_tile(2));
+    set_tile_data(&mut bus1, 0, &solid_tile(1));
+    set_tile_data(&mut bus1, 1, &solid_tile(2));
 
-    write_sprite(&mut bus, 0, 16, 8, 0, 0x00);
+    write_sprite(&mut bus1, 0, 16, 8, 0, 0x00);
 
-    bus.write(OBP0, PAL_IDENTITY);
-    bus.write(LCDC, LCDC_PPU_ENABLE | LCDC_OBJ_ENABLE | LCDC_OBJ_SIZE);
+    bus1.write(OBP0, PAL_IDENTITY);
+    bus1.write(LCDC, LCDC_PPU_ENABLE | LCDC_OBJ_ENABLE | LCDC_OBJ_SIZE);
 
-    step_into_mode3(&mut bus);
+    step_into_mode3(&mut bus1);
 
-    let fb = bus.framebuffer();
+    let fb = bus1.framebuffer();
     assert_eq!(
         fb[4], 1,
         "8×16 LY=0 usa tile superior (0) — shade deveria ser 1, é {}",
         fb[4]
     );
 
-    let mut bus2 = Bus::new(Box::new(MinimalCart));
+    let mut bus2 = bus();
     set_tile_data(&mut bus2, 0, &solid_tile(1));
     set_tile_data(&mut bus2, 1, &solid_tile(2));
     write_sprite(&mut bus2, 0, 8, 8, 0, 0x00);

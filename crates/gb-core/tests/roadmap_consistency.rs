@@ -50,7 +50,12 @@ fn sub_itens_usam_exatamente_dois_espacos_de_indentacao() {
     let torto: Vec<String> = caixas(&fonte)
         .iter()
         .filter(|c| c.indentacao % 2 != 0 || c.indentacao > 4)
-        .map(|c| format!("  linha {}: {} espaços — {}", c.linha, c.indentacao, c.texto))
+        .map(|c| {
+            format!(
+                "  linha {}: {} espaços — {}",
+                c.linha, c.indentacao, c.texto
+            )
+        })
         .collect();
 
     assert!(

@@ -99,3 +99,54 @@ fn caixa_pai_com_todos_os_filhos_fechados_esta_fechada() {
         orfas.join("\n")
     );
 }
+
+fn status() -> PathBuf {
+    roadmap().with_file_name("STATUS.md")
+}
+
+/// O primeiro item **acionável**: caixa aberta sem sub-item aberto embaixo dela.
+/// Caixa-pai com filho pendente não é tarefa — a tarefa é o filho.
+fn primeira_acionavel(todas: &[Caixa]) -> Option<&Caixa> {
+    todas.iter().enumerate().find_map(|(i, c)| {
+        if c.marcada || c.texto.contains("BLOQUEADO") {
+            return None;
+        }
+        let tem_filho_aberto = todas[i + 1..]
+            .iter()
+            .take_while(|f| f.indentacao > c.indentacao)
+            .any(|f| !f.marcada);
+        (!tem_filho_aberto).then_some(c)
+    })
+}
+
+fn alvo_do_status(texto: &str) -> Option<String> {
+    let linha = texto.lines().find(|l| l.contains("Próxima tarefa"))?;
+    let depois = &linha[linha.find("ROADMAP")? + "ROADMAP".len()..];
+    let inicio = depois.find("**")? + 2;
+    let fim = depois[inicio..].find("**")? + inicio;
+    Some(depois[inicio..fim].trim().to_string())
+}
+
+#[test]
+fn status_aponta_a_primeira_caixa_acionavel_do_roadmap() {
+    let fonte = std::fs::read_to_string(roadmap()).expect("ROADMAP.md é UTF-8");
+    let status_txt = std::fs::read_to_string(status()).expect("STATUS.md é UTF-8");
+
+    let todas = caixas(&fonte);
+    let Some(esperado) = primeira_acionavel(&todas) else {
+        return;
+    };
+    let id_esperado = esperado.texto.split_whitespace().next().unwrap_or("");
+
+    let alvo = alvo_do_status(&status_txt)
+        .expect("STATUS.md precisa de `Próxima tarefa: ROADMAP **X.Y**`");
+
+    assert_eq!(
+        alvo, id_esperado,
+        "o parágrafo `Próxima tarefa` é o que decide a fila de verdade — medido \
+         sete vezes. Apontar para outro item faz caixa envelhecer: o 2.4b levou 21 \
+         iterações e o 3.8 levou 7. Aponte para a primeira acionável (linha {} do \
+         ROADMAP) ou marque a caixa como BLOQUEADO, com a razão.",
+        esperado.linha
+    );
+}

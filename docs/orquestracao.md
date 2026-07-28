@@ -808,3 +808,36 @@ teste o contrato **entre** duas — e o placar não ajuda, porque exercita o
 Conserto: `available()` passa a devolver o comprimento contíguo, honrando o
 teste que já existia, e o `gb-desktop` drena em laço para esvaziar a volta no
 mesmo quadro.
+
+## 2026-07-27 — A regra da caixa-pai virou teste depois de quatro esquecimentos
+
+O passo 9 do `SKILL.md` manda, com todas as letras: *"Se ele era o último
+sub-item aberto de um grupo, marque também a caixa do pai"*. E já registrava dois
+casos — o 1.4 ficou dez iterações aberto com tudo pronto, e o 1.7 repetiu no
+mesmo dia em que o 1.4 foi consertado. O parágrafo seguinte avisa que sub-item
+usa **dois espaços**, porque três também renderiza e foi o que escondeu dois
+sub-itens do 1.7 de uma varredura.
+
+Em 27/07 aconteceu de novo, nas duas formas ao mesmo tempo: o `6.8` ficou aberto
+com os cinco filhos fechados, e o `6.8c/d/e` foi escrito com **três espaços** —
+a armadilha que o próprio passo 9 descreve, duas linhas abaixo da regra que ele
+descumpriu.
+
+**O diagnóstico errado, e vale registrar porque foi meu.** Eu disse ao usuário
+que "isso não é o modelo sendo desleixado, é o protocolo não pedir". O protocolo
+pede, no passo que leva esse nome, com o histórico anexo. A conclusão certa é a
+oposta: **escrever a regra pela quinta vez não ia funcionar** — quatro
+iterações a leram e a descumpriram.
+
+O que este projeto faz quando uma regra é esquecida por repetição já tem
+precedente: a R7 (teto de comentário) virou `comment_density.rs`. Então a regra
+da caixa-pai virou `roadmap_consistency.rs`, com dois testes — indentação e pai
+órfão.
+
+**O teste achou mais do que se procurava.** Além do `6.8`, apontou o `1.10d` com
+**cinco** espaços, torto desde o marco M1, dezenas de iterações atrás, invisível
+para todas as varreduras humanas e de agente que passaram por ali.
+
+A generalização: **regra em prosa protege contra o esquecimento de quem lê; teste
+protege contra o de quem não lê.** Numa cadeia em que o contexto é descartado a
+cada iteração, a segunda proteção é a única que acumula.

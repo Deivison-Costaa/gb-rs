@@ -3,24 +3,17 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0085 — halt bug: rollback do PC no dispatch
-([doc](docs/iterations/0085-halt-bug-pc-rollback.md)). Corrige o halt bug:
-quando `check_interrupt` dispara com `halt_bug` ativo (cenário `ei`; `halt`),
-o PC é revertido ao endereço do HALT antes do dispatch empurrá-lo na pilha.
-O rollback fica em `check_interrupt` (não no handler do HALT) para não quebrar
-o caso sem interrupção (RST/pulo após HALT). 2 testes novos, 2 testes
-existentes com asserções atualizadas. Bateria: **2/2 pegos, 2/2 controles**.
-Placar inalterado: `halt_bug` e `mem_timing-2` continuam em 0.
-**Próxima tarefa:** ROADMAP **2.4b** continua — `halt_bug.gb` e `mem_timing-2`
-ainda estouram 100M ciclos sem saída serial. O halt bug está corrigido (erro #1
-desta iteração), mas as ROMs precisam de mais investigação. Notas relevantes:
-57 (RST/halt bug: o rollback no dispatch garante que RST empurre o próprio
-endereço, não o do HALT). A ROM `halt_bug` é MBC1+RAM e copia código de ROM
-para WRAM antes de executar — pode estar testando o caso `halt` seguido de
-`rst` ou algo no timer que a impede de acordar do HALT. O `mem_timing-2`
-testa timing de PUSH/POP/CALL/RET: os M-cycles conferem com a spec, mas a
-ordem exata de leitura/escrita ou acessos fantasmas em ciclos `internal`
-podem divergir.
+**Última iteração concluída:** 0086 — halt_bug e mem_timing-2: verificação por hash do framebuffer
+([doc](docs/iterations/0086-halt-bug-mem-timing2-fb-hash.md)). As ROMs `halt_bug` e
+`mem_timing-2` usam saída visual (VRAM + PPU), não serial. O scoreboard agora
+verifica o hash SHA-256 do framebuffer para essas ROMs (mesmo mecanismo do
+dmg-acid2). 5 hashes novos, 4 testes novos em `run_command.rs`. Bateria:
+**2/2 pegos, 2/2 controles**. Placar: **+5 ROMs** (18→23/121).
+**Próxima tarefa:** ROADMAP **3.8** — DMA de OAM ($FF46) de verdade. Hoje o
+registrador só guarda o byte escrito e a transferência nunca acontece.
+Consequência: nenhum jogo mostra sprite algum. Notas relevantes: ler
+`docs/reference/06-ppu.md` antes (R1); são 160 M-cycles de transferência e a
+CPU só enxerga HRAM enquanto ela corre.
 
 **Repositório:** https://github.com/Deivison-Costaa/gb-rs
 
@@ -42,15 +35,15 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | blargg instr_timing | 1 | 1 |
 | blargg mem_timing | 4 | 4 |
 | blargg mem_timing-2 | 0 | 4 |
-| blargg halt_bug | 0 | 1 |
-| blargg oam_bug | 0 | 9 |
-| blargg interrupt_time | 0 | 1 |
-| blargg dmg_sound | 0 | 13 |
+| blargg/halt_bug | 1 | 1 |
+| blargg/oam_bug | 0 | 9 |
+| blargg/interrupt_time | 0 | 1 |
+| blargg/dmg_sound | 0 | 13 |
 | dmg-acid2 | 1 | 1 |
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **938** (sem alteração — 3 testes do CH4 modificados, nenhum novo).
+Testes do workspace: **942** (4 novos testes em `run_command.rs`).
 
 ## Invariantes
 

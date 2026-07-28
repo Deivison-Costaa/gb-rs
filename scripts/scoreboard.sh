@@ -69,6 +69,17 @@ readonly MAX_CYCLES="${MAX_CYCLES:-100000000}"
 # tests/roms/dmg-acid2/dmg-acid2-dmg.png (160×144, modo L, 4 tons).
 readonly DMG_ACID2_HASH='f844ea760a6f1fe137f7f992c7ab1c72d34c7fcd3a807b4174a78eb04a32a458'
 
+# ROMs que usam saída pelo framebuffer (sem serial).  Ver ROADMAP 2.4b.
+# Hashes capturados em 27/07/2026 com 100M ciclos — a tela final das ROMs
+# blargg/halt_bug e blargg/mem_timing-2 é estável antes disso.
+declare -A FB_HASHES=(
+  ['blargg/halt_bug.gb']='b9bfead5d36870b46f7e78cc1a0ed9a814f20b419dfe78c9cb834583ac4a6ab0'
+  ['blargg/mem_timing-2/mem_timing.gb']='c8f8ceb4d56b6d65a4a155ebb2cd7d6197041ca7a0e7015aab0d297dee5bd0fb'
+  ['blargg/mem_timing-2/rom_singles/01-read_timing.gb']='3760ee8b57c6c2ab056d4b7d031f2faff9776798952ec86792d42612709d5182'
+  ['blargg/mem_timing-2/rom_singles/02-write_timing.gb']='9188cba9c59c99056ae1d3c826647f0cd20fc06e42d419d2b7e58813c2ce787d'
+  ['blargg/mem_timing-2/rom_singles/03-modify_timing.gb']='55c3c37f0cb5f9c806294aef2d8ca6c884c9067f61c1213df4bfcad8c22ac157'
+)
+
 # Sufixos de modelo da mooneye que NÃO são DMG-B (o alvo deste emulador).
 # Elas continuam sendo executadas — o enunciado pede "todas as ROMs baixadas" —
 # mas vão para uma suíte própria, para não parecerem regressão no gráfico.
@@ -215,8 +226,12 @@ main() {
     suite="$(suite_of "$rel")"
 
     if [[ "$mode" == run ]]; then
+      local fb_hash="${FB_HASHES[$rel]:-}"
       if [[ "$suite" == dmg-acid2 ]]; then
-        result="$(run_one "$gb_cli" "$rom" "$DMG_ACID2_HASH")"
+        fb_hash="$DMG_ACID2_HASH"
+      fi
+      if [[ -n "$fb_hash" ]]; then
+        result="$(run_one "$gb_cli" "$rom" "$fb_hash")"
       else
         result="$(run_one "$gb_cli" "$rom")"
       fi

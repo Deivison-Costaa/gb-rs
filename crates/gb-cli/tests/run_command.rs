@@ -627,3 +627,125 @@ fn run_stops_when_cpu_is_stopped() {
         describe(&out)
     );
 }
+
+// ---------------------------------------------------------------------------
+// --check-fb-hash para ROMs sem saída serial (ROADMAP 2.4b)
+// ---------------------------------------------------------------------------
+
+// Capturados em 27/07/2026 com 5M ciclos — estabilizam antes de 2M.
+const HALT_BUG_HASH: &str = "b9bfead5d36870b46f7e78cc1a0ed9a814f20b419dfe78c9cb834583ac4a6ab0";
+const MEM_TIMING2_HASH: &str = "c8f8ceb4d56b6d65a4a155ebb2cd7d6197041ca7a0e7015aab0d297dee5bd0fb";
+
+fn halt_bug_path() -> PathBuf {
+    workspace_root().join("tests/roms/blargg/halt_bug.gb")
+}
+
+fn mem_timing2_path() -> PathBuf {
+    workspace_root().join("tests/roms/blargg/mem_timing-2/mem_timing.gb")
+}
+
+fn skip_if_no_halt_bug() -> Option<PathBuf> {
+    let path = halt_bug_path();
+    if path.exists() {
+        Some(path)
+    } else {
+        eprintln!(
+            "pulando teste: ROM ausente em {} — rode ./scripts/fetch-test-roms.sh",
+            path.display()
+        );
+        None
+    }
+}
+
+fn skip_if_no_mem_timing2() -> Option<PathBuf> {
+    let path = mem_timing2_path();
+    if path.exists() {
+        Some(path)
+    } else {
+        eprintln!(
+            "pulando teste: ROM ausente em {} — rode ./scripts/fetch-test-roms.sh",
+            path.display()
+        );
+        None
+    }
+}
+
+#[test]
+fn check_fb_hash_passes_for_halt_bug_rom() {
+    let path = match skip_if_no_halt_bug() {
+        Some(p) => p,
+        None => return,
+    };
+
+    let out = gb_cli(&[
+        "run",
+        path.to_str().unwrap(),
+        "--headless",
+        "--max-cycles",
+        "5000000",
+        "--check-fb-hash",
+        HALT_BUG_HASH,
+    ]);
+
+    assert_eq!(code(&out), Some(0), "{}", describe(&out));
+}
+
+#[test]
+fn check_fb_hash_fails_for_halt_bug_with_wrong_hash() {
+    let path = match skip_if_no_halt_bug() {
+        Some(p) => p,
+        None => return,
+    };
+
+    let out = gb_cli(&[
+        "run",
+        path.to_str().unwrap(),
+        "--headless",
+        "--max-cycles",
+        "5000000",
+        "--check-fb-hash",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+    ]);
+
+    assert_eq!(code(&out), Some(1), "{}", describe(&out));
+}
+
+#[test]
+fn check_fb_hash_passes_for_mem_timing2_rom() {
+    let path = match skip_if_no_mem_timing2() {
+        Some(p) => p,
+        None => return,
+    };
+
+    let out = gb_cli(&[
+        "run",
+        path.to_str().unwrap(),
+        "--headless",
+        "--max-cycles",
+        "5000000",
+        "--check-fb-hash",
+        MEM_TIMING2_HASH,
+    ]);
+
+    assert_eq!(code(&out), Some(0), "{}", describe(&out));
+}
+
+#[test]
+fn check_fb_hash_fails_for_mem_timing2_with_wrong_hash() {
+    let path = match skip_if_no_mem_timing2() {
+        Some(p) => p,
+        None => return,
+    };
+
+    let out = gb_cli(&[
+        "run",
+        path.to_str().unwrap(),
+        "--headless",
+        "--max-cycles",
+        "5000000",
+        "--check-fb-hash",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+    ]);
+
+    assert_eq!(code(&out), Some(1), "{}", describe(&out));
+}

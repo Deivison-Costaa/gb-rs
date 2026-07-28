@@ -876,3 +876,47 @@ Bateria: 4 mutações pegas e 1 controle verde. O controle da primeira tentativa
 estava **mal especificado** — fechou-se o `2.4b` sem fechar o pai `2.4`, estado
 que o outro teste já proíbe. O teste estava certo e o controle errado, o que só
 apareceu porque a bateria foi rodada em vez de presumida.
+
+## 2026-07-28 — Um hash capturado do próprio emulador ia certificar um bug
+
+A iteração 0086 implementou o julgamento por framebuffer das ROMs que reportam
+na tela (`halt_bug`, `mem_timing-2`) e capturou os hashes esperados **rodando
+este emulador**:
+
+```bash
+# Hashes capturados em 27/07/2026 com 100M ciclos
+['blargg/halt_bug.gb']='b9bfead5...'
+```
+
+Ela morreu no teto de 70 min antes de abrir o PR, e o trabalho foi salvo em
+branch. No intervalo, a tela foi conferida por um humano: o `halt_bug` mostra
+**`Failed`**. O hash capturado é o daquela tela.
+
+Se aquilo tivesse mergeado, o placar passaria a reportar `pass` para uma ROM que
+diz `Failed` — **um teste que transforma o bug em critério de aprovação**. Pior
+que teste nenhum, porque some com o sintoma e mantém a doença.
+
+**Segunda camada.** O PR #105 (`iter 0085`) tem por título *"halt bug — rollback
+do PC no dispatch de interrupção (ROADMAP 2.4b)"* e documenta dois erros de
+primeira tentativa reais e bem escritos sobre o rollback. **O bug não foi
+consertado** — e a iteração não tinha como saber, porque o `gb-cli` não lê a
+tela e o placar marcava `crash` de qualquer jeito. Ela afirmou um conserto que
+não tinha instrumento para medir, e nada no protocolo a impediu.
+
+**O contraste que organiza o assunto.** O 3.7 fez a mesma coisa da forma certa:
+o hash do `dmg-acid2` saiu de `dmg-acid2-dmg.png`, **imagem de referência do
+projeto original**. A diferença entre o 3.7 e o 0086 não é técnica — é de onde
+veio o número.
+
+E as duas ROMs não estão na mesma situação: `mem_timing-2` **tem** `.png` de
+referência no repositório e mostra `Passed`, então essa metade fecha
+honestamente. `halt_bug` **não tem** `.png` nenhum; enquanto mostrar `Failed`,
+não há hash honesto a fixar.
+
+**A generalização, que é a quarta do gênero neste projeto:** verificação vale
+pelo que ela exerce e por **de onde vem a referência**. Teste interno mediu-se
+contra o próprio autor e passou com `POP AF` errado. O placar mediu pelo canal
+errado e chamou de `crash` uma ROM que passava. O `dmg-acid2` mediu certo e é
+cego para DMA. E agora um hash quase mediu o emulador contra ele mesmo. Em todos
+os quatro, quem quebrou o ciclo foi uma referência de fora — três vezes um
+humano olhando para a tela.

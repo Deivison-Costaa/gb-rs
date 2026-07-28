@@ -841,3 +841,38 @@ para todas as varreduras humanas e de agente que passaram por ali.
 A generalização: **regra em prosa protege contra o esquecimento de quem lê; teste
 protege contra o de quem não lê.** Numa cadeia em que o contexto é descartado a
 cada iteração, a segunda proteção é a única que acumula.
+
+## 2026-07-27 — A fila deixa de ser sugestão e vira teste
+
+Está medido sete vezes que **quem decide o que a próxima iteração faz é o
+parágrafo `Próxima tarefa` do `STATUS.md`**, não a ordem do ROADMAP que o passo 1
+manda seguir. Quando o parágrafo aponta, o item sai; quando não aponta, o item
+envelhece — o `2.4b` levou **21 iterações** passando ao lado, e o `3.8` (DMA de
+OAM, sem o qual nenhum jogo mostra sprite) levou **7** em poucas horas.
+
+O usuário perguntou se não seria melhor o orquestrador executar as caixas
+restantes e deixar a cadeia só do M7 em diante. A resposta foi não, e a razão é o
+segundo entregável: caixa executada pelo orquestrador não gera doc de iteração,
+não gera `Erros de primeira tentativa` — que o `CLAUDE.md` chama de o dado mais
+valioso do projeto — e não entra na série de custo do 8.2. A divisão que se
+mostrou saudável é outra:
+
+```
+orquestrador   ferramenta, medição, verificação, protocolo
+cadeia         caixas do ROADMAP
+```
+
+O problema real não era **quem executa**, era que **o agendamento não era
+obrigatório**. E hoje já ficou provado que escrever a regra em prosa não resolve:
+o passo 9 mandava fechar caixa-pai, com dois exemplos anexos, e foi descumprido
+pela quarta vez.
+
+Então o agendamento virou teste, no mesmo arquivo do anterior. O `STATUS.md` tem
+de apontar para a primeira caixa **acionável** — aberta, sem sub-item aberto
+embaixo, e sem `BLOQUEADO` na linha. Desviar exige marcar a caixa como bloqueada
+com a razão escrita, que fica auditável no diff.
+
+Bateria: 4 mutações pegas e 1 controle verde. O controle da primeira tentativa
+estava **mal especificado** — fechou-se o `2.4b` sem fechar o pai `2.4`, estado
+que o outro teste já proíbe. O teste estava certo e o controle errado, o que só
+apareceu porque a bateria foi rodada em vez de presumida.

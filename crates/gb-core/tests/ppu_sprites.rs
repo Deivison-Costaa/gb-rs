@@ -324,6 +324,67 @@ fn bg_over_obj_esconde_sprite_quando_bg_cores_1_3() {
     );
 }
 
+// A prioridade olha o índice de cor do BG, não o shade que a BGP produziu
+// (ver docs/iterations/0077d).
+const PAL_COR_0_VIRA_SHADE_3: u8 = 0xE7;
+const PAL_TUDO_SHADE_0: u8 = 0x00;
+
+#[test]
+fn bg_over_obj_nao_esconde_sprite_sobre_bg_cor_0() {
+    let mut bus = bus();
+
+    set_tile_data(&mut bus, 0, &solid_tile(0));
+    set_tile_data(&mut bus, 1, &solid_tile(2));
+
+    bus.write(0x9800, 0);
+
+    write_sprite(&mut bus, 0, 16, 8, 1, 0x80);
+
+    bus.write(BGP, PAL_COR_0_VIRA_SHADE_3);
+    bus.write(OBP0, PAL_IDENTITY);
+    bus.write(
+        LCDC,
+        LCDC_PPU_ENABLE | LCDC_BG_ENABLE | LCDC_OBJ_ENABLE | LCDC_TILE_SELECT,
+    );
+
+    step_into_mode3(&mut bus);
+
+    let fb = bus.framebuffer();
+    assert_eq!(
+        fb[4], 2,
+        "BG cor 0 pintada de shade 3 pela BGP ainda perde para o sprite — pixel 4 deveria ser 2, é {}",
+        fb[4]
+    );
+}
+
+#[test]
+fn bg_over_obj_esconde_sprite_sobre_bg_cor_3_pintada_de_shade_0() {
+    let mut bus = bus();
+
+    set_tile_data(&mut bus, 0, &solid_tile(3));
+    set_tile_data(&mut bus, 1, &solid_tile(2));
+
+    bus.write(0x9800, 0);
+
+    write_sprite(&mut bus, 0, 16, 8, 1, 0x80);
+
+    bus.write(BGP, PAL_TUDO_SHADE_0);
+    bus.write(OBP0, PAL_IDENTITY);
+    bus.write(
+        LCDC,
+        LCDC_PPU_ENABLE | LCDC_BG_ENABLE | LCDC_OBJ_ENABLE | LCDC_TILE_SELECT,
+    );
+
+    step_into_mode3(&mut bus);
+
+    let fb = bus.framebuffer();
+    assert_eq!(
+        fb[4], 0,
+        "BG cor 3 vence o sprite mesmo pintada de shade 0 — pixel 4 deveria ser 0, é {}",
+        fb[4]
+    );
+}
+
 #[test]
 fn objs_desabilitado_nao_renderiza_sprites() {
     let mut bus = bus();

@@ -465,6 +465,7 @@ impl Cpu {
     // Avança um M-cycle (R2). No máximo um acesso ao barramento.
     pub fn step(&mut self, bus: &mut Bus) {
         bus.tick_timer();
+        bus.tick_dma();
         bus.tick_ppu();
         bus.tick_apu();
         bus.tick_joypad_interrupt();

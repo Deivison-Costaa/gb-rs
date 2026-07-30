@@ -19,6 +19,8 @@ const SB_ADDR: u16 = 0xFF01;
 
 const SC_ADDR: u16 = 0xFF02;
 
+const DMA_ADDR: u16 = 0xFF46;
+
 const TIMA_IDX: usize = 0x05;
 const TMA_IDX: usize = 0x06;
 const TAC_IDX: usize = 0x07;
@@ -95,6 +97,14 @@ pub struct Bus {
     tima_overflow: TimerOverflow,
     ppu: Ppu,
     apu: Apu,
+    dma: OamDma,
+}
+
+#[derive(Debug, Default)]
+struct OamDma {
+    active: bool,
+    source_high: u8,
+    index: u8,
 }
 
 impl Bus {
@@ -115,6 +125,7 @@ impl Bus {
             tima_overflow: TimerOverflow::Idle,
             ppu: Ppu::new(),
             apu: Apu::new(),
+            dma: OamDma::default(),
         }
     }
 
@@ -150,7 +161,7 @@ impl Bus {
                 }
             }
             Region::ObjectAttributeMemory => {
-                if self.ppu.is_oam_accessible() {
+                if self.cpu_can_access_oam() {
                     self.oam[oam_index(addr)]
                 } else {
                     OPEN_BUS
@@ -200,6 +211,14 @@ impl Bus {
                 SB_ADDR | SC_ADDR => self.serial.write(addr, value),
                 0xFF10..=0xFF26 => self.apu.write(addr, value),
                 0xFF30..=0xFF3F => self.apu.write(addr, value),
+                DMA_ADDR => {
+                    self.ppu.write(addr, value);
+                    self.dma = OamDma {
+                        active: true,
+                        source_high: value,
+                        index: 0,
+                    };
+                }
                 0xFF40..=0xFF4B => self.ppu.write(addr, value),
                 _ => {
                     let index = io_index(addr);
@@ -216,11 +235,44 @@ impl Bus {
             }
             Region::NotUsable => {}
             Region::ObjectAttributeMemory => {
-                if self.ppu.is_oam_accessible() {
+                if self.cpu_can_access_oam() {
                     self.oam[oam_index(addr)] = value;
                 }
             }
         }
+    }
+
+    fn cpu_can_access_oam(&self) -> bool {
+        !self.dma.active && self.ppu.is_oam_accessible()
+    }
+
+    // A DMA tem barramento próprio: não a bloqueiam nem a PPU nem o modo atual.
+    // Fonte acima de $DF cai no echo da WRAM, que é o que o DMG faz.
+    fn dma_read(&self, addr: u16) -> u8 {
+        match Region::of(addr) {
+            Region::CartridgeRom | Region::ExternalRam => self.cartridge.read(addr),
+            Region::VideoRam => self.vram[vram_index(addr)],
+            _ => self.wram[wram_index(addr)],
+        }
+    }
+
+    pub fn tick_dma(&mut self) {
+        if !self.dma.active {
+            return;
+        }
+
+        let source = (u16::from(self.dma.source_high) << 8) | u16::from(self.dma.index);
+        self.oam[self.dma.index as usize] = self.dma_read(source);
+
+        self.dma.index += 1;
+        if usize::from(self.dma.index) == OAM_LEN {
+            self.dma.active = false;
+        }
+    }
+
+    #[must_use]
+    pub fn dma_active(&self) -> bool {
+        self.dma.active
     }
 
     #[must_use]

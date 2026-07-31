@@ -113,6 +113,68 @@ fn oam_fica_inacessivel_a_cpu_enquanto_a_dma_roda() {
     );
 }
 
+const HRAM_BASE: u16 = 0xFF80;
+const ROM_ADDR: u16 = 0x0100;
+const VRAM_ADDR: u16 = 0x8000;
+
+#[test]
+fn durante_a_dma_a_cpu_so_enxerga_hram() {
+    let mut bus = bus();
+    fill_wram(&mut bus);
+    bus.write(HRAM_BASE, 0x42);
+
+    bus.write(DMA, 0xC0);
+    bus.tick_dma();
+
+    assert_eq!(
+        bus.read(HRAM_BASE),
+        0x42,
+        "a HRAM é o único caminho que sobra para a CPU durante a DMA"
+    );
+    for blocked in [ROM_ADDR, VRAM_ADDR, WRAM_BASE, 0xE000, OAM_BASE] {
+        assert_eq!(
+            bus.read(blocked),
+            OPEN_BUS,
+            "${blocked:04X} está no barramento que a DMA tomou"
+        );
+    }
+}
+
+#[test]
+fn a_dma_nao_bloqueia_a_faixa_de_io() {
+    let mut bus = bus();
+
+    bus.write(0xFF07, 0x05);
+    bus.write(DMA, 0xC0);
+    bus.tick_dma();
+
+    assert_eq!(
+        bus.read(0xFF07),
+        0x05,
+        "TAC segue legível: IF/IE e companhia são internos à CPU, não passam pelo barramento tomado"
+    );
+}
+
+#[test]
+fn escrita_fora_da_hram_nao_pega_durante_a_dma() {
+    let mut bus = bus();
+    fill_wram(&mut bus);
+
+    bus.write(DMA, 0xC0);
+    bus.tick_dma();
+    bus.write(0xD000, 0x5E);
+
+    for _ in 0..DMA_M_CYCLES {
+        bus.tick_dma();
+    }
+
+    assert_eq!(
+        bus.read(0xD000),
+        0x00,
+        "escrita da CPU na WRAM durante a DMA é engolida"
+    );
+}
+
 #[test]
 fn ff46_continua_legivel_com_o_ultimo_valor_escrito() {
     let mut bus = bus();

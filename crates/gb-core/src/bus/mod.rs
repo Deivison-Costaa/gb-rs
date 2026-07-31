@@ -131,6 +131,9 @@ impl Bus {
 
     #[must_use]
     pub fn read(&self, addr: u16) -> u8 {
+        if self.dma_blocks(addr) {
+            return OPEN_BUS;
+        }
         match Region::of(addr) {
             Region::CartridgeRom | Region::ExternalRam => self.cartridge.read(addr),
             Region::WorkRam | Region::EchoRam => self.wram[wram_index(addr)],
@@ -171,6 +174,9 @@ impl Bus {
     }
 
     pub fn write(&mut self, addr: u16, value: u8) {
+        if self.dma_blocks(addr) {
+            return;
+        }
         match Region::of(addr) {
             Region::CartridgeRom | Region::ExternalRam => self.cartridge.write(addr, value),
             Region::WorkRam | Region::EchoRam => self.wram[wram_index(addr)] = value,
@@ -244,6 +250,25 @@ impl Bus {
 
     fn cpu_can_access_oam(&self) -> bool {
         !self.dma.active && self.ppu.is_oam_accessible()
+    }
+
+    // A DMA toma o barramento externo: sobra a HRAM, e por isso a rotina de
+    // transferência mora lá. A faixa de I/O e o IE ficam de fora do bloqueio —
+    // são internos à CPU, e fechá-los tornaria IF/IE ilegíveis no dispatch de
+    // interrupção. O valor lido durante o conflito a spec não fixa; aqui é
+    // OPEN_BUS, como toda região sem dono. Ver docs/iterations/0087.
+    fn dma_blocks(&self, addr: u16) -> bool {
+        self.dma.active
+            && matches!(
+                Region::of(addr),
+                Region::CartridgeRom
+                    | Region::VideoRam
+                    | Region::ExternalRam
+                    | Region::WorkRam
+                    | Region::EchoRam
+                    | Region::ObjectAttributeMemory
+                    | Region::NotUsable
+            )
     }
 
     // A DMA tem barramento próprio: não a bloqueiam nem a PPU nem o modo atual.

@@ -273,7 +273,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [x] 3.5 Sprites: OAM scan, limite de 10/linha, prioridade, flip X/Y, modo 8x16.
 - [x] 3.6 Bloqueio de acesso a VRAM/OAM por modo.
 - [x] 3.7 `dmg-acid2` passando + comparação de hash do framebuffer na CI.
-- [ ] 3.8 **DMA de OAM ($FF46) de verdade** — hoje o registrador só guarda o byte
+- [x] 3.8 **DMA de OAM ($FF46) de verdade** — hoje o registrador só guarda o byte
   escrito (`self.dma = value`), e a transferência nunca acontece. O 3.1b entregou
   um *stub* deliberado, fechou a caixa e nunca abriu esta. Consequência medida em
   27/07: **nenhum jogo mostra sprite algum** — o Ash não aparece no Pokémon Red, o

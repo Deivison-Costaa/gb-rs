@@ -325,7 +325,7 @@ fn bg_over_obj_esconde_sprite_quando_bg_cores_1_3() {
 }
 
 // A prioridade olha o índice de cor do BG, não o shade que a BGP produziu
-// (ver docs/iterations/0077d).
+// (ver docs/iterations/0087).
 const PAL_COR_0_VIRA_SHADE_3: u8 = 0xE7;
 const PAL_TUDO_SHADE_0: u8 = 0x00;
 

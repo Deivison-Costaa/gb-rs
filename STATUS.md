@@ -3,7 +3,19 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0085 — halt bug: rollback do PC no dispatch
+**Última iteração concluída:** 0087 — DMA de OAM ($FF46) de verdade (ROADMAP
+3.8, [doc](docs/iterations/0087-oam-dma.md)). `Bus::tick_dma()` copia 160 bytes,
+um por M-cycle, com barramento próprio (não obedece ao bloqueio da PPU; fonte
+acima de `$DF` cai no echo da WRAM). Enquanto corre, `dma_blocks` fecha ROM,
+VRAM, SRAM, WRAM, echo, OAM e a região proibida — sobra a HRAM, que é por onde a
+rotina de DMA dos jogos roda. **I/O e IE ficam fora do bloqueio de propósito**
+(internos à CPU; fechá-los tornaria `IF`/`IE` ilegíveis no dispatch), e o valor
+lido de região tomada é `OPEN_BUS` — a spec não fixa esse valor. Junto: a
+prioridade BG-over-OBJ do 3.5 comparava o shade pós-BGP em vez do índice de cor;
+a PPU passou a guardar `bg_color` por scanline. 11 testes novos. Placar
+inalterado (18/121) e hash do dmg-acid2 idêntico — **nenhuma ROM da bateria
+exercita `$FF46`**; quem pegou foi rodar Super Mario Land e Tetris headless.
+**Iteração anterior:** 0085 — halt bug: rollback do PC no dispatch
 ([doc](docs/iterations/0085-halt-bug-pc-rollback.md)). Corrige o halt bug:
 quando `check_interrupt` dispara com `halt_bug` ativo (cenário `ei`; `halt`),
 o PC é revertido ao endereço do HALT antes do dispatch empurrá-lo na pilha.
@@ -50,7 +62,8 @@ agrupar `skip` e `crash` como "não passa", ou o gráfico inventa um evento.
 | mooneye acceptance | 0 | 66 |
 | mooneye acceptance (outros modelos) | 0 | 9 |
 
-Testes do workspace: **938** (sem alteração — 3 testes do CH4 modificados, nenhum novo).
+Testes do workspace: **949** (eram 938 na 0085 — 9 novos em `oam_dma.rs` e 2 em
+`ppu_sprites.rs`).
 
 ## Invariantes
 

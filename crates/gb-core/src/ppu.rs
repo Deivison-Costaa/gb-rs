@@ -59,6 +59,9 @@ pub(crate) struct Ppu {
     window_line: u8,
     window_y_condition: bool,
     framebuffer: [u8; SCREEN_W * SCREEN_H],
+    // Prioridade BG-over-OBJ olha o índice de cor do BG, não o shade que a BGP
+    // produziu — a paleta pode mapear 0 em preto e 3 em branco.
+    bg_color: [u8; SCREEN_W],
 }
 
 impl Ppu {
@@ -80,6 +83,7 @@ impl Ppu {
             window_line: 0,
             window_y_condition: false,
             framebuffer: [0x00; SCREEN_W * SCREEN_H],
+            bg_color: [0x00; SCREEN_W],
         }
     }
 
@@ -216,8 +220,8 @@ impl Ppu {
             }
 
             if let Some((color, palette_bit, bg_priority)) = sprite_pixel {
-                let bg_shade = self.framebuffer[row_offset + pixel_x];
-                let sprite_wins = !(bg_priority != 0 && bg_shade != 0 && self.lcdc & 0x01 != 0);
+                let bg_color = self.bg_color[pixel_x];
+                let sprite_wins = !(bg_priority != 0 && bg_color != 0 && self.lcdc & 0x01 != 0);
 
                 if sprite_wins {
                     let palette_reg = if palette_bit != 0 {
@@ -245,6 +249,7 @@ impl Ppu {
             let shade = self.bgp & 0x03;
             for x in 0..SCREEN_W {
                 self.framebuffer[row_offset + x] = shade;
+                self.bg_color[x] = 0;
             }
             return;
         }
@@ -304,6 +309,7 @@ impl Ppu {
                         ((byte1 >> pixel_in_tile) & 1) << 1 | ((byte0 >> pixel_in_tile) & 1);
                     let shade = (self.bgp >> (color_idx * 2)) & 0x03;
                     self.framebuffer[row_offset + pixel_x] = shade;
+                    self.bg_color[pixel_x] = color_idx;
                     continue;
                 }
             }
@@ -333,6 +339,7 @@ impl Ppu {
 
             let shade = (self.bgp >> (color_idx * 2)) & 0x03;
             self.framebuffer[row_offset + pixel_x] = shade;
+            self.bg_color[pixel_x] = color_idx;
         }
 
         if window_rendered {

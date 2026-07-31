@@ -258,7 +258,21 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [x] 2.3 `HALT` + o bug do HALT.
 - [ ] 2.4 blargg `instr_timing`, `mem_timing`, `mem_timing-2`, `halt_bug`.
   - [x] 2.4a `instr_timing` e `mem_timing` passando (não dependem de PPU).
-  - [ ] 2.4b `halt_bug` e `mem_timing-2` passando — M3 fechou no 3.7, o bloqueio expirou. Reavaliar: em 26/07 as ROMs rodavam até o teto de ciclos sem veredito; com a máquina de modos completa podem passar ou apontar bugs novos.
+  - [ ] 2.4b `halt_bug` e `mem_timing-2` passando. As duas **reportam na tela, não
+    pelo serial** — por isso o `gb-cli` nunca lhes deu veredito e o placar as
+    marcava `crash`. Medido na janela em 27/07 e de novo em 28/07, **depois** do
+    conserto do #105: `mem_timing-2` mostra `Passed`; **`halt_bug` mostra
+    `Failed`**. O bug do HALT ainda existe.
+    **NÃO capture o hash esperado rodando este emulador.** A iteração 0086 fez
+    isso e o hash resultante certificava a tela de `Failed` como aprovação — teste
+    que transforma bug em critério de sucesso é pior que teste nenhum. O
+    `dmg-acid2` é o modelo certo: o hash dele saiu de
+    `tests/roms/dmg-acid2/dmg-acid2-dmg.png`, imagem de referência **externa**.
+    As duas ROMs não estão na mesma situação:
+    `mem_timing-2` **tem** referência externa (`mem_timing-dmg-cgb.png`, ao lado
+    da ROM) — dá para extrair o hash dela, como o 3.7 fez, e fechar essa metade.
+    `halt_bug` **não tem** `.png` nenhum no repositório; enquanto ele mostrar
+    `Failed`, não há hash honesto a fixar. Essa metade só fecha consertando o bug.
 
 ## M3 — PPU
 

@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+mod gamepad;
 mod run;
 
 fn main() -> ExitCode {

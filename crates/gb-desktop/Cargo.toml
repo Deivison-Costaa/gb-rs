@@ -12,3 +12,4 @@ gb-core = { path = "../gb-core" }
 winit = "0.28"
 pixels = "0.13"
 cpal = "0.15"
+gilrs = "0.11"

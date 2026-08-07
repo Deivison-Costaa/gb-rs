@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use crate::gamepad::{Acao, Gamepad};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use gb_core::bus::Bus;
 use gb_core::cart::{self, CartridgeHeader};
@@ -164,6 +165,9 @@ pub fn execute(path: &Path) {
         }
     };
 
+    let mut gamepad = Gamepad::new();
+    let mut acoes = Vec::new();
+
     event_loop.run(move |event, _elwt, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -193,6 +197,15 @@ pub fn execute(path: &Path) {
                 window.request_redraw();
             }
             Event::RedrawRequested(_) => {
+                acoes.clear();
+                gamepad.poll(&mut acoes);
+                for acao in &acoes {
+                    match *acao {
+                        Acao::Pressiona(key) => bus.key_down(key),
+                        Acao::Solta(key) => bus.key_up(key),
+                    }
+                }
+
                 for _ in 0..M_CYCLES_PER_FRAME {
                     if cpu.lockup().is_some() || cpu.is_stopped() {
                         break;

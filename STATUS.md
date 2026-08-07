@@ -3,7 +3,20 @@
 > Este arquivo é a **memória do projeto entre iterações**. O contexto do agente
 > é descartado a cada iteração; este arquivo não. Mantenha-o curto e verdadeiro.
 
-**Última iteração concluída:** 0087 — DMA de OAM ($FF46) de verdade (ROADMAP
+**Última iteração concluída:** 0088 — gamepad XInput com hotplug (ROADMAP 4.5,
+[doc](docs/iterations/0088-gamepad-xinput.md)). `gb-desktop` ganhou `gamepad.rs`
+com `gilrs`; `gb-core` não foi tocado. O mapeamento é **por posição física**, não
+por rótulo: A do GB = botão leste (B do Xbox), B do GB = botão sul (A do Xbox) —
+convenção do RetroArch, e o inverso disso trocaria os dois botões em relação ao
+console. A tradução é pura (`Traducao` só conhece `Button`/`Axis`/`EventType`) e
+o `Gilrs` fica na borda: é o que permitiu 16 testes sem hardware. Stick esquerdo
+tem histerese (pressiona em 0.5, solta em 0.35) e stick e hat contam por fonte,
+para soltar um não soltar a direção que o outro segura. `Connected`/`Disconnected`
+soltam as oito teclas — controle arrancado com a direita pressionada deixaria o
+personagem correndo para sempre. A CI passou a instalar `libudev-dev` (o
+`gilrs-core` linka contra ele no Linux). **Não foi testado com controle físico**:
+a máquina não tinha pad plugado e `/dev/uinput` é root-only. Placar inalterado.
+**Iteração anterior:** 0087 — DMA de OAM ($FF46) de verdade (ROADMAP
 3.8, [doc](docs/iterations/0087-oam-dma.md)). `Bus::tick_dma()` copia 160 bytes,
 um por M-cycle, com barramento próprio (não obedece ao bloqueio da PPU; fonte
 acima de `$DF` cai no echo da WRAM). Enquanto corre, `dma_blocks` fecha ROM,
@@ -15,14 +28,6 @@ prioridade BG-over-OBJ do 3.5 comparava o shade pós-BGP em vez do índice de co
 a PPU passou a guardar `bg_color` por scanline. 11 testes novos. Placar
 inalterado (18/121) e hash do dmg-acid2 idêntico — **nenhuma ROM da bateria
 exercita `$FF46`**; quem pegou foi rodar Super Mario Land e Tetris headless.
-**Iteração anterior:** 0085 — halt bug: rollback do PC no dispatch
-([doc](docs/iterations/0085-halt-bug-pc-rollback.md)). Corrige o halt bug:
-quando `check_interrupt` dispara com `halt_bug` ativo (cenário `ei`; `halt`),
-o PC é revertido ao endereço do HALT antes do dispatch empurrá-lo na pilha.
-O rollback fica em `check_interrupt` (não no handler do HALT) para não quebrar
-o caso sem interrupção (RST/pulo após HALT). 2 testes novos, 2 testes
-existentes com asserções atualizadas. Bateria: **2/2 pegos, 2/2 controles**.
-Placar inalterado: `halt_bug` e `mem_timing-2` continuam em 0.
 **Próxima tarefa:** ROADMAP **2.4b** continua — `halt_bug.gb` e `mem_timing-2`
 ainda estouram 100M ciclos sem saída serial. O halt bug está corrigido (erro #1
 desta iteração), mas as ROMs precisam de mais investigação. Notas relevantes:

@@ -876,3 +876,17 @@ Bateria: 4 mutações pegas e 1 controle verde. O controle da primeira tentativa
 estava **mal especificado** — fechou-se o `2.4b` sem fechar o pai `2.4`, estado
 que o outro teste já proíbe. O teste estava certo e o controle errado, o que só
 apareceu porque a bateria foi rodada em vez de presumida.
+
+## 0088 — pedido do usuário fura a fila
+
+A 0088 (gamepad) não era a primeira caixa acionável: a fila apontava para a
+2.4b, e continua apontando. Foi pedido direto do usuário, no meio da sessão, e o
+teste da fila (`status_aponta_a_primeira_caixa_acionavel_do_roadmap`) não reprova
+isto — ele guarda o parágrafo **Próxima tarefa**, não o que a iteração escolheu
+fazer. A caixa 4.5 entrou já fechada, e a fila seguiu intacta.
+
+Vale registrar o que a exceção custou, porque não foi zero: a 4.5 não existia no
+ROADMAP, então o item foi escrito **depois** do código, invertendo os passos 2 e
+5 do protocolo. O teste veio antes da implementação (R5 respeitada), mas o
+planejamento veio depois de tudo. Se isso virar hábito, o ROADMAP deixa de ser
+plano e vira changelog — e aí a série do 8.2 mede uma fila que nunca existiu.

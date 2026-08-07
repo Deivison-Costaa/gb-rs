@@ -289,6 +289,7 @@ do anterior estar verde. Marque `[x]` só depois do merge em `main`.
 - [x] 4.2 MBC1: banking de ROM/RAM, modo 0/1.
 - [x] 4.3 SRAM com bateria: persistir `.sav` ao sair, carregar ao abrir.
 - [x] 4.4 `gb-desktop`: winit + pixels, 60 fps, mapeamento de teclado.
+- [x] 4.5 `gb-desktop`: gamepad XInput via `gilrs`, com hotplug. Mapeamento por posição física (A do GB = botão leste), stick esquerdo com histerese e as oito teclas soltas no connect/disconnect. [0088](docs/iterations/0088-gamepad-xinput.md).
 
 **Marco M4: Tetris e Super Mario Land jogáveis.**
 
